@@ -74,7 +74,7 @@ function Dashboard() {
         <div className="flex items-center gap-8">
           <span className="font-extrabold tracking-tighter text-xl italic">VAULT.03</span>
           <div className="hidden md:flex gap-6 text-sm font-medium text-muted-foreground">
-            <span className="text-foreground">Dashboard</span>
+            <span className="text-accent">Dashboard</span>
           </div>
         </div>
         <div className="flex gap-3 items-center">
@@ -98,7 +98,7 @@ function Dashboard() {
       <main className="max-w-7xl mx-auto px-6 pt-12">
         {/* Portfolio stats */}
         <header className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border animate-in-up">
-          <StatCell label="Total Value" value={fmt(totals.totalValue)} sub={totals.count ? "Live" : "Add your first card"} />
+          <StatCell label="Total Value" value={fmt(totals.totalValue)} sub={totals.count ? "Live" : "Add your first card"} subAccent={totals.count > 0} />
           <StatCell label="Assets" value={String(totals.count)} sub={totals.count ? `Graded: ${totals.gradedPct}%` : "—"} />
           <div className="bg-background p-8 md:col-span-2">
             <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Top Mover</p>
@@ -134,7 +134,7 @@ function Dashboard() {
                 placeholder="Search cards…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="text-xs border border-border px-3 py-1 w-48 focus:outline-none focus:border-foreground bg-background rounded-sm"
+                className="text-xs border border-border px-3 py-1 w-48 focus:outline-none focus:border-accent bg-background rounded-sm"
               />
             </div>
 
@@ -184,12 +184,12 @@ function Dashboard() {
   );
 }
 
-function StatCell({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function StatCell({ label, value, sub, subAccent }: { label: string; value: string; sub?: string; subAccent?: boolean }) {
   return (
     <div className="bg-background p-8">
       <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">{label}</p>
       <h2 className="text-4xl font-extrabold tracking-tight">{value}</h2>
-      {sub && <p className="text-xs text-muted-foreground font-mono mt-2">{sub}</p>}
+      {sub && <p className={`text-xs font-mono mt-2 ${subAccent ? "text-accent" : "text-muted-foreground"}`}>{sub}</p>}
     </div>
   );
 }
@@ -199,7 +199,7 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left bg-background p-4 flex gap-4 hover:bg-secondary transition-colors ${active ? "ring-1 ring-inset ring-foreground" : ""}`}
+      className={`w-full text-left bg-background p-4 flex gap-4 hover:bg-secondary transition-colors ${active ? "ring-1 ring-inset ring-accent" : ""}`}
     >
       <div className="w-16 h-24 bg-secondary shrink-0 border border-border overflow-hidden grid place-items-center">
         {card.photo_url ? (
@@ -217,7 +217,7 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
             <h4 className="font-extrabold text-lg leading-tight tracking-tight">{card.player_name}</h4>
             <div className="flex gap-2 mt-1 items-center">
               {card.grade && (
-                <span className="px-1.5 py-0.5 border border-foreground text-[10px] font-mono font-bold">
+                <span className="px-1.5 py-0.5 border border-accent text-accent text-[10px] font-mono font-bold">
                   {card.grader ?? ""} {card.grade}
                 </span>
               )}
@@ -322,7 +322,7 @@ function CardDetail({ cardId, onDeleted }: { cardId: string; onDeleted: () => vo
   return (
     <div className="bg-card border border-border p-6 shadow-sm">
       <div className="flex justify-between mb-8">
-        <span className="text-[10px] font-mono bg-foreground text-background px-2 py-0.5">ASSET DETAIL</span>
+        <span className="text-[10px] font-mono bg-accent text-accent-foreground px-2 py-0.5">ASSET DETAIL</span>
         <div className="flex gap-2">
           <button
             onClick={() => refreshValue.mutate()}
@@ -704,7 +704,7 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
                     <button
                       key={p.id}
                       onClick={() => setForm({ ...form, mlb_player_id: p.id, team: form.team || p.team || "", position: form.position || p.position || "" })}
-                      className={`w-full text-left px-2 py-1.5 text-xs hover:bg-secondary border border-transparent ${form.mlb_player_id === p.id ? "border-foreground bg-secondary" : ""}`}
+                      className={`w-full text-left px-2 py-1.5 text-xs hover:bg-secondary border border-transparent ${form.mlb_player_id === p.id ? "border-accent bg-accent/10" : ""}`}
                     >
                       <span className="font-bold">{p.name}</span>{" "}
                       <span className="text-muted-foreground">
@@ -715,7 +715,7 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
                 </div>
               )}
               {form.mlb_player_id && (
-                <p className="text-[10px] font-mono text-[color:var(--positive)] mt-2">Linked · id {form.mlb_player_id}</p>
+                <p className="text-[10px] font-mono text-accent mt-2">Linked · id {form.mlb_player_id}</p>
               )}
             </div>
 
@@ -756,7 +756,7 @@ function Field({
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 w-full h-10 px-3 border border-border rounded-sm text-sm bg-background focus:outline-none focus:border-foreground"
+        className="mt-1 w-full h-10 px-3 border border-border rounded-sm text-sm bg-background focus:outline-none focus:border-accent"
       />
     </label>
   );
