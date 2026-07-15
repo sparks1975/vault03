@@ -499,14 +499,6 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
   });
   const [playerResults, setPlayerResults] = useState<Awaited<ReturnType<typeof searchMlbPlayer>>>([]);
 
-  async function fileToDataUrl(file: File): Promise<string> {
-    return new Promise((res, rej) => {
-      const r = new FileReader();
-      r.onload = () => res(r.result as string);
-      r.onerror = rej;
-      r.readAsDataURL(file);
-    });
-  }
 
   async function handlePhoto(file: File) {
     setScanning(true);
