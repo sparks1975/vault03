@@ -53,16 +53,26 @@ function AuthPage() {
 
   async function handleGoogle() {
     setLoading(true);
-    const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (result.error) {
-      toast.error(result.error.message);
+    // On mobile, the OAuth popup often opens in a new tab. If the user
+    // returns to this tab without completing it, unstick the UI.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") setLoading(false);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    try {
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (result.error) {
+        toast.error(result.error.message);
+        return;
+      }
+      if (result.redirected) return;
+      navigate({ to: "/dashboard", replace: true });
+    } finally {
+      document.removeEventListener("visibilitychange", onVisible);
       setLoading(false);
-      return;
     }
-    if (result.redirected) return;
-    navigate({ to: "/dashboard", replace: true });
   }
 
   return (
