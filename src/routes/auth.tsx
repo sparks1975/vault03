@@ -4,6 +4,18 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 
+const LOVABLE_OAUTH_ORIGINS = new Set(["https://oauth.lovable.app", "https://lovable.dev"]);
+
+type LovableOAuthMessage = {
+  type?: unknown;
+  response?: {
+    access_token?: unknown;
+    refresh_token?: unknown;
+    error?: unknown;
+    error_description?: unknown;
+  };
+};
+
 export const Route = createFileRoute("/auth")({
   ssr: false,
   component: AuthPage,
@@ -150,12 +162,55 @@ function AuthPage() {
     setLoading(true);
     setFinishingOAuth(true);
     setOauthMessage("Google sign in is open. Approve access, then we’ll bring you to your dashboard.");
+    let keepWaitingForOAuth = false;
     const onReturn = () => void redirectIfSignedIn();
     const onVisible = () => {
       if (document.visibilityState === "visible") onReturn();
     };
+    const onOAuthMessage = (event: MessageEvent<LovableOAuthMessage>) => {
+      if (!LOVABLE_OAUTH_ORIGINS.has(event.origin)) return;
+      if (event.data?.type !== "authorization_response") return;
+
+      const response = event.data.response;
+      if (!response) return;
+
+      if (typeof response.error === "string") {
+        toast.error(
+          typeof response.error_description === "string"
+            ? response.error_description
+            : response.error,
+        );
+        setFinishingOAuth(false);
+        setLoading(false);
+        return;
+      }
+
+      if (
+        typeof response.access_token !== "string" ||
+        typeof response.refresh_token !== "string"
+      ) {
+        return;
+      }
+
+      setOauthMessage("Finishing your Google sign in…");
+      void supabase.auth
+        .setSession({
+          access_token: response.access_token,
+          refresh_token: response.refresh_token,
+        })
+        .then(({ error }) => {
+          if (error) {
+            toast.error(error.message);
+            setFinishingOAuth(false);
+            return;
+          }
+          navigate({ to: "/dashboard", replace: true });
+        })
+        .finally(() => setLoading(false));
+    };
     window.addEventListener("focus", onReturn);
     window.addEventListener("pageshow", onReturn);
+    window.addEventListener("message", onOAuthMessage);
     document.addEventListener("visibilitychange", onVisible);
     const sessionPoll = window.setInterval(() => void redirectIfSignedIn(), 1000);
     const fallback = window.setTimeout(() => {
@@ -167,11 +222,18 @@ function AuthPage() {
       });
 
       if (result.error) {
-        toast.error(result.error.message);
+        const message = result.error.message;
+        if (/cancelled|timed out/i.test(message)) {
+          keepWaitingForOAuth = true;
+          setOauthMessage("Waiting for Google to finish. If you approved access, return to this tab and we’ll finish automatically.");
+          return;
+        }
+        toast.error(message);
         setFinishingOAuth(false);
         return;
       }
       if (result.redirected) {
+        keepWaitingForOAuth = true;
         setOauthMessage("Finishing your Google sign in…");
         setFinishingOAuth(true);
         return;
@@ -181,12 +243,15 @@ function AuthPage() {
       }
 
     } finally {
-      window.clearTimeout(fallback);
-      window.clearInterval(sessionPoll);
-      window.removeEventListener("focus", onReturn);
-      window.removeEventListener("pageshow", onReturn);
-      document.removeEventListener("visibilitychange", onVisible);
-      setLoading(false);
+      if (!keepWaitingForOAuth) {
+        window.clearTimeout(fallback);
+        window.clearInterval(sessionPoll);
+        window.removeEventListener("focus", onReturn);
+        window.removeEventListener("pageshow", onReturn);
+        window.removeEventListener("message", onOAuthMessage);
+        document.removeEventListener("visibilitychange", onVisible);
+        setLoading(false);
+      }
     }
   }
 
@@ -196,6 +261,17 @@ function AuthPage() {
         <div className="h-8 w-8 rounded-full border-2 border-border border-t-accent animate-spin" />
         <p className="text-sm font-medium">Signing you in…</p>
         <p className="max-w-xs text-center text-xs text-muted-foreground">{oauthMessage}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setFinishingOAuth(false);
+            setLoading(false);
+            setOauthMessage("Signing you in…");
+          }}
+          className="mt-2 rounded-sm border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-widest hover:bg-secondary transition-colors"
+        >
+          Return to sign in
+        </button>
       </div>
     );
   }
