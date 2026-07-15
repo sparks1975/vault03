@@ -301,80 +301,63 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
 }
 
 function CardPhoto({ path, alt }: { path: string; alt: string }) {
-  const q = useQuery({
-    queryKey: ["photo", path],
-    queryFn: async () => {
-      const { data, error } = await supabase.storage.from("card-photos").createSignedUrl(path, 3600);
-      if (error) throw error;
-      return data.signedUrl;
-    },
-    staleTime: 55 * 60 * 1000,
-  });
-  if (!q.data) return <span className="text-[8px] text-muted-foreground">…</span>;
-  return <img src={q.data} alt={alt} className="w-full h-full object-cover" />;
+  return <img src={path} alt={alt} className="w-full h-full object-cover" />;
 }
 
-function CardDetail({ cardId, onDeleted }: { cardId: string; onDeleted: () => void }) {
-  const queryClient = useQueryClient();
-  const getCardFn = useServerFn(getCard);
+function CardDetail({
+  card,
+  onDeleted,
+  onUpdate,
+}: {
+  card: Card;
+  onDeleted: (cardId: string) => void;
+  onUpdate: (cardId: string, patch: Partial<Card>) => void;
+}) {
   const getStatsFn = useServerFn(getPlayerStats);
   const estimateFn = useServerFn(estimateCardValue);
-  const saveValFn = useServerFn(saveValuation);
-  const deleteCardFn = useServerFn(deleteCard);
-
-  const detail = useQuery({
-    queryKey: ["card", cardId],
-    queryFn: () => getCardFn({ data: { id: cardId } }),
-  });
+  const [valuing, setValuing] = useState(false);
 
   const stats = useQuery({
-    queryKey: ["stats", detail.data?.card.mlb_player_id],
-    queryFn: () => getStatsFn({ data: { playerId: detail.data!.card.mlb_player_id! } }),
-    enabled: !!detail.data?.card.mlb_player_id,
+    queryKey: ["stats", card.mlb_player_id],
+    queryFn: () => getStatsFn({ data: { playerId: card.mlb_player_id! } }),
+    enabled: !!card.mlb_player_id,
   });
 
-  const refreshValue = useMutation({
-    mutationFn: async () => {
-      const c = detail.data!.card;
+  async function refreshValue() {
+    setValuing(true);
+    try {
       const est = await estimateFn({
         data: {
-          player_name: c.player_name,
-          year: c.year,
-          set_name: c.set_name,
-          card_number: c.card_number,
-          grade: c.grade,
-          grader: c.grader,
+          player_name: card.player_name,
+          year: card.year,
+          set_name: card.set_name,
+          card_number: card.card_number,
+          grade: card.grade,
+          grader: card.grader,
         },
       });
-      await saveValFn({
-        data: {
-          card_id: c.id,
-          current_value: est.current_value,
-          value_delta_pct: est.value_delta_pct,
-          sales: est.sales,
-          history: est.history,
-        },
+      onUpdate(card.id, {
+        current_value: est.current_value,
+        value_delta_pct: est.value_delta_pct,
+        last_valued_at: new Date().toISOString(),
+        sales: est.sales.map((sale) => ({ ...sale, id: crypto.randomUUID(), card_id: card.id })),
+        history: est.history.map((point) => ({ ...point, id: crypto.randomUUID(), card_id: card.id })),
       });
-    },
-    onSuccess: () => {
       toast.success("Valuation refreshed");
-      queryClient.invalidateQueries({ queryKey: ["cards"] });
-      queryClient.invalidateQueries({ queryKey: ["card", cardId] });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : "Failed"),
-  });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed");
+    } finally {
+      setValuing(false);
+    }
+  }
 
-  const del = useMutation({
-    mutationFn: async () => deleteCardFn({ data: { id: cardId } }),
-    onSuccess: () => {
-      toast.success("Card removed");
-      queryClient.invalidateQueries({ queryKey: ["cards"] });
-      onDeleted();
-    },
-  });
+  function deleteSelected() {
+    onDeleted(card.id);
+    toast.success("Card removed");
+  }
 
-  if (!detail.data) return <div className="bg-card border border-border p-6 text-sm text-muted-foreground">Loading…</div>;
-  const { card, sales, history } = detail.data;
+  const sales = card.sales ?? [];
+  const history = card.history ?? [];
   const max = Math.max(...history.map((h) => Number(h.value)), 1);
 
   return (
@@ -383,15 +366,15 @@ function CardDetail({ cardId, onDeleted }: { cardId: string; onDeleted: () => vo
         <span className="text-[10px] font-mono bg-accent text-accent-foreground px-2 h-5 inline-flex items-center">ASSET DETAIL</span>
         <div className="flex gap-2">
           <button
-            onClick={() => refreshValue.mutate()}
-            disabled={refreshValue.isPending}
+            onClick={refreshValue}
+            disabled={valuing}
             className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary disabled:opacity-50 inline-flex items-center gap-1"
           >
-            {refreshValue.isPending ? <Loader2 className="size-3 animate-spin" /> : null}
-            {refreshValue.isPending ? "Valuing" : "Refresh value"}
+            {valuing ? <Loader2 className="size-3 animate-spin" /> : null}
+            {valuing ? "Valuing" : "Refresh value"}
           </button>
           <button
-            onClick={() => confirm("Remove this card?") && del.mutate()}
+            onClick={() => confirm("Remove this card?") && deleteSelected()}
             className="size-6 border border-border grid place-items-center hover:bg-destructive hover:text-destructive-foreground transition-colors"
             aria-label="Delete card"
           >
