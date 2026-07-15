@@ -30,7 +30,7 @@ function AuthPage() {
     return () => authListener.subscription.unsubscribe();
   }, [navigate]);
 
-  async function finishGoogleReturn() {
+  async function finishGoogleReturn(resetIfMissing = true) {
     if (!googleSignInPendingRef.current) return;
 
     const { data: sessionData } = await supabase.auth.getSession();
@@ -46,7 +46,7 @@ function AuthPage() {
       navigate({ to: "/dashboard", replace: true });
       return;
     }
-    setLoading(false);
+    if (resetIfMissing) setLoading(false);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -82,13 +82,14 @@ function AuthPage() {
     googleSignInPendingRef.current = true;
     // On mobile, OAuth often returns focus/pageshow without resolving the
     // popup promise. Re-check the session and unstick the UI when that happens.
-    const onReturn = () => void finishGoogleReturn();
+    const onReturn = () => void finishGoogleReturn(true);
     const onVisible = () => {
       if (document.visibilityState === "visible") onReturn();
     };
     window.addEventListener("focus", onReturn);
     window.addEventListener("pageshow", onReturn);
     document.addEventListener("visibilitychange", onVisible);
+    const sessionPoll = window.setInterval(() => void finishGoogleReturn(false), 1000);
     const fallback = window.setTimeout(onReturn, 8000);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
@@ -104,6 +105,7 @@ function AuthPage() {
       navigate({ to: "/dashboard", replace: true });
     } finally {
       window.clearTimeout(fallback);
+      window.clearInterval(sessionPoll);
       window.removeEventListener("focus", onReturn);
       window.removeEventListener("pageshow", onReturn);
       document.removeEventListener("visibilitychange", onVisible);
