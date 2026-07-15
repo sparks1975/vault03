@@ -8,6 +8,7 @@ import { LogOut, Plus, Trash2, Camera, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { listCards, getCard, createCard, deleteCard, saveValuation } from "@/lib/cards.functions";
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
+import { autoCropCard } from "@/lib/card-autocrop";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -516,7 +517,9 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
           toast.error("Couldn't convert HEIC image. Try a JPG or PNG.");
         }
       }
-      const dataUrl = await fileToDataUrl(workingFile as File);
+      const rawDataUrl = await fileToDataUrl(workingFile as File);
+      // Best-effort auto-crop & perspective straighten of the card.
+      const dataUrl = await autoCropCard(rawDataUrl);
       setImageDataUrl(dataUrl);
       const result = await scanFn({ data: { imageDataUrl: dataUrl } });
       setForm((f) => ({
