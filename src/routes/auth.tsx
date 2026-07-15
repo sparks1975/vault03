@@ -162,6 +162,7 @@ function AuthPage() {
     setLoading(true);
     setFinishingOAuth(true);
     setOauthMessage("Google sign in is open. Approve access, then we’ll bring you to your dashboard.");
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
     let keepWaitingForOAuth = false;
     const onReturn = () => void redirectIfSignedIn();
     const onVisible = () => {
