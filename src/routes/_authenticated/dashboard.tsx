@@ -517,7 +517,9 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
           toast.error("Couldn't convert HEIC image. Try a JPG or PNG.");
         }
       }
-      const dataUrl = await fileToDataUrl(workingFile as File);
+      const rawDataUrl = await fileToDataUrl(workingFile as File);
+      // Best-effort auto-crop & perspective straighten of the card.
+      const dataUrl = await autoCropCard(rawDataUrl);
       setImageDataUrl(dataUrl);
       const result = await scanFn({ data: { imageDataUrl: dataUrl } });
       setForm((f) => ({
