@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3.5-flash";
@@ -31,7 +30,6 @@ function extractJson<T>(text: string): T {
 
 // ---------- Photo scan: extract card details from an image ----------
 export const scanCardPhoto = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((d: { imageDataUrl: string }) =>
     z.object({ imageDataUrl: z.string().startsWith("data:image/") }).parse(d),
   )
@@ -72,7 +70,6 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
 
 // ---------- Value estimate + comparable sales (AI estimate) ----------
 export const estimateCardValue = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
     z
       .object({

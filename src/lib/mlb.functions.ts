@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 // MLB Stats API — free, public, no key required.
 // Docs: https://statsapi.mlb.com/
@@ -19,7 +18,6 @@ async function json(url: string) {
 }
 
 export const searchMlbPlayer = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((d: { query: string }) => z.object({ query: z.string().min(2).max(60) }).parse(d))
   .handler(async ({ data }) => {
     const url = `https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(data.query)}&sportIds=1`;
@@ -41,7 +39,6 @@ export const searchMlbPlayer = createServerFn({ method: "GET" })
   });
 
 export const getPlayerStats = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
   .inputValidator((d: { playerId: number }) =>
     z.object({ playerId: z.number().int().positive() }).parse(d),
   )
