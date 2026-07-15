@@ -4,6 +4,18 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 
+const LOVABLE_OAUTH_ORIGINS = new Set(["https://oauth.lovable.app", "https://lovable.dev"]);
+
+type LovableOAuthMessage = {
+  type?: unknown;
+  response?: {
+    access_token?: unknown;
+    refresh_token?: unknown;
+    error?: unknown;
+    error_description?: unknown;
+  };
+};
+
 export const Route = createFileRoute("/auth")({
   ssr: false,
   component: AuthPage,
@@ -91,6 +103,47 @@ function AuthPage() {
     document.addEventListener("visibilitychange", onVisible);
     const sessionPoll = window.setInterval(() => void finishGoogleReturn(false), 1000);
     const fallback = window.setTimeout(onReturn, 8000);
+    const onOAuthMessage = (event: MessageEvent<LovableOAuthMessage>) => {
+      if (!LOVABLE_OAUTH_ORIGINS.has(event.origin)) return;
+      if (event.data?.type !== "authorization_response") return;
+
+      const response = event.data.response;
+      if (!response) return;
+
+      if (typeof response.error === "string") {
+        toast.error(
+          typeof response.error_description === "string"
+            ? response.error_description
+            : response.error,
+        );
+        googleSignInPendingRef.current = false;
+        setLoading(false);
+        return;
+      }
+
+      if (
+        typeof response.access_token !== "string" ||
+        typeof response.refresh_token !== "string"
+      ) {
+        return;
+      }
+
+      void supabase.auth
+        .setSession({
+          access_token: response.access_token,
+          refresh_token: response.refresh_token,
+        })
+        .then(({ error }) => {
+          if (error) {
+            toast.error(error.message);
+            return;
+          }
+          googleSignInPendingRef.current = false;
+          navigate({ to: "/dashboard", replace: true });
+        })
+        .finally(() => setLoading(false));
+    };
+    window.addEventListener("message", onOAuthMessage);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: window.location.origin,
@@ -108,6 +161,7 @@ function AuthPage() {
       window.clearInterval(sessionPoll);
       window.removeEventListener("focus", onReturn);
       window.removeEventListener("pageshow", onReturn);
+      window.removeEventListener("message", onOAuthMessage);
       document.removeEventListener("visibilitychange", onVisible);
       setLoading(false);
     }
