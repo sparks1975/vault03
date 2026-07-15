@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
@@ -16,6 +16,7 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
+  const googleSignInPendingRef = useRef(false);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -30,8 +31,18 @@ function AuthPage() {
   }, [navigate]);
 
   async function finishGoogleReturn() {
+    if (!googleSignInPendingRef.current) return;
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session) {
+      googleSignInPendingRef.current = false;
+      navigate({ to: "/dashboard", replace: true });
+      return;
+    }
+
     const { data } = await supabase.auth.getUser();
     if (data.user) {
+      googleSignInPendingRef.current = false;
       navigate({ to: "/dashboard", replace: true });
       return;
     }
@@ -68,6 +79,7 @@ function AuthPage() {
 
   async function handleGoogle() {
     setLoading(true);
+    googleSignInPendingRef.current = true;
     // On mobile, OAuth often returns focus/pageshow without resolving the
     // popup promise. Re-check the session and unstick the UI when that happens.
     const onReturn = () => void finishGoogleReturn();
@@ -84,9 +96,11 @@ function AuthPage() {
       });
       if (result.error) {
         toast.error(result.error.message);
+        googleSignInPendingRef.current = false;
         return;
       }
       if (result.redirected) return;
+      googleSignInPendingRef.current = false;
       navigate({ to: "/dashboard", replace: true });
     } finally {
       window.clearTimeout(fallback);
