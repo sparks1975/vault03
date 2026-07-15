@@ -511,7 +511,20 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
   async function handlePhoto(file: File) {
     setScanning(true);
     try {
-      const dataUrl = await fileToDataUrl(file);
+      // Convert HEIC/HEIF to JPEG so browsers can render the preview
+      let workingFile: Blob = file;
+      const isHeic =
+        /image\/hei[cf]/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
+      if (isHeic) {
+        try {
+          const { default: heic2any } = await import("heic2any");
+          const converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+          workingFile = Array.isArray(converted) ? converted[0] : converted;
+        } catch {
+          toast.error("Couldn't convert HEIC image. Try a JPG or PNG.");
+        }
+      }
+      const dataUrl = await fileToDataUrl(workingFile as File);
       setImageDataUrl(dataUrl);
       const result = await scanFn({ data: { imageDataUrl: dataUrl } });
       setForm((f) => ({
@@ -534,6 +547,16 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
       setScanning(false);
     }
   }
+
+  async function fileToDataUrl(file: Blob): Promise<string> {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result as string);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
+
 
   async function searchPlayer() {
     if (!form.player_name.trim()) return;
