@@ -1,21 +1,72 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { LogOut, Plus, Trash2, Camera, Loader2 } from "lucide-react";
+import { Plus, Trash2, Camera, Loader2 } from "lucide-react";
 
-import { supabase } from "@/integrations/supabase/client";
-import { listCards, getCard, createCard, deleteCard, saveValuation } from "@/lib/cards.functions";
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
 import { CardCropDialog } from "@/components/CardCropDialog";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
 
 export const Route = createFileRoute("/dashboard")({
+  ssr: false,
   component: Dashboard,
 });
 
-type Card = Awaited<ReturnType<typeof listCards>>[number];
+type Sale = {
+  id: string;
+  card_id: string;
+  sold_at: string;
+  grade: string | null;
+  price: number;
+  source: string | null;
+  url: string | null;
+};
+
+type HistoryPoint = {
+  id: string;
+  card_id: string;
+  recorded_at: string;
+  value: number;
+};
+
+type Card = {
+  id: string;
+  player_name: string;
+  team: string | null;
+  position: string | null;
+  year: number | null;
+  set_name: string | null;
+  card_number: string | null;
+  grade: string | null;
+  grader: string | null;
+  purchase_price: number | null;
+  current_value: number | null;
+  value_delta_pct: number | null;
+  notes: string | null;
+  photo_url: string | null;
+  mlb_player_id: number | null;
+  last_valued_at: string | null;
+  created_at: string;
+  sales: Sale[];
+  history: HistoryPoint[];
+};
+
+const STORAGE_KEY = "vault03.cards.v1";
+
+function loadCards(): Card[] {
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Card[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCards(cards: Card[]) {
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+}
 
 function fmt(n: number | null | undefined) {
   if (n == null) return "—";
