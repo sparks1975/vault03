@@ -14,7 +14,172 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      card_sales: {
+        Row: {
+          card_id: string
+          created_at: string
+          grade: string | null
+          id: string
+          price: number
+          sold_at: string
+          source: string | null
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          card_id: string
+          created_at?: string
+          grade?: string | null
+          id?: string
+          price: number
+          sold_at: string
+          source?: string | null
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          card_id?: string
+          created_at?: string
+          grade?: string | null
+          id?: string
+          price?: number
+          sold_at?: string
+          source?: string | null
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_sales_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      card_value_history: {
+        Row: {
+          card_id: string
+          id: string
+          recorded_at: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          card_id: string
+          id?: string
+          recorded_at?: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          card_id?: string
+          id?: string
+          recorded_at?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "card_value_history_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cards: {
+        Row: {
+          card_number: string | null
+          created_at: string
+          current_value: number | null
+          grade: string | null
+          grader: string | null
+          id: string
+          last_valued_at: string | null
+          mlb_player_id: number | null
+          notes: string | null
+          photo_url: string | null
+          player_name: string
+          position: string | null
+          purchase_price: number | null
+          set_name: string | null
+          team: string | null
+          updated_at: string
+          user_id: string
+          value_delta_pct: number | null
+          year: number | null
+        }
+        Insert: {
+          card_number?: string | null
+          created_at?: string
+          current_value?: number | null
+          grade?: string | null
+          grader?: string | null
+          id?: string
+          last_valued_at?: string | null
+          mlb_player_id?: number | null
+          notes?: string | null
+          photo_url?: string | null
+          player_name: string
+          position?: string | null
+          purchase_price?: number | null
+          set_name?: string | null
+          team?: string | null
+          updated_at?: string
+          user_id: string
+          value_delta_pct?: number | null
+          year?: number | null
+        }
+        Update: {
+          card_number?: string | null
+          created_at?: string
+          current_value?: number | null
+          grade?: string | null
+          grader?: string | null
+          id?: string
+          last_valued_at?: string | null
+          mlb_player_id?: number | null
+          notes?: string | null
+          photo_url?: string | null
+          player_name?: string
+          position?: string | null
+          purchase_price?: number | null
+          set_name?: string | null
+          team?: string | null
+          updated_at?: string
+          user_id?: string
+          value_delta_pct?: number | null
+          year?: number | null
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
