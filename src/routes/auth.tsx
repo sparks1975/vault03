@@ -30,6 +30,21 @@ function AuthPage() {
   const [loading, setLoading] = useState(false);
   const googleSignInPendingRef = useRef(false);
 
+  // Detect an OAuth return: either tokens in the URL hash (full-page redirect)
+  // or the ?oauth=1 marker we set on the redirect_uri. While true, we hide the
+  // login form and show a clear "Signing you in…" screen so it doesn't look
+  // like the user was bounced back to login.
+  const [finishingOAuth, setFinishingOAuth] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const hash = window.location.hash || "";
+    const search = window.location.search || "";
+    return (
+      hash.includes("access_token=") ||
+      hash.includes("error=") ||
+      search.includes("oauth=1")
+    );
+  });
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) navigate({ to: "/dashboard", replace: true });
@@ -39,8 +54,27 @@ function AuthPage() {
       if (event === "SIGNED_IN") navigate({ to: "/dashboard", replace: true });
     });
 
-    return () => authListener.subscription.unsubscribe();
-  }, [navigate]);
+    // Safety net: if we're finishing an OAuth return but no session materializes
+    // within 10s, stop showing the loading screen so the user isn't stranded.
+    let timeoutId: number | undefined;
+    if (finishingOAuth) {
+      timeoutId = window.setTimeout(async () => {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          navigate({ to: "/dashboard", replace: true });
+        } else {
+          setFinishingOAuth(false);
+          toast.error("Sign in didn't complete. Please try again.");
+        }
+      }, 10000);
+    }
+
+    return () => {
+      authListener.subscription.unsubscribe();
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [navigate, finishingOAuth]);
+
 
   async function finishGoogleReturn(resetIfMissing = true) {
     if (!googleSignInPendingRef.current) return;
@@ -146,16 +180,21 @@ function AuthPage() {
     window.addEventListener("message", onOAuthMessage);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+        redirect_uri: `${window.location.origin}/auth?oauth=1`,
       });
+
       if (result.error) {
         toast.error(result.error.message);
         googleSignInPendingRef.current = false;
         return;
       }
-      if (result.redirected) return;
+      if (result.redirected) {
+        setFinishingOAuth(true);
+        return;
+      }
       googleSignInPendingRef.current = false;
       navigate({ to: "/dashboard", replace: true });
+
     } finally {
       window.clearTimeout(fallback);
       window.clearInterval(sessionPoll);
@@ -167,11 +206,22 @@ function AuthPage() {
     }
   }
 
+  if (finishingOAuth) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 gap-4">
+        <div className="h-8 w-8 rounded-full border-2 border-border border-t-accent animate-spin" />
+        <p className="text-sm font-medium">Signing you in…</p>
+        <p className="text-xs text-muted-foreground">Finishing your Google sign in.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <nav className="border-b border-border h-16 px-6 flex items-center">
         <Link to="/" className="font-extrabold tracking-tighter text-xl italic">VAULT.03</Link>
       </nav>
+
       <main className="flex-1 flex items-center justify-center px-6 py-16">
         <div className="w-full max-w-sm">
           <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">
