@@ -8,7 +8,7 @@ import { LogOut, Plus, Trash2, Camera, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { listCards, getCard, createCard, deleteCard, saveValuation } from "@/lib/cards.functions";
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
-import { autoCropCard } from "@/lib/card-autocrop";
+import { CardCropDialog } from "@/components/CardCropDialog";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
