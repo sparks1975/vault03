@@ -188,9 +188,13 @@ function AuthPage() {
         googleSignInPendingRef.current = false;
         return;
       }
-      if (result.redirected) return;
+      if (result.redirected) {
+        setFinishingOAuth(true);
+        return;
+      }
       googleSignInPendingRef.current = false;
       navigate({ to: "/dashboard", replace: true });
+
     } finally {
       window.clearTimeout(fallback);
       window.clearInterval(sessionPoll);
