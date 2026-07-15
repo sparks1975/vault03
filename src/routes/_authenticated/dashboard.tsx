@@ -322,7 +322,7 @@ function CardDetail({ cardId, onDeleted }: { cardId: string; onDeleted: () => vo
   return (
     <div className="bg-card border border-border p-6 shadow-sm">
       <div className="flex justify-between mb-8">
-        <span className="text-[10px] font-mono bg-accent text-accent-foreground px-2 py-0.5">ASSET DETAIL</span>
+        <span className="text-[10px] font-mono bg-accent text-accent-foreground px-2 h-5 inline-flex items-center">ASSET DETAIL</span>
         <div className="flex gap-2">
           <button
             onClick={() => refreshValue.mutate()}
