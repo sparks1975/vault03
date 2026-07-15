@@ -206,11 +206,22 @@ function AuthPage() {
     }
   }
 
+  if (finishingOAuth) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 gap-4">
+        <div className="h-8 w-8 rounded-full border-2 border-border border-t-accent animate-spin" />
+        <p className="text-sm font-medium">Signing you in…</p>
+        <p className="text-xs text-muted-foreground">Finishing your Google sign in.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <nav className="border-b border-border h-16 px-6 flex items-center">
         <Link to="/" className="font-extrabold tracking-tighter text-xl italic">VAULT.03</Link>
       </nav>
+
       <main className="flex-1 flex items-center justify-center px-6 py-16">
         <div className="w-full max-w-sm">
           <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">
