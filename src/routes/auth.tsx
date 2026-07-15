@@ -30,6 +30,21 @@ function AuthPage() {
   const [loading, setLoading] = useState(false);
   const googleSignInPendingRef = useRef(false);
 
+  // Detect an OAuth return: either tokens in the URL hash (full-page redirect)
+  // or the ?oauth=1 marker we set on the redirect_uri. While true, we hide the
+  // login form and show a clear "Signing you in…" screen so it doesn't look
+  // like the user was bounced back to login.
+  const [finishingOAuth, setFinishingOAuth] = useState(() => {
+    if (typeof window === "undefined") return false;
+    const hash = window.location.hash || "";
+    const search = window.location.search || "";
+    return (
+      hash.includes("access_token=") ||
+      hash.includes("error=") ||
+      search.includes("oauth=1")
+    );
+  });
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) navigate({ to: "/dashboard", replace: true });
@@ -39,8 +54,27 @@ function AuthPage() {
       if (event === "SIGNED_IN") navigate({ to: "/dashboard", replace: true });
     });
 
-    return () => authListener.subscription.unsubscribe();
-  }, [navigate]);
+    // Safety net: if we're finishing an OAuth return but no session materializes
+    // within 10s, stop showing the loading screen so the user isn't stranded.
+    let timeoutId: number | undefined;
+    if (finishingOAuth) {
+      timeoutId = window.setTimeout(async () => {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          navigate({ to: "/dashboard", replace: true });
+        } else {
+          setFinishingOAuth(false);
+          toast.error("Sign in didn't complete. Please try again.");
+        }
+      }, 10000);
+    }
+
+    return () => {
+      authListener.subscription.unsubscribe();
+      if (timeoutId) window.clearTimeout(timeoutId);
+    };
+  }, [navigate, finishingOAuth]);
+
 
   async function finishGoogleReturn(resetIfMissing = true) {
     if (!googleSignInPendingRef.current) return;
