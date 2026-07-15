@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
@@ -28,7 +28,7 @@ function AuthPage() {
   const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(false);
-  const googleSignInPendingRef = useRef(false);
+  const [oauthMessage, setOauthMessage] = useState("Signing you in…");
 
   // Detect an OAuth return: either tokens in the URL hash (full-page redirect)
   // or the ?oauth=1 marker we set on the redirect_uri. While true, we hide the
@@ -45,55 +45,90 @@ function AuthPage() {
     );
   });
 
+  async function redirectIfSignedIn() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session) {
+      navigate({ to: "/dashboard", replace: true });
+      return true;
+    }
+
+    const { data } = await supabase.auth.getUser();
+    if (data.user) {
+      navigate({ to: "/dashboard", replace: true });
+      return true;
+    }
+
+    return false;
+  }
+
+  async function finishOAuthFromUrl() {
+    if (typeof window === "undefined" || !window.location.hash) return false;
+
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+    const error = hashParams.get("error");
+    const errorDescription = hashParams.get("error_description");
+
+    if (error) {
+      window.history.replaceState(null, "", `${window.location.origin}/auth`);
+      setFinishingOAuth(false);
+      setLoading(false);
+      toast.error(errorDescription || error);
+      return true;
+    }
+
+    const accessToken = hashParams.get("access_token");
+    const refreshToken = hashParams.get("refresh_token");
+    if (!accessToken || !refreshToken) return false;
+
+    setFinishingOAuth(true);
+    setOauthMessage("Finishing your Google sign in…");
+    const { error: sessionError } = await supabase.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+
+    window.history.replaceState(null, "", `${window.location.origin}/auth`);
+
+    if (sessionError) {
+      setFinishingOAuth(false);
+      setLoading(false);
+      toast.error(sessionError.message);
+      return true;
+    }
+
+    navigate({ to: "/dashboard", replace: true });
+    return true;
+  }
+
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) navigate({ to: "/dashboard", replace: true });
+    let intervalId: number | undefined;
+    let timeoutId: number | undefined;
+
+    void finishOAuthFromUrl().then((handled) => {
+      if (!handled) void redirectIfSignedIn();
     });
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_IN") navigate({ to: "/dashboard", replace: true });
     });
 
-    // Safety net: if we're finishing an OAuth return but no session materializes
-    // within 10s, stop showing the loading screen so the user isn't stranded.
-    let timeoutId: number | undefined;
     if (finishingOAuth) {
-      timeoutId = window.setTimeout(async () => {
-        const { data } = await supabase.auth.getSession();
-        if (data.session) {
-          navigate({ to: "/dashboard", replace: true });
-        } else {
-          setFinishingOAuth(false);
-          toast.error("Sign in didn't complete. Please try again.");
-        }
-      }, 10000);
+      intervalId = window.setInterval(() => {
+        void finishOAuthFromUrl().then((handled) => {
+          if (!handled) void redirectIfSignedIn();
+        });
+      }, 1000);
+      timeoutId = window.setTimeout(() => {
+        setOauthMessage("Still waiting for Google to finish. If approval opened in another tab, return here after it closes.");
+      }, 9000);
     }
 
     return () => {
       authListener.subscription.unsubscribe();
+      if (intervalId) window.clearInterval(intervalId);
       if (timeoutId) window.clearTimeout(timeoutId);
     };
   }, [navigate, finishingOAuth]);
-
-
-  async function finishGoogleReturn(resetIfMissing = true) {
-    if (!googleSignInPendingRef.current) return;
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData.session) {
-      googleSignInPendingRef.current = false;
-      navigate({ to: "/dashboard", replace: true });
-      return;
-    }
-
-    const { data } = await supabase.auth.getUser();
-    if (data.user) {
-      googleSignInPendingRef.current = false;
-      navigate({ to: "/dashboard", replace: true });
-      return;
-    }
-    if (resetIfMissing) setLoading(false);
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -125,18 +160,14 @@ function AuthPage() {
 
   async function handleGoogle() {
     setLoading(true);
-    googleSignInPendingRef.current = true;
-    // On mobile, OAuth often returns focus/pageshow without resolving the
-    // popup promise. Re-check the session and unstick the UI when that happens.
-    const onReturn = () => void finishGoogleReturn(true);
+    setFinishingOAuth(true);
+    setOauthMessage("Google sign in is open. Approve access, then we’ll bring you to your dashboard.");
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    let keepWaitingForOAuth = false;
+    const onReturn = () => void redirectIfSignedIn();
     const onVisible = () => {
       if (document.visibilityState === "visible") onReturn();
     };
-    window.addEventListener("focus", onReturn);
-    window.addEventListener("pageshow", onReturn);
-    document.addEventListener("visibilitychange", onVisible);
-    const sessionPoll = window.setInterval(() => void finishGoogleReturn(false), 1000);
-    const fallback = window.setTimeout(onReturn, 8000);
     const onOAuthMessage = (event: MessageEvent<LovableOAuthMessage>) => {
       if (!LOVABLE_OAUTH_ORIGINS.has(event.origin)) return;
       if (event.data?.type !== "authorization_response") return;
@@ -150,7 +181,7 @@ function AuthPage() {
             ? response.error_description
             : response.error,
         );
-        googleSignInPendingRef.current = false;
+        setFinishingOAuth(false);
         setLoading(false);
         return;
       }
@@ -162,6 +193,7 @@ function AuthPage() {
         return;
       }
 
+      setOauthMessage("Finishing your Google sign in…");
       void supabase.auth
         .setSession({
           access_token: response.access_token,
@@ -170,39 +202,57 @@ function AuthPage() {
         .then(({ error }) => {
           if (error) {
             toast.error(error.message);
+            setFinishingOAuth(false);
             return;
           }
-          googleSignInPendingRef.current = false;
           navigate({ to: "/dashboard", replace: true });
         })
         .finally(() => setLoading(false));
     };
+    window.addEventListener("focus", onReturn);
+    window.addEventListener("pageshow", onReturn);
     window.addEventListener("message", onOAuthMessage);
+    document.addEventListener("visibilitychange", onVisible);
+    const sessionPoll = window.setInterval(() => void redirectIfSignedIn(), 1000);
+    const fallback = window.setTimeout(() => {
+      setOauthMessage("Still waiting for Google to finish. If approval opened in another tab, return here after it closes.");
+    }, 9000);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: `${window.location.origin}/auth?oauth=1`,
       });
 
       if (result.error) {
-        toast.error(result.error.message);
-        googleSignInPendingRef.current = false;
+        const message = result.error.message;
+        if (/cancelled|timed out/i.test(message)) {
+          keepWaitingForOAuth = true;
+          setOauthMessage("Waiting for Google to finish. If you approved access, return to this tab and we’ll finish automatically.");
+          return;
+        }
+        toast.error(message);
+        setFinishingOAuth(false);
         return;
       }
       if (result.redirected) {
+        keepWaitingForOAuth = true;
+        setOauthMessage("Finishing your Google sign in…");
         setFinishingOAuth(true);
         return;
       }
-      googleSignInPendingRef.current = false;
-      navigate({ to: "/dashboard", replace: true });
+      if (!(await redirectIfSignedIn())) {
+        navigate({ to: "/dashboard", replace: true });
+      }
 
     } finally {
-      window.clearTimeout(fallback);
-      window.clearInterval(sessionPoll);
-      window.removeEventListener("focus", onReturn);
-      window.removeEventListener("pageshow", onReturn);
-      window.removeEventListener("message", onOAuthMessage);
-      document.removeEventListener("visibilitychange", onVisible);
-      setLoading(false);
+      if (!keepWaitingForOAuth) {
+        window.clearTimeout(fallback);
+        window.clearInterval(sessionPoll);
+        window.removeEventListener("focus", onReturn);
+        window.removeEventListener("pageshow", onReturn);
+        window.removeEventListener("message", onOAuthMessage);
+        document.removeEventListener("visibilitychange", onVisible);
+        setLoading(false);
+      }
     }
   }
 
@@ -211,7 +261,18 @@ function AuthPage() {
       <div className="min-h-screen bg-background flex flex-col items-center justify-center px-6 gap-4">
         <div className="h-8 w-8 rounded-full border-2 border-border border-t-accent animate-spin" />
         <p className="text-sm font-medium">Signing you in…</p>
-        <p className="text-xs text-muted-foreground">Finishing your Google sign in.</p>
+        <p className="max-w-xs text-center text-xs text-muted-foreground">{oauthMessage}</p>
+        <button
+          type="button"
+          onClick={() => {
+            setFinishingOAuth(false);
+            setLoading(false);
+            setOauthMessage("Signing you in…");
+          }}
+          className="mt-2 rounded-sm border border-border px-3 py-2 text-[10px] font-bold uppercase tracking-widest hover:bg-secondary transition-colors"
+        >
+          Return to sign in
+        </button>
       </div>
     );
   }
