@@ -485,6 +485,7 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [cropSource, setCropSource] = useState<string | null>(null);
   const [form, setForm] = useState({
     player_name: "",
     team: "",
@@ -502,7 +503,6 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
 
 
   async function handlePhoto(file: File) {
-    setScanning(true);
     try {
       // Convert HEIC/HEIF to JPEG so browsers can render the preview
       let workingFile: Blob = file;
@@ -515,13 +515,22 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
           workingFile = Array.isArray(converted) ? converted[0] : converted;
         } catch {
           toast.error("Couldn't convert HEIC image. Try a JPG or PNG.");
+          return;
         }
       }
       const rawDataUrl = await fileToDataUrl(workingFile as File);
-      // Best-effort auto-crop & perspective straighten of the card.
-      const dataUrl = await autoCropCard(rawDataUrl);
-      setImageDataUrl(dataUrl);
-      const result = await scanFn({ data: { imageDataUrl: dataUrl } });
+      setCropSource(rawDataUrl);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Couldn't read image");
+    }
+  }
+
+  async function handleCropConfirm(croppedDataUrl: string) {
+    setCropSource(null);
+    setImageDataUrl(croppedDataUrl);
+    setScanning(true);
+    try {
+      const result = await scanFn({ data: { imageDataUrl: croppedDataUrl } });
       setForm((f) => ({
         ...f,
         player_name: result.player_name ?? f.player_name,
@@ -542,6 +551,7 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
       setScanning(false);
     }
   }
+
 
   async function fileToDataUrl(file: Blob): Promise<string> {
     return new Promise((res, rej) => {
