@@ -513,13 +513,18 @@ function StatGrid({ group, s }: { group: "hitting" | "pitching"; s: Record<strin
 }
 
 // ---------- Add Card Dialog ----------
-function AddCardDialog({ onClose }: { onClose: () => void }) {
-  const queryClient = useQueryClient();
+function AddCardDialog({
+  onClose,
+  onCreate,
+  onUpdate,
+}: {
+  onClose: () => void;
+  onCreate: (card: Card) => void;
+  onUpdate: (cardId: string, patch: Partial<Card>) => void;
+}) {
   const scanFn = useServerFn(scanCardPhoto);
-  const createCardFn = useServerFn(createCard);
   const searchPlayerFn = useServerFn(searchMlbPlayer);
   const estimateFn = useServerFn(estimateCardValue);
-  const saveValFn = useServerFn(saveValuation);
 
   const [step, setStep] = useState<"choose" | "form">("choose");
   const [scanning, setScanning] = useState(false);
@@ -621,35 +626,28 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
     }
     setSaving(true);
     try {
-      // Upload photo (if any)
-      let photoPath: string | null = null;
-      if (imageDataUrl) {
-        const { data: userData } = await supabase.auth.getUser();
-        const uid = userData.user!.id;
-        const blob = await (await fetch(imageDataUrl)).blob();
-        const ext = blob.type.split("/")[1] ?? "jpg";
-        const key = `${uid}/${crypto.randomUUID()}.${ext}`;
-        const { error } = await supabase.storage.from("card-photos").upload(key, blob, { contentType: blob.type });
-        if (error) throw error;
-        photoPath = key;
-      }
-
-      const created = await createCardFn({
-        data: {
-          player_name: form.player_name.trim(),
-          team: form.team || null,
-          position: form.position || null,
-          year: form.year ? Number(form.year) : null,
-          set_name: form.set_name || null,
-          card_number: form.card_number || null,
-          grade: form.grade || null,
-          grader: form.grader || null,
-          purchase_price: form.purchase_price ? Number(form.purchase_price) : null,
-          notes: form.notes || null,
-          photo_url: photoPath,
-          mlb_player_id: form.mlb_player_id,
-        },
-      });
+      const created: Card = {
+        id: crypto.randomUUID(),
+        player_name: form.player_name.trim(),
+        team: form.team || null,
+        position: form.position || null,
+        year: form.year ? Number(form.year) : null,
+        set_name: form.set_name || null,
+        card_number: form.card_number || null,
+        grade: form.grade || null,
+        grader: form.grader || null,
+        purchase_price: form.purchase_price ? Number(form.purchase_price) : null,
+        current_value: null,
+        value_delta_pct: null,
+        notes: form.notes || null,
+        photo_url: imageDataUrl,
+        mlb_player_id: form.mlb_player_id,
+        last_valued_at: null,
+        created_at: new Date().toISOString(),
+        sales: [],
+        history: [],
+      };
+      onCreate(created);
       toast.success("Card added. Fetching valuation…");
       // Kick off async valuation
       try {
@@ -663,19 +661,16 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
             grader: created.grader,
           },
         });
-        await saveValFn({
-          data: {
-            card_id: created.id,
-            current_value: est.current_value,
-            value_delta_pct: est.value_delta_pct,
-            sales: est.sales,
-            history: est.history,
-          },
+        onUpdate(created.id, {
+          current_value: est.current_value,
+          value_delta_pct: est.value_delta_pct,
+          last_valued_at: new Date().toISOString(),
+          sales: est.sales.map((sale) => ({ ...sale, id: crypto.randomUUID(), card_id: created.id })),
+          history: est.history.map((point) => ({ ...point, id: crypto.randomUUID(), card_id: created.id })),
         });
       } catch {
         // silent — user can refresh value later
       }
-      queryClient.invalidateQueries({ queryKey: ["cards"] });
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
