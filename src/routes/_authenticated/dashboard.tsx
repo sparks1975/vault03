@@ -1,18 +1,42 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Camera, Loader2 } from "lucide-react";
+import { Plus, Trash2, Camera, Loader2, LogOut } from "lucide-react";
 
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
 import { CardCropDialog } from "@/components/CardCropDialog";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
+import { supabase } from "@/integrations/supabase/client";
 
-export const Route = createFileRoute("/dashboard")({
+export const Route = createFileRoute("/_authenticated/dashboard")({
   ssr: false,
   component: Dashboard,
 });
+
+function SignOutButton() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [busy, setBusy] = useState(false);
+  async function handle() {
+    setBusy(true);
+    await queryClient.cancelQueries();
+    queryClient.clear();
+    await supabase.auth.signOut();
+    navigate({ to: "/auth", replace: true });
+  }
+  return (
+    <button
+      onClick={handle}
+      disabled={busy}
+      title="Sign out"
+      className="p-2 rounded-sm border border-border hover:bg-secondary transition-colors disabled:opacity-60"
+    >
+      <LogOut className="size-4" />
+    </button>
+  );
+}
 
 type Sale = {
   id: string;
@@ -152,6 +176,7 @@ function Dashboard() {
           >
             <Plus className="size-3.5" /> Add Card
           </button>
+          <SignOutButton />
         </div>
       </nav>
 
