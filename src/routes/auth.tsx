@@ -100,7 +100,7 @@ function AuthPage() {
                 placeholder="Display name"
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full h-11 px-3 border border-border rounded-sm text-sm focus:outline-none focus:border-foreground"
+                className="w-full h-11 px-3 border border-border rounded-sm text-sm focus:outline-none focus:border-accent"
               />
             )}
             <input
@@ -109,7 +109,7 @@ function AuthPage() {
               placeholder="Email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full h-11 px-3 border border-border rounded-sm text-sm focus:outline-none focus:border-foreground"
+              className="w-full h-11 px-3 border border-border rounded-sm text-sm focus:outline-none focus:border-accent"
             />
             <input
               type="password"
@@ -118,7 +118,7 @@ function AuthPage() {
               placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full h-11 px-3 border border-border rounded-sm text-sm focus:outline-none focus:border-foreground"
+              className="w-full h-11 px-3 border border-border rounded-sm text-sm focus:outline-none focus:border-accent"
             />
             <button
               type="submit"
