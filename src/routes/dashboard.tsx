@@ -80,17 +80,39 @@ function fmtPct(n: number | null | undefined) {
 }
 
 function Dashboard() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const listCardsFn = useServerFn(listCards);
-
-  const cards = useQuery({ queryKey: ["cards"], queryFn: () => listCardsFn() });
+  const [cardData, setCardData] = useState<Card[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
 
+  useEffect(() => {
+    setCardData(loadCards());
+  }, []);
+
+  function replaceCards(next: Card[] | ((current: Card[]) => Card[])) {
+    setCardData((current) => {
+      const value = typeof next === "function" ? next(current) : next;
+      saveCards(value);
+      return value;
+    });
+  }
+
+  function addCard(card: Card) {
+    replaceCards((current) => [card, ...current]);
+    setSelectedId(card.id);
+  }
+
+  function updateCard(cardId: string, patch: Partial<Card>) {
+    replaceCards((current) => current.map((card) => (card.id === cardId ? { ...card, ...patch } : card)));
+  }
+
+  function removeCard(cardId: string) {
+    replaceCards((current) => current.filter((card) => card.id !== cardId));
+    setSelectedId(null);
+  }
+
   const filtered = useMemo(() => {
-    const list = cards.data ?? [];
+    const list = cardData;
     if (!query.trim()) return list;
     const q = query.toLowerCase();
     return list.filter(
@@ -99,26 +121,20 @@ function Dashboard() {
         c.set_name?.toLowerCase().includes(q) ||
         c.team?.toLowerCase().includes(q),
     );
-  }, [cards.data, query]);
+  }, [cardData, query]);
 
   const selected = selectedId ?? filtered[0]?.id ?? null;
+  const selectedCard = selected ? cardData.find((card) => card.id === selected) ?? null : null;
 
   const totals = useMemo(() => {
-    const list = cards.data ?? [];
+    const list = cardData;
     const totalValue = list.reduce((sum, c) => sum + Number(c.current_value ?? 0), 0);
     const graded = list.filter((c) => c.grade).length;
     const topMover = [...list]
       .filter((c) => c.value_delta_pct != null)
       .sort((a, b) => Number(b.value_delta_pct) - Number(a.value_delta_pct))[0];
     return { totalValue, count: list.length, gradedPct: list.length ? Math.round((graded / list.length) * 100) : 0, topMover };
-  }, [cards.data]);
-
-  async function handleSignOut() {
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    await supabase.auth.signOut();
-    navigate({ to: "/auth", replace: true });
-  }
+  }, [cardData]);
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-20">
@@ -135,14 +151,6 @@ function Dashboard() {
             className="px-4 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-accent transition-colors inline-flex items-center gap-2"
           >
             <Plus className="size-3.5" /> Add Card
-          </button>
-          <button
-            onClick={handleSignOut}
-            className="size-9 border border-border rounded-sm grid place-items-center hover:bg-secondary transition-colors"
-            aria-label="Sign out"
-            title="Sign out"
-          >
-            <LogOut className="size-4" />
           </button>
         </div>
       </nav>
@@ -190,9 +198,7 @@ function Dashboard() {
               />
             </div>
 
-            {cards.isLoading ? (
-              <div className="p-8 border border-border text-sm text-muted-foreground">Loading…</div>
-            ) : filtered.length === 0 ? (
+            {filtered.length === 0 ? (
               <div className="p-12 border border-border text-center">
                 <p className="text-sm text-muted-foreground mb-4">Your vault is empty.</p>
                 <button
@@ -219,8 +225,8 @@ function Dashboard() {
           {/* Detail */}
           <aside className="lg:col-span-5 animate-in-up [animation-delay:200ms]">
             <div className="sticky top-28">
-              {selected ? (
-                <CardDetail cardId={selected} onDeleted={() => setSelectedId(null)} />
+              {selectedCard ? (
+                <CardDetail card={selectedCard} onDeleted={removeCard} onUpdate={updateCard} />
               ) : (
                 <div className="bg-card border border-border p-6 text-sm text-muted-foreground">
                   Select a card to see market data and player stats.
@@ -231,7 +237,7 @@ function Dashboard() {
         </div>
       </main>
 
-      {addOpen && <AddCardDialog onClose={() => setAddOpen(false)} />}
+      {addOpen && <AddCardDialog onClose={() => setAddOpen(false)} onCreate={addCard} onUpdate={updateCard} />}
     </div>
   );
 }
