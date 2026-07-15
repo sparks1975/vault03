@@ -645,6 +645,15 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
+    <>
+      {cropSource && (
+        <CardCropDialog
+          image={cropSource}
+          onCancel={() => setCropSource(null)}
+          onConfirm={handleCropConfirm}
+          confirmLabel="Scan card"
+        />
+      )}
     <div className="fixed inset-0 z-50 bg-foreground/40 backdrop-blur-sm grid place-items-center p-4 fade-in" onClick={onClose}>
       <div
         className="bg-background border border-border w-full max-w-2xl max-h-[90vh] overflow-y-auto p-8"
