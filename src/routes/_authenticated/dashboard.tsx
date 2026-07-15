@@ -757,6 +757,7 @@ function AddCardDialog({ onClose }: { onClose: () => void }) {
         )}
       </div>
     </div>
+    </>
   );
 }
 
