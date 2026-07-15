@@ -21,7 +21,22 @@ function AuthPage() {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) navigate({ to: "/dashboard", replace: true });
     });
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN") navigate({ to: "/dashboard", replace: true });
+    });
+
+    return () => authListener.subscription.unsubscribe();
   }, [navigate]);
+
+  async function finishGoogleReturn() {
+    const { data } = await supabase.auth.getUser();
+    if (data.user) {
+      navigate({ to: "/dashboard", replace: true });
+      return;
+    }
+    setLoading(false);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -53,12 +68,16 @@ function AuthPage() {
 
   async function handleGoogle() {
     setLoading(true);
-    // On mobile, the OAuth popup often opens in a new tab. If the user
-    // returns to this tab without completing it, unstick the UI.
+    // On mobile, OAuth often returns focus/pageshow without resolving the
+    // popup promise. Re-check the session and unstick the UI when that happens.
+    const onReturn = () => void finishGoogleReturn();
     const onVisible = () => {
-      if (document.visibilityState === "visible") setLoading(false);
+      if (document.visibilityState === "visible") onReturn();
     };
+    window.addEventListener("focus", onReturn);
+    window.addEventListener("pageshow", onReturn);
     document.addEventListener("visibilitychange", onVisible);
+    const fallback = window.setTimeout(onReturn, 8000);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
         redirect_uri: window.location.origin,
@@ -70,6 +89,9 @@ function AuthPage() {
       if (result.redirected) return;
       navigate({ to: "/dashboard", replace: true });
     } finally {
+      window.clearTimeout(fallback);
+      window.removeEventListener("focus", onReturn);
+      window.removeEventListener("pageshow", onReturn);
       document.removeEventListener("visibilitychange", onVisible);
       setLoading(false);
     }
