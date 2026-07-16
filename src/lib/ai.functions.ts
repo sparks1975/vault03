@@ -171,6 +171,8 @@ If unable to value, return current_value: 0.`;
       sales: ebaySales,
       history: ai.history,
       source: ebayMedian > 0 ? ("ebay" as const) : ("ai" as const),
+      note: ebayNote,
     };
   });
+
 
