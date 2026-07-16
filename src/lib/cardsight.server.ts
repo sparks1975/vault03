@@ -123,39 +123,72 @@ function parseSoldComps(text: string): SoldComp[] {
 const cache = new Map<string, { at: number; comps: SoldComp[] }>();
 const TTL_MS = 10 * 60 * 1000;
 
+const NO_RESULTS_RE =
+  /no.*sold comps|no recent sales|no completed[- ]sale listings|no results|no listings/i;
+
+async function runSearchPricing(
+  q: string,
+  period: string,
+  limit: number,
+): Promise<{ comps: SoldComp[]; empty: boolean; raw: string }> {
+  const text = await mcpCall("search_pricing", { q, period, limit });
+  if (NO_RESULTS_RE.test(text)) return { comps: [], empty: true, raw: text };
+  const comps = parseSoldComps(text);
+  return { comps, empty: comps.length === 0, raw: text };
+}
+
 export async function fetchCardsightSoldComps(
   input: CardDescriptor,
   opts: { limit?: number; period?: string } = {},
 ): Promise<{ query: string; comps: SoldComp[]; error?: string }> {
-  const q = buildFreeText(input);
-  const cacheKey = `${q}|${opts.period ?? "3m"}|${opts.limit ?? 10}`;
+  const period = opts.period ?? "3m";
+  const limit = opts.limit ?? 10;
+
+  // Try progressively broader queries so uncommon cards still surface comps.
+  const queries: string[] = [];
+  const full = buildFreeText(input);
+  if (full) queries.push(full);
+  const noGrade = buildFreeText({ ...input, grade: null, grader: null });
+  if (noGrade && !queries.includes(noGrade)) queries.push(noGrade);
+  const noNumber = buildFreeText({ ...input, grade: null, grader: null, card_number: null });
+  if (noNumber && !queries.includes(noNumber)) queries.push(noNumber);
+  const nameYear = [input.year, input.player_name].filter(Boolean).join(" ");
+  if (nameYear && !queries.includes(nameYear)) queries.push(nameYear);
+  if (queries.length === 0) queries.push(input.player_name);
+
+  const primary = queries[0];
+  const cacheKey = `${primary}|${period}|${limit}`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < TTL_MS) {
-    return { query: q, comps: cached.comps };
+    return { query: primary, comps: cached.comps };
   }
-  try {
-    const text = await mcpCall("search_pricing", {
-      q,
-      period: opts.period ?? "3m",
-      limit: opts.limit ?? 10,
-    });
-    if (/no.*sold comps/i.test(text) || /No recent sales/i.test(text)) {
-      return { query: q, comps: [], error: "No sold comps found on Cardsight for this query." };
+
+  let lastRaw = "";
+  for (const q of queries) {
+    try {
+      const { comps, empty, raw } = await runSearchPricing(q, period, limit);
+      lastRaw = raw;
+      if (!empty && comps.length > 0) {
+        cache.set(cacheKey, { at: Date.now(), comps });
+        return { query: q, comps };
+      }
+    } catch (err) {
+      return {
+        query: q,
+        comps: [],
+        error: err instanceof Error ? err.message : String(err),
+      };
     }
-    const comps = parseSoldComps(text);
-    if (comps.length === 0) {
-      return { query: q, comps: [], error: "Could not parse Cardsight response." };
-    }
-    cache.set(cacheKey, { at: Date.now(), comps });
-    return { query: q, comps };
-  } catch (err) {
-    return {
-      query: q,
-      comps: [],
-      error: err instanceof Error ? err.message : String(err),
-    };
   }
+
+  console.log("Cardsight search_pricing had no comps. Last response:", lastRaw?.slice(0, 300));
+  return {
+    query: primary,
+    comps: [],
+    error: "Cardsight has no recent sold comps for this card.",
+  };
 }
+
 
 // Call Cardsight's identify_card with a public https image URL. Returns raw
 // human-readable text so the caller can feed it into an LLM structurer.
