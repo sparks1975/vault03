@@ -148,8 +148,36 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
     }
 
     // 3) Fallback: direct AI vision on the original data URL.
-    return scanViaAIVision(data.imageDataUrl);
+    const result = await scanViaAIVision(data.imageDataUrl);
+    return await enrichWithMlb(result);
   });
+
+// If team/position are missing, look them up from the free MLB Stats API.
+async function enrichWithMlb(result: ScanResult): Promise<ScanResult> {
+  if (!result.player_name || (result.team && result.position)) return result;
+  try {
+    const url = `https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(result.player_name)}&sportIds=1`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return result;
+    const body = await res.json();
+    const people = (body.people ?? []) as Array<{
+      fullName: string;
+      primaryPosition?: { abbreviation?: string };
+      currentTeam?: { name?: string };
+      active?: boolean;
+    }>;
+    if (people.length === 0) return result;
+    // Prefer active player; fall back to first match.
+    const pick = people.find((p) => p.active) ?? people[0];
+    return {
+      ...result,
+      team: result.team ?? pick.currentTeam?.name ?? null,
+      position: result.position ?? pick.primaryPosition?.abbreviation ?? null,
+    };
+  } catch {
+    return result;
+  }
+}
 
 
 // ---------- Value estimate + comparable sales (AI estimate) ----------
