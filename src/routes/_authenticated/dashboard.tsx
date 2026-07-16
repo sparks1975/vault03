@@ -508,8 +508,9 @@ function CardDetail({
             </table>
           )}
           <p className="mt-4 text-[9px] font-mono text-muted-foreground uppercase tracking-widest">
-            Values are AI-generated estimates. Plug in a live sales API for authoritative data.
+            Values reflect recent sold comps from Cardsight when available.
           </p>
+
         </div>
       </div>
     </div>
