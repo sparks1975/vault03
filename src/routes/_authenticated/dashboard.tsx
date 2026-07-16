@@ -500,10 +500,7 @@ function CardDetail({
   }
 
   const sales = card.sales ?? [];
-  const history = [...(card.history ?? [])].sort(
-    (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime(),
-  );
-  const max = Math.max(...history.map((h) => Number(h.value)), 1);
+
 
   return (
     <div className="bg-card border border-border p-6 shadow-sm">
