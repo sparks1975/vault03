@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X } from "lucide-react";
+import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X, ChevronLeft } from "lucide-react";
 
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
 import { CardCropDialog } from "@/components/CardCropDialog";
@@ -215,68 +215,86 @@ function Dashboard() {
     };
   }, [cardData]);
 
+  const [mobileDetail, setMobileDetail] = useState(false);
+
+  function selectCard(id: string) {
+    setSelectedId(id);
+    setMobileDetail(true);
+  }
+
   return (
-    <div className="min-h-screen bg-background text-foreground pb-20">
-      <nav className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border px-6 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-8">
-          <span className="font-extrabold tracking-tighter text-xl italic">VAULT.03</span>
+    <div className="min-h-screen bg-background text-foreground pb-20 overflow-x-hidden">
+      <nav className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border px-4 md:px-6 h-16 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-4 md:gap-8 min-w-0">
+          {mobileDetail && (
+            <button
+              onClick={() => setMobileDetail(false)}
+              className="lg:hidden p-2 -ml-2 rounded-sm border border-border hover:bg-secondary"
+              aria-label="Back to list"
+            >
+              <ChevronLeft className="size-4" />
+            </button>
+          )}
+          <span className="font-extrabold tracking-tighter text-xl italic truncate">VAULT.03</span>
           <div className="hidden md:flex gap-6 text-sm font-medium text-muted-foreground">
             <span className="text-accent">Dashboard</span>
           </div>
         </div>
-        <div className="flex gap-3 items-center">
+        <div className="flex gap-2 md:gap-3 items-center shrink-0">
           <button
             onClick={() => setAddOpen(true)}
-            className="px-4 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-accent transition-colors inline-flex items-center gap-2"
+            className="px-3 md:px-4 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-accent transition-colors inline-flex items-center gap-2"
           >
-            <Plus className="size-3.5" /> Add Card
+            <Plus className="size-3.5" /> <span className="hidden sm:inline">Add Card</span><span className="sm:hidden">Add</span>
           </button>
           <SignOutButton />
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-6 pt-12">
-        <header className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border animate-in-up">
-          <StatCell label="Total Value" value={fmt(totals.totalValue)} sub={totals.count ? "Live" : "Add your first card"} subAccent={totals.count > 0} />
-          <StatCell label="Assets" value={String(totals.count)} sub={totals.count ? `Graded: ${totals.gradedPct}%` : "—"} />
-          <div className="bg-background p-8 md:col-span-2">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Top Mover</p>
-            {totals.topMover ? (
-              <div className="flex justify-between items-end">
-                <div>
-                  <h3 className="font-bold">
-                    {totals.topMover.year ?? ""} {totals.topMover.set_name ?? ""} {totals.topMover.player_name}
-                  </h3>
-                  <p className="text-xs text-muted-foreground">
-                    {totals.topMover.grader ?? ""} {totals.topMover.grade ?? ""}
-                  </p>
+      <main className="max-w-7xl mx-auto px-4 md:px-6 pt-8 md:pt-12">
+        {!mobileDetail && (
+          <header className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border animate-in-up">
+            <StatCell label="Total Value" value={fmt(totals.totalValue)} sub={totals.count ? "Live" : "Add your first card"} subAccent={totals.count > 0} />
+            <StatCell label="Assets" value={String(totals.count)} sub={totals.count ? `Graded: ${totals.gradedPct}%` : "—"} />
+            <div className="bg-background p-6 md:p-8 md:col-span-2">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Top Mover</p>
+              {totals.topMover ? (
+                <div className="flex justify-between items-end gap-3">
+                  <div className="min-w-0">
+                    <h3 className="font-bold truncate">
+                      {totals.topMover.year ?? ""} {totals.topMover.set_name ?? ""} {totals.topMover.player_name}
+                    </h3>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {totals.topMover.grader ?? ""} {totals.topMover.grade ?? ""}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className={`font-mono font-bold text-sm md:text-base ${(totals.topMoverDollars ?? 0) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
+                      {(totals.topMoverDollars ?? 0) >= 0 ? "+" : ""}{fmt(totals.topMoverDollars)}
+                      {totals.topMoverPct != null && ` (${fmtPct(totals.topMoverPct)})`}
+                    </span>
+                    <p className="text-[9px] font-mono text-muted-foreground uppercase">vs. purchase</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className={`font-mono font-bold ${(totals.topMoverDollars ?? 0) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
-                    {(totals.topMoverDollars ?? 0) >= 0 ? "+" : ""}{fmt(totals.topMoverDollars)}
-                    {totals.topMoverPct != null && ` (${fmtPct(totals.topMoverPct)})`}
-                  </span>
-                  <p className="text-[9px] font-mono text-muted-foreground uppercase">vs. purchase</p>
-                </div>
-              </div>
-            ) : cardData.length > 0 ? (
-              <p className="text-sm text-muted-foreground">Add a purchase price to your cards to see gains vs. current value.</p>
-            ) : (
-              <p className="text-sm text-muted-foreground">No valuations yet — add a card to see market movement.</p>
-            )}
-          </div>
-        </header>
+              ) : cardData.length > 0 ? (
+                <p className="text-sm text-muted-foreground">Add a purchase price to your cards to see gains vs. current value.</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">No valuations yet — add a card to see market movement.</p>
+              )}
+            </div>
+          </header>
+        )}
 
-        <div className="mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
-          <section className="lg:col-span-7 animate-in-up [animation-delay:100ms]">
-            <div className="flex items-center justify-between mb-6">
+        <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
+          <section className={`lg:col-span-7 animate-in-up [animation-delay:100ms] ${mobileDetail ? "hidden lg:block" : ""}`}>
+            <div className="flex items-center justify-between mb-6 gap-3">
               <h3 className="text-sm font-mono uppercase tracking-widest">Portfolio Holdings</h3>
               <input
                 type="text"
                 placeholder="Search cards…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="text-xs border border-border px-3 py-1 w-48 focus:outline-none focus:border-accent bg-background rounded-sm"
+                className="text-xs border border-border px-3 py-1 w-32 sm:w-48 focus:outline-none focus:border-accent bg-background rounded-sm"
               />
             </div>
 
@@ -295,16 +313,16 @@ function Dashboard() {
             ) : (
               <div className="space-y-2">
                 {filtered.map((c) => (
-                  <CardRow key={c.id} card={c} active={c.id === selected} onClick={() => setSelectedId(c.id)} />
+                  <CardRow key={c.id} card={c} active={c.id === selected} onClick={() => selectCard(c.id)} />
                 ))}
               </div>
             )}
           </section>
 
-          <aside className="lg:col-span-5 animate-in-up [animation-delay:200ms]">
-            <div className="sticky top-28">
+          <aside className={`lg:col-span-5 animate-in-up [animation-delay:200ms] ${mobileDetail ? "" : "hidden lg:block"}`}>
+            <div className="lg:sticky lg:top-28">
               {selectedCard ? (
-                <CardDetail card={selectedCard} onDeleted={removeCard} onUpdate={updateCard} />
+                <CardDetail card={selectedCard} onDeleted={(id) => { removeCard(id); setMobileDetail(false); }} onUpdate={updateCard} />
               ) : (
                 <div className="bg-card border border-border p-6 text-sm text-muted-foreground">
                   Select a card to see market data and player stats.
@@ -320,6 +338,7 @@ function Dashboard() {
           onClose={() => setAddOpen(false)}
           onCreated={(id) => {
             setSelectedId(id);
+            setMobileDetail(true);
             qc.invalidateQueries({ queryKey: ["cards"] });
           }}
         />
@@ -327,6 +346,7 @@ function Dashboard() {
     </div>
   );
 }
+
 
 function StatCell({ label, value, sub, subAccent }: { label: string; value: string; sub?: string; subAccent?: boolean }) {
   return (
@@ -676,27 +696,30 @@ function CardDetail({
           {sales.length === 0 ? (
             <p className="text-xs text-muted-foreground">No comparable sales yet. Refresh value to fetch estimates.</p>
           ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-[9px] font-mono text-muted-foreground uppercase">
-                  <th className="pb-2">Date</th>
-                  <th className="pb-2">Grade</th>
-                  <th className="pb-2">Source</th>
-                  <th className="pb-2 text-right">Price</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sales.map((s) => (
-                  <tr key={s.id} className="text-xs border-b border-border/50">
-                    <td className="py-2">{s.sold_at ? new Date(s.sold_at).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "2-digit" }) : "Active"}</td>
-                    <td className="py-2">{s.grade ?? "—"}</td>
-                    <td className="py-2 text-muted-foreground">{s.source ?? "—"}</td>
-                    <td className="py-2 text-right font-mono">{fmt(Number(s.price))}</td>
+            <div className="overflow-x-auto -mx-6 px-6">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-[9px] font-mono text-muted-foreground uppercase">
+                    <th className="pb-2">Date</th>
+                    <th className="pb-2">Grade</th>
+                    <th className="pb-2">Source</th>
+                    <th className="pb-2 text-right">Price</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {sales.map((s) => (
+                    <tr key={s.id} className="text-xs border-b border-border/50">
+                      <td className="py-2 whitespace-nowrap">{s.sold_at ? new Date(s.sold_at).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "2-digit" }) : "Active"}</td>
+                      <td className="py-2 whitespace-nowrap">{s.grade ?? "—"}</td>
+                      <td className="py-2 text-muted-foreground whitespace-nowrap">{s.source ?? "—"}</td>
+                      <td className="py-2 text-right font-mono whitespace-nowrap">{fmt(Number(s.price))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
+
           <p className="mt-4 text-[9px] font-mono text-muted-foreground uppercase tracking-widest">
             Values reflect recent sold comps from Cardsight when available.
           </p>
