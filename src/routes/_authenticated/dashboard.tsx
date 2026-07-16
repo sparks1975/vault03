@@ -206,9 +206,10 @@ function Dashboard() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-[color:var(--positive)] font-mono font-bold">
-                    {fmtPct(totals.topMover.value_delta_pct)}
+                  <span className={`font-mono font-bold ${(totals.topMoverGain ?? 0) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
+                    {fmtPct(totals.topMoverGain)}
                   </span>
+                  <p className="text-[9px] font-mono text-muted-foreground uppercase">vs. purchase</p>
                 </div>
               </div>
             ) : (
