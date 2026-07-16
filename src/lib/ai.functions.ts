@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3.5-flash";
@@ -28,44 +29,118 @@ function extractJson<T>(text: string): T {
   return JSON.parse(match[0]) as T;
 }
 
-// ---------- Photo scan: extract card details from an image ----------
+type ScanResult = {
+  player_name: string;
+  team: string | null;
+  position: string | null;
+  year: number | null;
+  set_name: string | null;
+  card_number: string | null;
+  grade: string | null;
+  grader: string | null;
+  confidence: "high" | "medium" | "low";
+};
+
+function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; contentType: string; ext: string } {
+  const m = dataUrl.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
+  if (!m) throw new Error("Invalid image data URL");
+  const contentType = m[1];
+  const base64 = m[2];
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const ext = contentType.split("/")[1]?.split("+")[0] || "jpg";
+  return { bytes, contentType, ext };
+}
+
+async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
+  const text = await callAI({
+    model: MODEL,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a baseball card identification expert. Extract details from card photos. Reply ONLY with a JSON object matching the requested schema — no prose.",
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text:
+              "Identify this baseball card. Return JSON: {\"player_name\": string, \"team\": string|null, \"position\": string|null, \"year\": number|null, \"set_name\": string|null, \"card_number\": string|null, \"grade\": string|null, \"grader\": string|null, \"confidence\": \"high\"|\"medium\"|\"low\"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null.",
+          },
+          { type: "image_url", image_url: { url: imageUrl } },
+        ],
+      },
+    ],
+  });
+  return extractJson<ScanResult>(text);
+}
+
+// ---------- Photo scan: Cardsight identify_card, AI fallback ----------
 export const scanCardPhoto = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: { imageDataUrl: string }) =>
     z.object({ imageDataUrl: z.string().startsWith("data:image/") }).parse(d),
   )
-  .handler(async ({ data }) => {
-    const text = await callAI({
-      model: MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a baseball card identification expert. Extract details from card photos. Reply ONLY with a JSON object matching the requested schema — no prose.",
-        },
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text:
-                "Identify this baseball card. Return JSON: {\"player_name\": string, \"team\": string|null, \"position\": string|null, \"year\": number|null, \"set_name\": string|null, \"card_number\": string|null, \"grade\": string|null, \"grader\": string|null, \"confidence\": \"high\"|\"medium\"|\"low\"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null.",
-            },
-            { type: "image_url", image_url: { url: data.imageDataUrl } },
-          ],
-        },
-      ],
-    });
-    return extractJson<{
-      player_name: string;
-      team: string | null;
-      position: string | null;
-      year: number | null;
-      set_name: string | null;
-      card_number: string | null;
-      grade: string | null;
-      grader: string | null;
-      confidence: "high" | "medium" | "low";
-    }>(text);
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+
+    // 1) Upload the cropped photo to storage so Cardsight can fetch a public URL.
+    let signedUrl: string | null = null;
+    try {
+      const { bytes, contentType, ext } = dataUrlToBytes(data.imageDataUrl);
+      const path = `${userId}/scans/${crypto.randomUUID()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("card-photos")
+        .upload(path, bytes, { contentType, upsert: false });
+      if (upErr) throw upErr;
+      const { data: signed, error: signErr } = await supabase.storage
+        .from("card-photos")
+        .createSignedUrl(path, 300);
+      if (signErr || !signed?.signedUrl) throw signErr ?? new Error("No signed URL");
+      signedUrl = signed.signedUrl;
+    } catch (err) {
+      console.error("Storage upload for identify_card failed:", err);
+    }
+
+    // 2) Ask Cardsight to identify the card from the URL.
+    if (signedUrl) {
+      try {
+        const { identifyCardFromImageUrl } = await import("./cardsight.server");
+        const { text, error } = await identifyCardFromImageUrl(signedUrl);
+        if (!error && text.trim()) {
+          // Convert Cardsight's human-readable response into our JSON schema.
+          const structured = await callAI({
+            model: MODEL,
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You convert baseball card identification notes into strict JSON. Reply ONLY with a JSON object — no prose.",
+              },
+              {
+                role: "user",
+                content: `Cardsight identify_card response:\n\n${text}\n\nReturn JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null.`,
+              },
+            ],
+          });
+          try {
+            return extractJson<ScanResult>(structured);
+          } catch (err) {
+            console.error("Failed to structure Cardsight identify_card text:", err);
+          }
+        } else if (error) {
+          console.error("Cardsight identify_card error:", error);
+        }
+      } catch (err) {
+        console.error("Cardsight identify_card call failed:", err);
+      }
+    }
+
+    // 3) Fallback: direct AI vision on the original data URL.
+    return scanViaAIVision(data.imageDataUrl);
   });
 
 // ---------- Value estimate + comparable sales (AI estimate) ----------
