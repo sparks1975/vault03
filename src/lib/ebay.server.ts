@@ -112,3 +112,50 @@ export async function searchCardListings(
   const items = await browseSearch(params);
   return { query: q, items };
 }
+
+export type SoldItem = {
+  itemId: string;
+  title: string;
+  lastSoldPrice?: { value: string; currency: string };
+  lastSoldDate?: string;
+  itemWebUrl?: string;
+  image?: { imageUrl: string };
+  condition?: string;
+};
+
+// Marketplace Insights API — real sold prices (last 90 days).
+// Requires eBay approval. Returns { sold, error? } so callers can degrade gracefully.
+export async function searchSoldItems(
+  input: CardDescriptor,
+  opts: { limit?: number } = {},
+): Promise<{ query: string; sold: SoldItem[]; error?: string }> {
+  const q = buildQuery(input);
+  const { token, base } = await getAppToken();
+  const params = new URLSearchParams({
+    q,
+    limit: String(opts.limit ?? 10),
+    category_ids: "213",
+  });
+  const url = `${base}/buy/marketplace_insights/v1_beta/item_sales/search?${params.toString()}`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+    },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    if (res.status === 403 || res.status === 401) {
+      return {
+        query: q,
+        sold: [],
+        error:
+          "Marketplace Insights access not enabled for this eBay app. Apply at developer.ebay.com → Application Access Request → Marketplace Insights API.",
+      };
+    }
+    return { query: q, sold: [], error: `eBay sold search failed: ${res.status} ${body}` };
+  }
+  const j = (await res.json()) as { itemSales?: SoldItem[] };
+  return { query: q, sold: j.itemSales ?? [] };
+}
+
