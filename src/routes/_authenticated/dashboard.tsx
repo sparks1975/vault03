@@ -95,10 +95,17 @@ function fmtPct(n: number | null | undefined) {
   const sign = v >= 0 ? "+" : "";
   return `${sign}${v.toFixed(1)}%`;
 }
-function gainPct(card: { purchase_price: number | null; current_value: number | null }): number | null {
-  const p = card.purchase_price == null ? null : Number(card.purchase_price);
+function gainDollars(card: { purchase_price: number | null; current_value: number | null }): number | null {
   const v = card.current_value == null ? null : Number(card.current_value);
-  if (p == null || v == null || p <= 0) return null;
+  if (v == null) return null;
+  const p = card.purchase_price == null ? 0 : Number(card.purchase_price);
+  return v - p;
+}
+function gainPct(card: { purchase_price: number | null; current_value: number | null }): number | null {
+  const v = card.current_value == null ? null : Number(card.current_value);
+  if (v == null) return null;
+  const p = card.purchase_price == null ? 0 : Number(card.purchase_price);
+  if (p <= 0) return null; // undefined % when cost basis is 0
   return ((v - p) / p) * 100;
 }
 
@@ -156,16 +163,17 @@ function Dashboard() {
     const totalValue = list.reduce((sum, c) => sum + Number(c.current_value ?? 0), 0);
     const graded = list.filter((c) => c.grade).length;
     const withGain = list
-      .map((c) => ({ card: c, gain: gainPct(c) }))
-      .filter((x): x is { card: Card; gain: number } => x.gain != null)
-      .sort((a, b) => b.gain - a.gain);
+      .map((c) => ({ card: c, dollars: gainDollars(c), pct: gainPct(c) }))
+      .filter((x): x is { card: Card; dollars: number; pct: number | null } => x.dollars != null)
+      .sort((a, b) => b.dollars - a.dollars);
     const top = withGain[0];
     return {
       totalValue,
       count: list.length,
       gradedPct: list.length ? Math.round((graded / list.length) * 100) : 0,
       topMover: top?.card ?? null,
-      topMoverGain: top?.gain ?? null,
+      topMoverDollars: top?.dollars ?? null,
+      topMoverPct: top?.pct ?? null,
     };
   }, [cardData]);
 
@@ -206,8 +214,9 @@ function Dashboard() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className={`font-mono font-bold ${(totals.topMoverGain ?? 0) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
-                    {fmtPct(totals.topMoverGain)}
+                  <span className={`font-mono font-bold ${(totals.topMoverDollars ?? 0) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
+                    {(totals.topMoverDollars ?? 0) >= 0 ? "+" : ""}{fmt(totals.topMoverDollars)}
+                    {totals.topMoverPct != null && ` (${fmtPct(totals.topMoverPct)})`}
                   </span>
                   <p className="text-[9px] font-mono text-muted-foreground uppercase">vs. purchase</p>
                 </div>
