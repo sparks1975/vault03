@@ -41,7 +41,7 @@ function SignOutButton() {
 type Sale = {
   id: string;
   card_id: string;
-  sold_at: string;
+  sold_at: string | null;
   grade: string | null;
   price: number;
   source: string | null;
@@ -492,7 +492,7 @@ function CardDetail({
               <tbody>
                 {sales.map((s) => (
                   <tr key={s.id} className="text-xs border-b border-border/50">
-                    <td className="py-2">{new Date(s.sold_at).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "2-digit" })}</td>
+                    <td className="py-2">{s.sold_at ? new Date(s.sold_at).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "2-digit" }) : "Active"}</td>
                     <td className="py-2">{s.grade ?? "—"}</td>
                     <td className="py-2 text-muted-foreground">{s.source ?? "—"}</td>
                     <td className="py-2 text-right font-mono">{fmt(Number(s.price))}</td>
