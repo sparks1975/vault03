@@ -1,19 +1,28 @@
 // Server-only eBay helpers. Never import at module scope from client-reachable files.
-const EBAY_BASE = "https://api.sandbox.ebay.com";
-const OAUTH_URL = `${EBAY_BASE}/identity/v1/oauth2/token`;
-const BROWSE_URL = `${EBAY_BASE}/buy/browse/v1/item_summary/search`;
-const BROWSE_IMAGE_URL = `${EBAY_BASE}/buy/browse/v1/item_summary/search_by_image`;
+// Prefer production credentials when available; fall back to sandbox otherwise.
+function ebayEnv() {
+  const prodApp = process.env.EBAY_PROD_APP_ID;
+  const prodCert = process.env.EBAY_PROD_CERT_ID;
+  if (prodApp && prodCert) {
+    return { base: "https://api.ebay.com", appId: prodApp, certId: prodCert, mode: "prod" as const };
+  }
+  const sbxApp = process.env.EBAY_SANDBOX_APP_ID;
+  const sbxCert = process.env.EBAY_SANDBOX_CERT_ID;
+  if (sbxApp && sbxCert) {
+    return { base: "https://api.sandbox.ebay.com", appId: sbxApp, certId: sbxCert, mode: "sandbox" as const };
+  }
+  throw new Error("eBay credentials not configured");
+}
 
-let cachedToken: { token: string; expiresAt: number } | null = null;
+let cachedToken: { token: string; expiresAt: number; mode: string } | null = null;
 
-export async function getAppToken(): Promise<string> {
-  const appId = process.env.EBAY_SANDBOX_APP_ID;
-  const certId = process.env.EBAY_SANDBOX_CERT_ID;
-  if (!appId || !certId) throw new Error("eBay sandbox credentials not configured");
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.token;
-
-  const basic = Buffer.from(`${appId}:${certId}`).toString("base64");
-  const res = await fetch(OAUTH_URL, {
+export async function getAppToken(): Promise<{ token: string; base: string }> {
+  const env = ebayEnv();
+  if (cachedToken && cachedToken.mode === env.mode && cachedToken.expiresAt > Date.now() + 60_000) {
+    return { token: cachedToken.token, base: env.base };
+  }
+  const basic = Buffer.from(`${env.appId}:${env.certId}`).toString("base64");
+  const res = await fetch(`${env.base}/identity/v1/oauth2/token`, {
     method: "POST",
     headers: {
       Authorization: `Basic ${basic}`,
@@ -25,8 +34,8 @@ export async function getAppToken(): Promise<string> {
   });
   if (!res.ok) throw new Error(`eBay OAuth failed: ${res.status} ${await res.text()}`);
   const j = (await res.json()) as { access_token: string; expires_in: number };
-  cachedToken = { token: j.access_token, expiresAt: Date.now() + j.expires_in * 1000 };
-  return j.access_token;
+  cachedToken = { token: j.access_token, expiresAt: Date.now() + j.expires_in * 1000, mode: env.mode };
+  return { token: j.access_token, base: env.base };
 }
 
 export type ItemSummary = {
