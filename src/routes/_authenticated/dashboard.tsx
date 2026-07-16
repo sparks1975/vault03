@@ -95,10 +95,17 @@ function fmtPct(n: number | null | undefined) {
   const sign = v >= 0 ? "+" : "";
   return `${sign}${v.toFixed(1)}%`;
 }
-function gainPct(card: { purchase_price: number | null; current_value: number | null }): number | null {
-  const p = card.purchase_price == null ? null : Number(card.purchase_price);
+function gainDollars(card: { purchase_price: number | null; current_value: number | null }): number | null {
   const v = card.current_value == null ? null : Number(card.current_value);
-  if (p == null || v == null || p <= 0) return null;
+  if (v == null) return null;
+  const p = card.purchase_price == null ? 0 : Number(card.purchase_price);
+  return v - p;
+}
+function gainPct(card: { purchase_price: number | null; current_value: number | null }): number | null {
+  const v = card.current_value == null ? null : Number(card.current_value);
+  if (v == null) return null;
+  const p = card.purchase_price == null ? 0 : Number(card.purchase_price);
+  if (p <= 0) return null; // undefined % when cost basis is 0
   return ((v - p) / p) * 100;
 }
 
