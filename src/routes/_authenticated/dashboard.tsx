@@ -95,6 +95,12 @@ function fmtPct(n: number | null | undefined) {
   const sign = v >= 0 ? "+" : "";
   return `${sign}${v.toFixed(1)}%`;
 }
+function gainPct(card: { purchase_price: number | null; current_value: number | null }): number | null {
+  const p = card.purchase_price == null ? null : Number(card.purchase_price);
+  const v = card.current_value == null ? null : Number(card.current_value);
+  if (p == null || v == null || p <= 0) return null;
+  return ((v - p) / p) * 100;
+}
 
 function Dashboard() {
   const listFn = useServerFn(listCards);
