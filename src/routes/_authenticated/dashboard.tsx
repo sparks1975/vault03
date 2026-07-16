@@ -696,27 +696,30 @@ function CardDetail({
           {sales.length === 0 ? (
             <p className="text-xs text-muted-foreground">No comparable sales yet. Refresh value to fetch estimates.</p>
           ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="text-[9px] font-mono text-muted-foreground uppercase">
-                  <th className="pb-2">Date</th>
-                  <th className="pb-2">Grade</th>
-                  <th className="pb-2">Source</th>
-                  <th className="pb-2 text-right">Price</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sales.map((s) => (
-                  <tr key={s.id} className="text-xs border-b border-border/50">
-                    <td className="py-2">{s.sold_at ? new Date(s.sold_at).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "2-digit" }) : "Active"}</td>
-                    <td className="py-2">{s.grade ?? "—"}</td>
-                    <td className="py-2 text-muted-foreground">{s.source ?? "—"}</td>
-                    <td className="py-2 text-right font-mono">{fmt(Number(s.price))}</td>
+            <div className="overflow-x-auto -mx-6 px-6">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="text-[9px] font-mono text-muted-foreground uppercase">
+                    <th className="pb-2">Date</th>
+                    <th className="pb-2">Grade</th>
+                    <th className="pb-2">Source</th>
+                    <th className="pb-2 text-right">Price</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {sales.map((s) => (
+                    <tr key={s.id} className="text-xs border-b border-border/50">
+                      <td className="py-2 whitespace-nowrap">{s.sold_at ? new Date(s.sold_at).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "2-digit" }) : "Active"}</td>
+                      <td className="py-2 whitespace-nowrap">{s.grade ?? "—"}</td>
+                      <td className="py-2 text-muted-foreground whitespace-nowrap">{s.source ?? "—"}</td>
+                      <td className="py-2 text-right font-mono whitespace-nowrap">{fmt(Number(s.price))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
+
           <p className="mt-4 text-[9px] font-mono text-muted-foreground uppercase tracking-widest">
             Values reflect recent sold comps from Cardsight when available.
           </p>
