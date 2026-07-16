@@ -93,11 +93,38 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       .filter(Boolean)
       .join(" ");
 
-    const prompt = `Give a realistic current secondary-market value estimate (USD) for this baseball card: "${descriptor}". Also give a plausible 30-day percent change, 5 recent comparable sales (fabricated but plausible), and 6 monthly historical value data points ending today. Return JSON ONLY:
+    // 1) Try eBay for real market listings.
+    let ebaySales: Array<{
+      sold_at: string | null;
+      grade: string | null;
+      price: number;
+      source: string;
+      url: string | null;
+    }> = [];
+    let ebayMedian = 0;
+    try {
+      const { searchCardListings } = await import("./ebay.server");
+      const { items } = await searchCardListings(data, { limit: 10 });
+      ebaySales = items
+        .filter((it) => it.price)
+        .map((it) => ({
+          sold_at: null,
+          grade: null,
+          price: Number(it.price!.value),
+          source: "eBay",
+          url: it.itemWebUrl ?? null,
+        }));
+      const prices = ebaySales.map((s) => s.price).sort((a, b) => a - b);
+      ebayMedian = prices.length ? prices[Math.floor(prices.length / 2)] : 0;
+    } catch (err) {
+      console.error("eBay lookup failed, falling back to AI:", err);
+    }
+
+    // 2) AI for narrative value + history (and as fallback if eBay empty).
+    const prompt = `Give a realistic current secondary-market value estimate (USD) for this baseball card: "${descriptor}". Also give a plausible 30-day percent change and 6 monthly historical value data points ending today. Return JSON ONLY:
 {
   "current_value": number,
   "value_delta_pct": number,
-  "sales": [{"sold_at": "YYYY-MM-DD", "grade": string|null, "price": number, "source": "eBay"|"PWCC"|"Goldin"|"Heritage", "url": null}],
   "history": [{"recorded_at": "YYYY-MM-DDTHH:mm:ssZ", "value": number}]
 }
 If unable to value, return current_value: 0.`;
@@ -114,10 +141,18 @@ If unable to value, return current_value: 0.`;
       ],
     });
 
-    return extractJson<{
+    const ai = extractJson<{
       current_value: number;
       value_delta_pct: number;
-      sales: Array<{ sold_at: string; grade: string | null; price: number; source: string; url: string | null }>;
       history: Array<{ recorded_at: string; value: number }>;
     }>(text);
+
+    return {
+      current_value: ebayMedian > 0 ? ebayMedian : ai.current_value,
+      value_delta_pct: ai.value_delta_pct,
+      sales: ebaySales,
+      history: ai.history,
+      source: ebayMedian > 0 ? ("ebay" as const) : ("ai" as const),
+    };
   });
+
