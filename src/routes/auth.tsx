@@ -105,10 +105,10 @@ function AuthPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
       <div className="w-full max-w-md">
         <div className="text-center">
-          <span className="inline-flex items-center rounded-full bg-accent/10 px-3 py-1 text-[10px] font-mono uppercase tracking-widest text-accent">
-            Vault.03
-          </span>
-          <h1 className="mt-4 text-3xl font-extrabold tracking-tighter italic text-foreground">
+          <p className="text-xl font-extrabold tracking-tighter italic text-foreground">
+            VAULT.03
+          </p>
+          <h1 className="mt-5 text-3xl font-extrabold tracking-tighter italic text-foreground">
             Your baseball card portfolio
           </h1>
           <p className="mt-3 text-sm text-muted-foreground">
