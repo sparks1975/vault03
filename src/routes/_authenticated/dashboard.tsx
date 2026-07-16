@@ -1,13 +1,21 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Camera, Loader2, LogOut } from "lucide-react";
 
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
 import { CardCropDialog } from "@/components/CardCropDialog";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
+import {
+  listCards,
+  createCard,
+  updateCardFields,
+  deleteCard,
+  replaceValuation,
+  uploadCardPhoto,
+} from "@/lib/cards.functions";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -77,34 +85,6 @@ type Card = {
   history: HistoryPoint[];
 };
 
-const STORAGE_KEY = "vault03.cards.v1";
-
-function loadCards(): Card[] {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Card[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-function stripPhotos(cards: Card[]): Card[] {
-  return cards.map((c) => ({ ...c, photo_url: c.photo_url?.startsWith("data:") ? "" : c.photo_url }));
-}
-
-function saveCards(cards: Card[]) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
-  } catch {
-    // Photo data URLs can overflow localStorage quota — retry without them.
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stripPhotos(cards)));
-    } catch {
-      // Give up silently — state stays in memory for this session.
-    }
-  }
-}
-
 function fmt(n: number | null | undefined) {
   if (n == null) return "—";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(n));
@@ -117,42 +97,44 @@ function fmtPct(n: number | null | undefined) {
 }
 
 function Dashboard() {
-  const [cardData, setCardData] = useState<Card[]>([]);
+  const listFn = useServerFn(listCards);
+  const updateFn = useServerFn(updateCardFields);
+  const deleteFn = useServerFn(deleteCard);
+  const qc = useQueryClient();
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [addOpen, setAddOpen] = useState(false);
 
-  useEffect(() => {
-    setCardData(loadCards());
-  }, []);
+  const cardsQ = useQuery({
+    queryKey: ["cards"],
+    queryFn: () => listFn(),
+  });
+  const cardData = (cardsQ.data ?? []) as Card[];
 
-  function replaceCards(next: Card[] | ((current: Card[]) => Card[])) {
-    setCardData((current) => {
-      const value = typeof next === "function" ? next(current) : next;
-      saveCards(value);
-      return value;
-    });
-  }
+  const updateMut = useMutation({
+    mutationFn: (v: { id: string; patch: Partial<Card> }) =>
+      updateFn({ data: { id: v.id, patch: v.patch as Record<string, unknown> } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cards"] }),
+  });
 
-  function addCard(card: Card) {
-    replaceCards((current) => [card, ...current]);
-    setSelectedId(card.id);
-  }
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => deleteFn({ data: { id } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["cards"] }),
+  });
 
   function updateCard(cardId: string, patch: Partial<Card>) {
-    replaceCards((current) => current.map((card) => (card.id === cardId ? { ...card, ...patch } : card)));
+    updateMut.mutate({ id: cardId, patch });
   }
-
   function removeCard(cardId: string) {
-    replaceCards((current) => current.filter((card) => card.id !== cardId));
+    deleteMut.mutate(cardId);
     setSelectedId(null);
   }
 
   const filtered = useMemo(() => {
-    const list = cardData;
-    if (!query.trim()) return list;
+    if (!query.trim()) return cardData;
     const q = query.toLowerCase();
-    return list.filter(
+    return cardData.filter(
       (c) =>
         c.player_name.toLowerCase().includes(q) ||
         c.set_name?.toLowerCase().includes(q) ||
@@ -194,7 +176,6 @@ function Dashboard() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-6 pt-12">
-        {/* Portfolio stats */}
         <header className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border animate-in-up">
           <StatCell label="Total Value" value={fmt(totals.totalValue)} sub={totals.count ? "Live" : "Add your first card"} subAccent={totals.count > 0} />
           <StatCell label="Assets" value={String(totals.count)} sub={totals.count ? `Graded: ${totals.gradedPct}%` : "—"} />
@@ -223,7 +204,6 @@ function Dashboard() {
         </header>
 
         <div className="mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
-          {/* Holdings list */}
           <section className="lg:col-span-7 animate-in-up [animation-delay:100ms]">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-sm font-mono uppercase tracking-widest">Portfolio Holdings</h3>
@@ -236,7 +216,9 @@ function Dashboard() {
               />
             </div>
 
-            {filtered.length === 0 ? (
+            {cardsQ.isLoading ? (
+              <div className="p-12 border border-border text-center text-sm text-muted-foreground">Loading your vault…</div>
+            ) : filtered.length === 0 ? (
               <div className="p-12 border border-border text-center">
                 <p className="text-sm text-muted-foreground mb-4">Your vault is empty.</p>
                 <button
@@ -249,18 +231,12 @@ function Dashboard() {
             ) : (
               <div className="space-y-2">
                 {filtered.map((c) => (
-                  <CardRow
-                    key={c.id}
-                    card={c}
-                    active={c.id === selected}
-                    onClick={() => setSelectedId(c.id)}
-                  />
+                  <CardRow key={c.id} card={c} active={c.id === selected} onClick={() => setSelectedId(c.id)} />
                 ))}
               </div>
             )}
           </section>
 
-          {/* Detail */}
           <aside className="lg:col-span-5 animate-in-up [animation-delay:200ms]">
             <div className="sticky top-28">
               {selectedCard ? (
@@ -275,7 +251,15 @@ function Dashboard() {
         </div>
       </main>
 
-      {addOpen && <AddCardDialog onClose={() => setAddOpen(false)} onCreate={addCard} onUpdate={updateCard} />}
+      {addOpen && (
+        <AddCardDialog
+          onClose={() => setAddOpen(false)}
+          onCreated={(id) => {
+            setSelectedId(id);
+            qc.invalidateQueries({ queryKey: ["cards"] });
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -299,7 +283,7 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
     >
       <div className="w-16 h-24 bg-secondary shrink-0 border border-border overflow-hidden grid place-items-center">
         {card.photo_url ? (
-          <CardPhoto path={card.photo_url} alt={card.player_name} />
+          <img src={card.photo_url} alt={card.player_name} className="w-full h-full object-cover" />
         ) : (
           <span className="text-[8px] uppercase tracking-tighter text-muted-foreground">Asset</span>
         )}
@@ -338,10 +322,6 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
   );
 }
 
-function CardPhoto({ path, alt }: { path: string; alt: string }) {
-  return <img src={path} alt={alt} className="w-full h-full object-cover" />;
-}
-
 function CardDetail({
   card,
   onDeleted,
@@ -353,6 +333,8 @@ function CardDetail({
 }) {
   const getStatsFn = useServerFn(getPlayerStats);
   const estimateFn = useServerFn(estimateCardValue);
+  const replaceValFn = useServerFn(replaceValuation);
+  const qc = useQueryClient();
   const [valuing, setValuing] = useState(false);
 
   const stats = useQuery({
@@ -374,13 +356,16 @@ function CardDetail({
           grader: card.grader,
         },
       });
-      onUpdate(card.id, {
-        current_value: est.current_value,
-        value_delta_pct: est.value_delta_pct,
-        last_valued_at: new Date().toISOString(),
-        sales: est.sales.map((sale) => ({ ...sale, id: crypto.randomUUID(), card_id: card.id })),
-        history: est.history.map((point) => ({ ...point, id: crypto.randomUUID(), card_id: card.id })),
+      await replaceValFn({
+        data: {
+          card_id: card.id,
+          current_value: est.current_value,
+          value_delta_pct: est.value_delta_pct,
+          sales: est.sales,
+          history: est.history,
+        },
       });
+      qc.invalidateQueries({ queryKey: ["cards"] });
       if (est.note) toast.warning(est.note);
       const soldCount = est.sales.filter((s) => s.source.startsWith("Cardsight")).length;
       toast.success(
@@ -401,8 +386,13 @@ function CardDetail({
   }
 
   const sales = card.sales ?? [];
-  const history = card.history ?? [];
+  const history = [...(card.history ?? [])].sort(
+    (a, b) => new Date(a.recorded_at).getTime() - new Date(b.recorded_at).getTime(),
+  );
   const max = Math.max(...history.map((h) => Number(h.value)), 1);
+
+  // reference so linter doesn't warn about unused onUpdate (kept for API parity)
+  void onUpdate;
 
   return (
     <div className="bg-card border border-border p-6 shadow-sm">
@@ -429,7 +419,7 @@ function CardDetail({
 
       <div className="w-full aspect-[2/3] bg-secondary mb-8 border border-border overflow-hidden grid place-items-center">
         {card.photo_url ? (
-          <CardPhoto path={card.photo_url} alt={card.player_name} />
+          <img src={card.photo_url} alt={card.player_name} className="w-full h-full object-cover" />
         ) : (
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">No photo</span>
         )}
@@ -523,7 +513,6 @@ function CardDetail({
           <p className="mt-4 text-[9px] font-mono text-muted-foreground uppercase tracking-widest">
             Values reflect recent sold comps from Cardsight when available.
           </p>
-
         </div>
       </div>
     </div>
@@ -560,16 +549,18 @@ function StatGrid({ group, s }: { group: "hitting" | "pitching"; s: Record<strin
 // ---------- Add Card Dialog ----------
 function AddCardDialog({
   onClose,
-  onCreate,
-  onUpdate,
+  onCreated,
 }: {
   onClose: () => void;
-  onCreate: (card: Card) => void;
-  onUpdate: (cardId: string, patch: Partial<Card>) => void;
+  onCreated: (cardId: string) => void;
 }) {
   const scanFn = useServerFn(scanCardPhoto);
   const searchPlayerFn = useServerFn(searchMlbPlayer);
   const estimateFn = useServerFn(estimateCardValue);
+  const createFn = useServerFn(createCard);
+  const uploadFn = useServerFn(uploadCardPhoto);
+  const replaceValFn = useServerFn(replaceValuation);
+  const updateFn = useServerFn(updateCardFields);
 
   const [step, setStep] = useState<"choose" | "form">("choose");
   const [scanning, setScanning] = useState(false);
@@ -591,10 +582,8 @@ function AddCardDialog({
   });
   const [playerResults, setPlayerResults] = useState<Awaited<ReturnType<typeof searchMlbPlayer>>>([]);
 
-
   async function handlePhoto(file: File) {
     try {
-      // Convert HEIC/HEIF to JPEG so browsers can render the preview
       let workingFile: Blob = file;
       const isHeic =
         /image\/hei[cf]/i.test(file.type) || /\.(heic|heif)$/i.test(file.name);
@@ -642,7 +631,6 @@ function AddCardDialog({
     }
   }
 
-
   async function fileToDataUrl(file: Blob): Promise<string> {
     return new Promise((res, rej) => {
       const r = new FileReader();
@@ -651,7 +639,6 @@ function AddCardDialog({
       r.readAsDataURL(file);
     });
   }
-
 
   async function searchPlayer() {
     if (!form.player_name.trim()) return;
@@ -671,30 +658,39 @@ function AddCardDialog({
     }
     setSaving(true);
     try {
-      const created: Card = {
-        id: crypto.randomUUID(),
-        player_name: form.player_name.trim(),
-        team: form.team || null,
-        position: form.position || null,
-        year: form.year ? Number(form.year) : null,
-        set_name: form.set_name || null,
-        card_number: form.card_number || null,
-        grade: form.grade || null,
-        grader: form.grader || null,
-        purchase_price: form.purchase_price ? Number(form.purchase_price) : null,
-        current_value: null,
-        value_delta_pct: null,
-        notes: form.notes || null,
-        photo_url: imageDataUrl,
-        mlb_player_id: form.mlb_player_id,
-        last_valued_at: null,
-        created_at: new Date().toISOString(),
-        sales: [],
-        history: [],
-      };
-      onCreate(created);
+      // Upload photo to storage first (if provided)
+      let photoPath: string | null = null;
+      if (imageDataUrl) {
+        try {
+          const up = await uploadFn({ data: { imageDataUrl } });
+          photoPath = up.path;
+        } catch (e) {
+          console.error("Photo upload failed", e);
+          toast.warning("Photo couldn't be saved — card will save without it.");
+        }
+      }
+
+      const created = await createFn({
+        data: {
+          player_name: form.player_name.trim(),
+          team: form.team || null,
+          position: form.position || null,
+          year: form.year ? Number(form.year) : null,
+          set_name: form.set_name || null,
+          card_number: form.card_number || null,
+          grade: form.grade || null,
+          grader: form.grader || null,
+          purchase_price: form.purchase_price ? Number(form.purchase_price) : null,
+          notes: form.notes || null,
+          photo_path: photoPath,
+          mlb_player_id: form.mlb_player_id,
+        },
+      });
+
+      onCreated(created.id);
       toast.success("Card added. Fetching valuation…");
-      // Kick off async valuation
+
+      // Async valuation
       try {
         const est = await estimateFn({
           data: {
@@ -706,16 +702,20 @@ function AddCardDialog({
             grader: created.grader,
           },
         });
-        onUpdate(created.id, {
-          current_value: est.current_value,
-          value_delta_pct: est.value_delta_pct,
-          last_valued_at: new Date().toISOString(),
-          sales: est.sales.map((sale) => ({ ...sale, id: crypto.randomUUID(), card_id: created.id })),
-          history: est.history.map((point) => ({ ...point, id: crypto.randomUUID(), card_id: created.id })),
+        await replaceValFn({
+          data: {
+            card_id: created.id,
+            current_value: est.current_value,
+            value_delta_pct: est.value_delta_pct,
+            sales: est.sales,
+            history: est.history,
+          },
         });
-      } catch {
-        // silent — user can refresh value later
+        onCreated(created.id);
+      } catch (e) {
+        console.error("Valuation failed", e);
       }
+      void updateFn;
       onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
