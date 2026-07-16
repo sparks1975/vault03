@@ -49,39 +49,62 @@ export const getPlayerStats = createServerFn({ method: "GET" })
     const position = person?.primaryPosition?.abbreviation as string | undefined;
     const isPitcher = position === "P";
     const group = isPitcher ? "pitching" : "hitting";
+    const isActive = person?.active ?? false;
 
-    // Try current season first, fall back to most recent season with stats.
+    const buildPlayer = () =>
+      person
+        ? {
+            id: data.playerId,
+            name: person.fullName,
+            team: person.currentTeam?.name ?? undefined,
+            position,
+            primaryNumber: person.primaryNumber ?? undefined,
+          }
+        : null;
+
+    // Retired players → return career totals.
+    if (!isActive) {
+      const careerUrl = `https://statsapi.mlb.com/api/v1/people/${data.playerId}/stats?stats=career&group=${group}&sportId=1`;
+      const body = await json(careerUrl);
+      const splits = body.stats?.[0]?.splits ?? [];
+      if (splits.length > 0) {
+        return {
+          player: buildPlayer(),
+          season: "Career",
+          group,
+          stats: splits[splits.length - 1].stat ?? null,
+        };
+      }
+    }
+
+    // Active players (or fallback) → try current season, then prior season.
     for (const s of [season, String(Number(season) - 1)]) {
       const statsUrl = `https://statsapi.mlb.com/api/v1/people/${data.playerId}/stats?stats=season&group=${group}&season=${s}&sportId=1`;
       const body = await json(statsUrl);
       const splits = body.stats?.[0]?.splits ?? [];
       if (splits.length > 0) {
         return {
-          player: {
-            id: data.playerId,
-            name: person?.fullName ?? "",
-            team: person?.currentTeam?.name ?? undefined,
-            position: position ?? undefined,
-            primaryNumber: person?.primaryNumber ?? undefined,
-          },
+          player: buildPlayer(),
           season: s,
           group,
           stats: splits[0].stat ?? null,
         };
       }
     }
-    return {
-      player: person
-        ? {
-            id: data.playerId,
-            name: person.fullName,
-            team: person.currentTeam?.name,
-            position,
-            primaryNumber: person.primaryNumber,
-          }
-        : null,
-      season,
-      group,
-      stats: null,
-    };
+
+    // Last resort: career stats even for active players with no season data.
+    const careerUrl = `https://statsapi.mlb.com/api/v1/people/${data.playerId}/stats?stats=career&group=${group}&sportId=1`;
+    const careerBody = await json(careerUrl).catch(() => null);
+    const careerSplits = careerBody?.stats?.[0]?.splits ?? [];
+    if (careerSplits.length > 0) {
+      return {
+        player: buildPlayer(),
+        season: "Career",
+        group,
+        stats: careerSplits[careerSplits.length - 1].stat ?? null,
+      };
+    }
+
+    return { player: buildPlayer(), season, group, stats: null };
   });
+
