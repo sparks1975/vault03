@@ -733,6 +733,56 @@ function StatGrid({ group, s }: { group: "hitting" | "pitching"; s: Record<strin
   );
 }
 
+function SalesSparkline({ points }: { points: { date: number; price: number }[] }) {
+  const W = 600;
+  const H = 120;
+  const PAD = 8;
+  const xs = points.map((p) => p.date);
+  const ys = points.map((p) => p.price);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const spanX = maxX - minX || 1;
+  const spanY = maxY - minY || 1;
+  const coords = points.map((p) => {
+    const x = PAD + ((p.date - minX) / spanX) * (W - PAD * 2);
+    const y = H - PAD - ((p.price - minY) / spanY) * (H - PAD * 2);
+    return { x, y, ...p };
+  });
+  const path = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(" ");
+  const area = `${path} L ${coords[coords.length - 1].x.toFixed(1)} ${H - PAD} L ${coords[0].x.toFixed(1)} ${H - PAD} Z`;
+  const first = points[0];
+  const last = points[points.length - 1];
+  const changePct = first.price > 0 ? ((last.price - first.price) / first.price) * 100 : 0;
+  const up = last.price >= first.price;
+  const stroke = up ? "var(--positive)" : "var(--negative)";
+  return (
+    <div>
+      <div className="flex justify-between items-baseline mb-2">
+        <span className="text-[10px] font-mono text-muted-foreground uppercase">
+          {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(minY)}
+          {" – "}
+          {new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(maxY)}
+        </span>
+        <span className="text-[10px] font-mono" style={{ color: stroke }}>
+          {up ? "+" : ""}{changePct.toFixed(1)}% across window
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-24" preserveAspectRatio="none">
+        <path d={area} fill={stroke} opacity="0.12" />
+        <path d={path} fill="none" stroke={stroke} strokeWidth="1.5" />
+        {coords.map((c, i) => (
+          <circle key={i} cx={c.x} cy={c.y} r="2" fill={stroke} />
+        ))}
+      </svg>
+      <div className="flex justify-between text-[9px] font-mono text-muted-foreground mt-1">
+        <span>{new Date(minX).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })}</span>
+        <span>{new Date(maxX).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "2-digit" })}</span>
+      </div>
+    </div>
+  );
+
 // ---------- Add Card Dialog ----------
 function AddCardDialog({
   onClose,
