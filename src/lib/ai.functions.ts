@@ -133,7 +133,7 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
           try {
             const parsed = extractJson<ScanResult>(structured);
             if (parsed.player_name && parsed.player_name.trim()) {
-              return parsed;
+              return await enrichWithMlb(parsed);
             }
             console.warn("Cardsight structured result had no player_name, falling back to AI vision");
           } catch (err) {
