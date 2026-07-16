@@ -93,7 +93,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       .filter(Boolean)
       .join(" ");
 
-    // 1) Try eBay Marketplace Insights for real SOLD comps (last 90 days).
+    // 1) Try 130point for real SOLD comps. Fall back to eBay active listings if unavailable.
     let ebaySales: Array<{
       sold_at: string | null;
       grade: string | null;
@@ -104,21 +104,19 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     let ebayMedian = 0;
     let ebayNote: string | null = null;
     try {
-      const { searchSoldItems, searchCardListings } = await import("./ebay.server");
-      const soldRes = await searchSoldItems(data, { limit: 10 });
-      if (soldRes.sold.length > 0) {
-        ebaySales = soldRes.sold
-          .filter((it) => it.lastSoldPrice)
-          .map((it) => ({
-            sold_at: it.lastSoldDate ?? null,
-            grade: null,
-            price: Number(it.lastSoldPrice!.value),
-            source: "eBay (sold)",
-            url: it.itemWebUrl ?? null,
-          }));
+      const { fetch130PointSales } = await import("./pricing.server");
+      const soldRes = await fetch130PointSales(data, { limit: 10 });
+      if (soldRes.comps.length > 0) {
+        ebaySales = soldRes.comps.map((c) => ({
+          sold_at: c.soldAt,
+          grade: null,
+          price: c.price,
+          source: "130point (sold)",
+          url: c.url,
+        }));
       } else {
-        // No sold data (or Marketplace Insights not approved) — fall back to active listings.
         ebayNote = soldRes.error ?? null;
+        const { searchCardListings } = await import("./ebay.server");
         const { items } = await searchCardListings(data, { limit: 10 });
         ebaySales = items
           .filter((it) => it.price)
@@ -133,7 +131,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       const prices = ebaySales.map((s) => s.price).sort((a, b) => a - b);
       ebayMedian = prices.length ? prices[Math.floor(prices.length / 2)] : 0;
     } catch (err) {
-      console.error("eBay lookup failed, falling back to AI:", err);
+      console.error("Comp lookup failed, falling back to AI:", err);
       ebayNote = err instanceof Error ? err.message : String(err);
     }
 
