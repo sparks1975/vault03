@@ -41,7 +41,7 @@ function SignOutButton() {
 type Sale = {
   id: string;
   card_id: string;
-  sold_at: string;
+  sold_at: string | null;
   grade: string | null;
   price: number;
   source: string | null;
