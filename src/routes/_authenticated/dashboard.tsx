@@ -259,16 +259,16 @@ function Dashboard() {
             <div className="bg-background p-6 md:p-8 md:col-span-2">
               <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Top Mover</p>
               {totals.topMover ? (
-                <div className="flex justify-between items-end gap-3">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2">
                   <div className="min-w-0">
-                    <h3 className="font-bold truncate">
+                    <h3 className="font-bold break-words">
                       {totals.topMover.year ?? ""} {totals.topMover.set_name ?? ""} {totals.topMover.player_name}
                     </h3>
-                    <p className="text-xs text-muted-foreground truncate">
+                    <p className="text-xs text-muted-foreground">
                       {totals.topMover.grader ?? ""} {totals.topMover.grade ?? ""}
                     </p>
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="sm:text-right shrink-0">
                     <span className={`font-mono font-bold text-sm md:text-base ${(totals.topMoverDollars ?? 0) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
                       {(totals.topMoverDollars ?? 0) >= 0 ? "+" : ""}{fmt(totals.topMoverDollars)}
                       {totals.topMoverPct != null && ` (${fmtPct(totals.topMoverPct)})`}
@@ -282,6 +282,7 @@ function Dashboard() {
                 <p className="text-sm text-muted-foreground">No valuations yet — add a card to see market movement.</p>
               )}
             </div>
+
           </header>
         )}
 
