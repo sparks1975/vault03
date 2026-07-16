@@ -214,8 +214,9 @@ function Dashboard() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className={`font-mono font-bold ${(totals.topMoverGain ?? 0) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
-                    {fmtPct(totals.topMoverGain)}
+                  <span className={`font-mono font-bold ${(totals.topMoverDollars ?? 0) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
+                    {(totals.topMoverDollars ?? 0) >= 0 ? "+" : ""}{fmt(totals.topMoverDollars)}
+                    {totals.topMoverPct != null && ` (${fmtPct(totals.topMoverPct)})`}
                   </span>
                   <p className="text-[9px] font-mono text-muted-foreground uppercase">vs. purchase</p>
                 </div>
