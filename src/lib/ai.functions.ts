@@ -189,7 +189,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     let compsNote: string | null = null;
     try {
       const { fetchCardsightSoldComps } = await import("./cardsight.server");
-      const soldRes = await fetchCardsightSoldComps(data, { limit: 10, period: "6m" });
+      const soldRes = await fetchCardsightSoldComps(data, { limit: 25, period: "6m" });
       if (soldRes.comps.length > 0) {
         sales = soldRes.comps.map((c) => ({
           sold_at: c.soldAt,
