@@ -95,6 +95,12 @@ function fmtPct(n: number | null | undefined) {
   const sign = v >= 0 ? "+" : "";
   return `${sign}${v.toFixed(1)}%`;
 }
+function gainPct(card: { purchase_price: number | null; current_value: number | null }): number | null {
+  const p = card.purchase_price == null ? null : Number(card.purchase_price);
+  const v = card.current_value == null ? null : Number(card.current_value);
+  if (p == null || v == null || p <= 0) return null;
+  return ((v - p) / p) * 100;
+}
 
 function Dashboard() {
   const listFn = useServerFn(listCards);
@@ -149,10 +155,18 @@ function Dashboard() {
     const list = cardData;
     const totalValue = list.reduce((sum, c) => sum + Number(c.current_value ?? 0), 0);
     const graded = list.filter((c) => c.grade).length;
-    const topMover = [...list]
-      .filter((c) => c.value_delta_pct != null)
-      .sort((a, b) => Number(b.value_delta_pct) - Number(a.value_delta_pct))[0];
-    return { totalValue, count: list.length, gradedPct: list.length ? Math.round((graded / list.length) * 100) : 0, topMover };
+    const withGain = list
+      .map((c) => ({ card: c, gain: gainPct(c) }))
+      .filter((x): x is { card: Card; gain: number } => x.gain != null)
+      .sort((a, b) => b.gain - a.gain);
+    const top = withGain[0];
+    return {
+      totalValue,
+      count: list.length,
+      gradedPct: list.length ? Math.round((graded / list.length) * 100) : 0,
+      topMover: top?.card ?? null,
+      topMoverGain: top?.gain ?? null,
+    };
   }, [cardData]);
 
   return (
@@ -192,9 +206,10 @@ function Dashboard() {
                   </p>
                 </div>
                 <div className="text-right">
-                  <span className="text-[color:var(--positive)] font-mono font-bold">
-                    {fmtPct(totals.topMover.value_delta_pct)}
+                  <span className={`font-mono font-bold ${(totals.topMoverGain ?? 0) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
+                    {fmtPct(totals.topMoverGain)}
                   </span>
+                  <p className="text-[9px] font-mono text-muted-foreground uppercase">vs. purchase</p>
                 </div>
               </div>
             ) : (
