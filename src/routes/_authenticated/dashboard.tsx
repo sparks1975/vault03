@@ -88,8 +88,21 @@ function loadCards(): Card[] {
   }
 }
 
+function stripPhotos(cards: Card[]): Card[] {
+  return cards.map((c) => ({ ...c, photo_url: c.photo_url?.startsWith("data:") ? "" : c.photo_url }));
+}
+
 function saveCards(cards: Card[]) {
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+  } catch {
+    // Photo data URLs can overflow localStorage quota — retry without them.
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(stripPhotos(cards)));
+    } catch {
+      // Give up silently — state stays in memory for this session.
+    }
+  }
 }
 
 function fmt(n: number | null | undefined) {
