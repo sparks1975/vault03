@@ -500,6 +500,11 @@ function CardDetail({
   }
 
   const sales = card.sales ?? [];
+  const priceHistory = sales
+    .filter((s) => s.sold_at && Number(s.price) > 0)
+    .map((s) => ({ date: new Date(s.sold_at as string).getTime(), price: Number(s.price) }))
+    .sort((a, b) => a.date - b.date);
+
 
 
   return (
