@@ -235,7 +235,7 @@ function Dashboard() {
               <ChevronLeft className="size-4" />
             </button>
           )}
-          <span className="font-extrabold tracking-tighter text-xl italic truncate">VAULT.03</span>
+          <span className="font-extrabold tracking-tighter text-lg md:text-xl italic shrink-0 pr-1">VAULT.03</span>
           <div className="hidden md:flex gap-6 text-sm font-medium text-muted-foreground">
             <span className="text-accent">Dashboard</span>
           </div>
