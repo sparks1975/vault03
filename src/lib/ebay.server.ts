@@ -69,8 +69,8 @@ export function buildQuery(input: CardDescriptor): string {
 }
 
 export async function browseSearch(params: URLSearchParams): Promise<ItemSummary[]> {
-  const token = await getAppToken();
-  const res = await fetch(`${BROWSE_URL}?${params.toString()}`, {
+  const { token, base } = await getAppToken();
+  const res = await fetch(`${base}/buy/browse/v1/item_summary/search?${params.toString()}`, {
     headers: {
       Authorization: `Bearer ${token}`,
       "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
@@ -82,8 +82,8 @@ export async function browseSearch(params: URLSearchParams): Promise<ItemSummary
 }
 
 export async function browseByImage(base64: string): Promise<ItemSummary[]> {
-  const token = await getAppToken();
-  const res = await fetch(`${BROWSE_IMAGE_URL}?limit=5&category_ids=213`, {
+  const { token, base } = await getAppToken();
+  const res = await fetch(`${base}/buy/browse/v1/item_summary/search_by_image?limit=5&category_ids=213`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -96,6 +96,7 @@ export async function browseByImage(base64: string): Promise<ItemSummary[]> {
   const j = (await res.json()) as { itemSummaries?: ItemSummary[] };
   return j.itemSummaries ?? [];
 }
+
 
 export async function searchCardListings(
   input: CardDescriptor,
