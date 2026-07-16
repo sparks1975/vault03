@@ -156,3 +156,16 @@ export async function fetchCardsightSoldComps(
     };
   }
 }
+
+// Call Cardsight's identify_card with a public https image URL. Returns raw
+// human-readable text so the caller can feed it into an LLM structurer.
+export async function identifyCardFromImageUrl(
+  imageUrl: string,
+): Promise<{ text: string; error?: string }> {
+  try {
+    const text = await mcpCall("identify_card", { image_url: imageUrl });
+    return { text };
+  } catch (err) {
+    return { text: "", error: err instanceof Error ? err.message : String(err) };
+  }
+}
