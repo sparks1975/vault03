@@ -334,14 +334,64 @@ function CardDetail({
   const getStatsFn = useServerFn(getPlayerStats);
   const estimateFn = useServerFn(estimateCardValue);
   const replaceValFn = useServerFn(replaceValuation);
+  const searchPlayerFn = useServerFn(searchMlbPlayer);
   const qc = useQueryClient();
   const [valuing, setValuing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Partial<Card>>({});
+  const [playerResults, setPlayerResults] = useState<Awaited<ReturnType<typeof searchMlbPlayer>>>([]);
 
   const stats = useQuery({
     queryKey: ["stats", card.mlb_player_id],
     queryFn: () => getStatsFn({ data: { playerId: card.mlb_player_id! } }),
     enabled: !!card.mlb_player_id,
   });
+
+  function startEdit() {
+    setDraft({
+      player_name: card.player_name,
+      team: card.team,
+      position: card.position,
+      year: card.year,
+      set_name: card.set_name,
+      card_number: card.card_number,
+      grade: card.grade,
+      grader: card.grader,
+      purchase_price: card.purchase_price,
+      notes: card.notes,
+      mlb_player_id: card.mlb_player_id,
+    });
+    setPlayerResults([]);
+    setEditing(true);
+  }
+
+  function cancelEdit() {
+    setEditing(false);
+    setDraft({});
+    setPlayerResults([]);
+  }
+
+  function saveEdit() {
+    if (!draft.player_name || !String(draft.player_name).trim()) {
+      toast.error("Player name is required");
+      return;
+    }
+    onUpdate(card.id, draft);
+    setEditing(false);
+    toast.success("Card updated");
+  }
+
+  async function searchPlayer() {
+    const q = (draft.player_name ?? "").toString().trim();
+    if (!q) return;
+    try {
+      const r = await searchPlayerFn({ data: { query: q } });
+      setPlayerResults(r);
+      if (r.length === 0) toast.info("No MLB player found.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Search failed");
+    }
+  }
 
   async function refreshValue() {
     setValuing(true);
@@ -391,29 +441,51 @@ function CardDetail({
   );
   const max = Math.max(...history.map((h) => Number(h.value)), 1);
 
-  // reference so linter doesn't warn about unused onUpdate (kept for API parity)
-  void onUpdate;
-
   return (
     <div className="bg-card border border-border p-6 shadow-sm">
       <div className="flex justify-between mb-8">
         <span className="text-[10px] font-mono bg-accent text-accent-foreground px-2 h-5 inline-flex items-center">ASSET DETAIL</span>
         <div className="flex gap-2">
-          <button
-            onClick={refreshValue}
-            disabled={valuing}
-            className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary disabled:opacity-50 inline-flex items-center gap-1"
-          >
-            {valuing ? <Loader2 className="size-3 animate-spin" /> : null}
-            {valuing ? "Valuing" : "Refresh value"}
-          </button>
-          <button
-            onClick={() => confirm("Remove this card?") && deleteSelected()}
-            className="size-6 border border-border grid place-items-center hover:bg-destructive hover:text-destructive-foreground transition-colors"
-            aria-label="Delete card"
-          >
-            <Trash2 className="size-3" />
-          </button>
+          {editing ? (
+            <>
+              <button
+                onClick={saveEdit}
+                className="text-[10px] font-mono uppercase tracking-widest border border-accent text-accent px-2 py-1 hover:bg-accent hover:text-accent-foreground inline-flex items-center gap-1"
+              >
+                <Check className="size-3" /> Save
+              </button>
+              <button
+                onClick={cancelEdit}
+                className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary inline-flex items-center gap-1"
+              >
+                <X className="size-3" /> Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={startEdit}
+                className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary inline-flex items-center gap-1"
+              >
+                <Pencil className="size-3" /> Edit
+              </button>
+              <button
+                onClick={refreshValue}
+                disabled={valuing}
+                className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                {valuing ? <Loader2 className="size-3 animate-spin" /> : null}
+                {valuing ? "Valuing" : "Refresh value"}
+              </button>
+              <button
+                onClick={() => confirm("Remove this card?") && deleteSelected()}
+                className="size-6 border border-border grid place-items-center hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                aria-label="Delete card"
+              >
+                <Trash2 className="size-3" />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -425,25 +497,85 @@ function CardDetail({
         )}
       </div>
 
-      <div className="mb-8">
-        <p className="text-[10px] font-mono text-muted-foreground uppercase">
-          {card.year ?? "—"} {card.set_name ?? ""} {card.card_number ? `#${card.card_number}` : ""}
-        </p>
-        <h2 className="text-2xl font-extrabold tracking-tight">{card.player_name}</h2>
-        <div className="flex justify-between items-end mt-2">
-          <div className="text-xs text-muted-foreground">
-            {card.grader} {card.grade} {card.team ? `• ${card.team}` : ""}
+      {editing ? (
+        <div className="mb-8 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Player name*" value={String(draft.player_name ?? "")} onChange={(v) => setDraft({ ...draft, player_name: v })} />
+            <Field label="Team" value={String(draft.team ?? "")} onChange={(v) => setDraft({ ...draft, team: v || null })} />
+            <Field label="Year" type="number" value={draft.year == null ? "" : String(draft.year)} onChange={(v) => setDraft({ ...draft, year: v ? Number(v) : null })} />
+            <Field label="Set" value={String(draft.set_name ?? "")} onChange={(v) => setDraft({ ...draft, set_name: v || null })} />
+            <Field label="Card #" value={String(draft.card_number ?? "")} onChange={(v) => setDraft({ ...draft, card_number: v || null })} />
+            <Field label="Position" value={String(draft.position ?? "")} onChange={(v) => setDraft({ ...draft, position: v || null })} />
+            <Field label="Grader" value={String(draft.grader ?? "")} onChange={(v) => setDraft({ ...draft, grader: v || null })} />
+            <Field label="Grade" value={String(draft.grade ?? "")} onChange={(v) => setDraft({ ...draft, grade: v || null })} />
+            <Field label="Purchase price (USD)" type="number" value={draft.purchase_price == null ? "" : String(draft.purchase_price)} onChange={(v) => setDraft({ ...draft, purchase_price: v ? Number(v) : null })} />
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-extrabold tracking-tight">{fmt(card.current_value)}</p>
-            {card.value_delta_pct != null && (
-              <p className={`text-[10px] font-mono ${Number(card.value_delta_pct) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
-                {fmtPct(Number(card.value_delta_pct))} / 30d
-              </p>
+          <label className="block">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Notes</span>
+            <textarea
+              value={String(draft.notes ?? "")}
+              onChange={(e) => setDraft({ ...draft, notes: e.target.value || null })}
+              rows={3}
+              className="mt-1 w-full px-3 py-2 border border-border rounded-sm text-sm bg-background focus:outline-none focus:border-accent"
+            />
+          </label>
+          <div className="border border-border p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Link MLB player (for live stats)</p>
+              <button onClick={searchPlayer} className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary">
+                Search MLB
+              </button>
+            </div>
+            {playerResults.length > 0 && (
+              <div className="space-y-1 max-h-40 overflow-y-auto">
+                {playerResults.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setDraft({ ...draft, mlb_player_id: p.id, team: draft.team || p.team || null, position: draft.position || p.position || null })}
+                    className={`w-full text-left px-2 py-1.5 text-xs hover:bg-secondary border border-transparent ${draft.mlb_player_id === p.id ? "border-accent bg-accent/10" : ""}`}
+                  >
+                    <span className="font-bold">{p.name}</span>{" "}
+                    <span className="text-muted-foreground">
+                      {p.team ?? "—"} {p.position ? `• ${p.position}` : ""} {p.active ? "" : "• retired"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {draft.mlb_player_id && (
+              <div className="flex items-center justify-between mt-2">
+                <p className="text-[10px] font-mono text-accent">Linked · id {draft.mlb_player_id}</p>
+                <button
+                  onClick={() => setDraft({ ...draft, mlb_player_id: null })}
+                  className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground"
+                >
+                  Unlink
+                </button>
+              </div>
             )}
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="mb-8">
+          <p className="text-[10px] font-mono text-muted-foreground uppercase">
+            {card.year ?? "—"} {card.set_name ?? ""} {card.card_number ? `#${card.card_number}` : ""}
+          </p>
+          <h2 className="text-2xl font-extrabold tracking-tight">{card.player_name}</h2>
+          <div className="flex justify-between items-end mt-2">
+            <div className="text-xs text-muted-foreground">
+              {card.grader} {card.grade} {card.team ? `• ${card.team}` : ""}
+            </div>
+            <div className="text-right">
+              <p className="text-2xl font-extrabold tracking-tight">{fmt(card.current_value)}</p>
+              {card.value_delta_pct != null && (
+                <p className={`text-[10px] font-mono ${Number(card.value_delta_pct) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
+                  {fmtPct(Number(card.value_delta_pct))} / 30d
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-8">
         <div>
