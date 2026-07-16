@@ -642,28 +642,7 @@ function CardDetail({
       )}
 
       <div className="space-y-8">
-        <div>
-          <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4 border-b border-border pb-2">Market History</h3>
-          {history.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No history yet — refresh value to build the chart.</p>
-          ) : (
-            <>
-              <div className="h-16 w-full flex items-end gap-1 mb-2 px-1">
-                {history.map((h, i) => (
-                  <div
-                    key={h.id}
-                    className={`flex-1 ${i === history.length - 1 ? "bg-accent" : "bg-secondary"}`}
-                    style={{ height: `${(Number(h.value) / max) * 100}%` }}
-                  />
-                ))}
-              </div>
-              <div className="flex justify-between text-[9px] font-mono text-muted-foreground">
-                <span>{new Date(history[0].recorded_at).toLocaleDateString(undefined, { month: "short", year: "2-digit" })}</span>
-                <span>TODAY</span>
-              </div>
-            </>
-          )}
-        </div>
+
 
         <div>
           <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4 border-b border-border pb-2">
