@@ -93,50 +93,38 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       .filter(Boolean)
       .join(" ");
 
-    // 1) Try 130point for real SOLD comps. Fall back to eBay active listings if unavailable.
-    let ebaySales: Array<{
+    // 1) Cardsight for real SOLD comps (search_pricing over MCP).
+    let sales: Array<{
       sold_at: string | null;
       grade: string | null;
       price: number;
       source: string;
       url: string | null;
     }> = [];
-    let ebayMedian = 0;
-    let ebayNote: string | null = null;
+    let compsMedian = 0;
+    let compsNote: string | null = null;
     try {
-      const { fetch130PointSales } = await import("./pricing.server");
-      const soldRes = await fetch130PointSales(data, { limit: 10 });
+      const { fetchCardsightSoldComps } = await import("./cardsight.server");
+      const soldRes = await fetchCardsightSoldComps(data, { limit: 10, period: "3m" });
       if (soldRes.comps.length > 0) {
-        ebaySales = soldRes.comps.map((c) => ({
+        sales = soldRes.comps.map((c) => ({
           sold_at: c.soldAt,
-          grade: null,
+          grade: c.grade,
           price: c.price,
-          source: "130point (sold)",
+          source: `Cardsight (${c.source} sold)`,
           url: c.url,
         }));
+        const prices = sales.map((s) => s.price).sort((a, b) => a - b);
+        compsMedian = prices[Math.floor(prices.length / 2)];
       } else {
-        ebayNote = soldRes.error ?? null;
-        const { searchCardListings } = await import("./ebay.server");
-        const { items } = await searchCardListings(data, { limit: 10 });
-        ebaySales = items
-          .filter((it) => it.price)
-          .map((it) => ({
-            sold_at: null,
-            grade: null,
-            price: Number(it.price!.value),
-            source: "eBay (active)",
-            url: it.itemWebUrl ?? null,
-          }));
+        compsNote = soldRes.error ?? null;
       }
-      const prices = ebaySales.map((s) => s.price).sort((a, b) => a - b);
-      ebayMedian = prices.length ? prices[Math.floor(prices.length / 2)] : 0;
     } catch (err) {
-      console.error("Comp lookup failed, falling back to AI:", err);
-      ebayNote = err instanceof Error ? err.message : String(err);
+      console.error("Cardsight lookup failed:", err);
+      compsNote = err instanceof Error ? err.message : String(err);
     }
 
-
-    // 2) AI for narrative value + history (and as fallback if eBay empty).
+    // 2) AI for narrative value + history (and as value fallback if Cardsight is empty).
     const prompt = `Give a realistic current secondary-market value estimate (USD) for this baseball card: "${descriptor}". Also give a plausible 30-day percent change and 6 monthly historical value data points ending today. Return JSON ONLY:
 {
   "current_value": number,
@@ -164,12 +152,12 @@ If unable to value, return current_value: 0.`;
     }>(text);
 
     return {
-      current_value: ebayMedian > 0 ? ebayMedian : ai.current_value,
+      current_value: compsMedian > 0 ? compsMedian : ai.current_value,
       value_delta_pct: ai.value_delta_pct,
-      sales: ebaySales,
+      sales,
       history: ai.history,
-      source: ebayMedian > 0 ? ("ebay" as const) : ("ai" as const),
-      note: ebayNote,
+      source: compsMedian > 0 ? ("cardsight" as const) : ("ai" as const),
+      note: compsNote,
     };
   });
 
