@@ -212,6 +212,8 @@ function Dashboard() {
                   <p className="text-[9px] font-mono text-muted-foreground uppercase">vs. purchase</p>
                 </div>
               </div>
+            ) : cardData.length > 0 ? (
+              <p className="text-sm text-muted-foreground">Add a purchase price to your cards to see gains vs. current value.</p>
             ) : (
               <p className="text-sm text-muted-foreground">No valuations yet — add a card to see market movement.</p>
             )}
