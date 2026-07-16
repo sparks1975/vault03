@@ -125,7 +125,7 @@ export const updateCardFields = createServerFn({ method: "POST" })
     ];
     const clean: Record<string, unknown> = {};
     for (const k of allowed) if (k in data.patch) clean[k] = data.patch[k];
-    const { error } = await supabase.from("cards").update(clean).eq("id", data.id);
+    const { error } = await supabase.from("cards").update(clean as never).eq("id", data.id);
     if (error) throw error;
     return { ok: true };
   });
