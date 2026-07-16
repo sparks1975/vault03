@@ -196,7 +196,10 @@ export async function identifyCardFromImageUrl(
   imageUrl: string,
 ): Promise<{ text: string; error?: string }> {
   try {
-    const text = await mcpCall("identify_card", { image_url: imageUrl });
+    const text = await mcpCall("identify_card", { imageUrl });
+    if (/identification failed|invalid input|expected.*imageUrl|received undefined/i.test(text)) {
+      return { text: "", error: text };
+    }
     return { text };
   } catch (err) {
     return { text: "", error: err instanceof Error ? err.message : String(err) };
