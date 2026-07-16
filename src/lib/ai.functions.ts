@@ -93,7 +93,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       .filter(Boolean)
       .join(" ");
 
-    // 1) Try eBay for real market listings.
+    // 1) Try eBay Marketplace Insights for real SOLD comps (last 90 days).
     let ebaySales: Array<{
       sold_at: string | null;
       grade: string | null;
@@ -102,23 +102,41 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       url: string | null;
     }> = [];
     let ebayMedian = 0;
+    let ebayNote: string | null = null;
     try {
-      const { searchCardListings } = await import("./ebay.server");
-      const { items } = await searchCardListings(data, { limit: 10 });
-      ebaySales = items
-        .filter((it) => it.price)
-        .map((it) => ({
-          sold_at: null,
-          grade: null,
-          price: Number(it.price!.value),
-          source: "eBay",
-          url: it.itemWebUrl ?? null,
-        }));
+      const { searchSoldItems, searchCardListings } = await import("./ebay.server");
+      const soldRes = await searchSoldItems(data, { limit: 10 });
+      if (soldRes.sold.length > 0) {
+        ebaySales = soldRes.sold
+          .filter((it) => it.lastSoldPrice)
+          .map((it) => ({
+            sold_at: it.lastSoldDate ?? null,
+            grade: null,
+            price: Number(it.lastSoldPrice!.value),
+            source: "eBay (sold)",
+            url: it.itemWebUrl ?? null,
+          }));
+      } else {
+        // No sold data (or Marketplace Insights not approved) — fall back to active listings.
+        ebayNote = soldRes.error ?? null;
+        const { items } = await searchCardListings(data, { limit: 10 });
+        ebaySales = items
+          .filter((it) => it.price)
+          .map((it) => ({
+            sold_at: null,
+            grade: null,
+            price: Number(it.price!.value),
+            source: "eBay (active)",
+            url: it.itemWebUrl ?? null,
+          }));
+      }
       const prices = ebaySales.map((s) => s.price).sort((a, b) => a - b);
       ebayMedian = prices.length ? prices[Math.floor(prices.length / 2)] : 0;
     } catch (err) {
       console.error("eBay lookup failed, falling back to AI:", err);
+      ebayNote = err instanceof Error ? err.message : String(err);
     }
+
 
     // 2) AI for narrative value + history (and as fallback if eBay empty).
     const prompt = `Give a realistic current secondary-market value estimate (USD) for this baseball card: "${descriptor}". Also give a plausible 30-day percent change and 6 monthly historical value data points ending today. Return JSON ONLY:
@@ -153,6 +171,8 @@ If unable to value, return current_value: 0.`;
       sales: ebaySales,
       history: ai.history,
       source: ebayMedian > 0 ? ("ebay" as const) : ("ai" as const),
+      note: ebayNote,
     };
   });
+
 

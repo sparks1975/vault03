@@ -368,7 +368,15 @@ function CardDetail({
         sales: est.sales.map((sale) => ({ ...sale, id: crypto.randomUUID(), card_id: card.id })),
         history: est.history.map((point) => ({ ...point, id: crypto.randomUUID(), card_id: card.id })),
       });
-      toast.success("Valuation refreshed");
+      if (est.note) toast.warning(est.note);
+      const soldCount = est.sales.filter((s) => s.source === "eBay (sold)").length;
+      toast.success(
+        soldCount > 0
+          ? `Valuation refreshed — ${soldCount} sold comps from eBay`
+          : est.source === "ebay"
+          ? "Valuation refreshed — active eBay listings (sold data unavailable)"
+          : "Valuation refreshed — AI estimate (no eBay results)",
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
     } finally {
