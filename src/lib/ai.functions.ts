@@ -24,9 +24,39 @@ async function callAI(body: unknown): Promise<string> {
 }
 
 function extractJson<T>(text: string): T {
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("AI did not return JSON");
-  return JSON.parse(match[0]) as T;
+  let cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
+  const start = cleaned.search(/[{[]/);
+  if (start === -1) throw new Error("AI did not return JSON");
+  const openCh = cleaned[start];
+  const closeCh = openCh === "[" ? "]" : "}";
+  // Walk to find matching close, respecting strings.
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  let end = -1;
+  for (let i = start; i < cleaned.length; i++) {
+    const c = cleaned[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === "\\") esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === openCh) depth++;
+    else if (c === closeCh) {
+      depth--;
+      if (depth === 0) { end = i; break; }
+    }
+  }
+  if (end === -1) throw new Error("AI JSON not balanced");
+  const slice = cleaned.slice(start, end + 1);
+  try {
+    return JSON.parse(slice) as T;
+  } catch {
+    const repaired = slice.replace(/,\s*}/g, "}").replace(/,\s*]/g, "]").replace(/[\x00-\x1F\x7F]/g, "");
+    return JSON.parse(repaired) as T;
+  }
 }
 
 type ScanResult = {
