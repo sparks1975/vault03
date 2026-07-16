@@ -782,6 +782,9 @@ function SalesSparkline({ points }: { points: { date: number; price: number }[] 
       </div>
     </div>
   );
+}
+
+
 
 // ---------- Add Card Dialog ----------
 function AddCardDialog({
