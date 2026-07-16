@@ -137,12 +137,57 @@ async function runSearchPricing(
   return { comps, empty: comps.length === 0, raw: text };
 }
 
+// Parallel/insert/serial keywords that indicate a NON-base version of the card.
+// If the user's descriptor doesn't call these out, we exclude comps that do —
+// serialized/refractor/auto variants sell for wildly different prices.
+const PARALLEL_KEYWORDS = [
+  "refractor", "prizm", "mojo", "wave", "rainbow", "atomic", "superfractor",
+  "gold", "silver", "black", "red", "blue", "orange", "purple", "pink", "green",
+  "sapphire", "emerald", "ruby", "onyx", "chrome",
+  "auto", "autograph", "signed", "patch", "relic", "jersey", "rpa",
+  "ssp", "short print", " sp ", "insert", "parallel", "variation", "printing plate",
+  "1/1", "one of one", "numbered",
+];
+
+function hasParallelSignal(text: string): boolean {
+  const t = ` ${text.toLowerCase()} `;
+  if (/\/\d{1,4}\b/.test(t)) return true; // serial number like /99, /25, /499
+  if (/#\d+\/\d+/.test(t)) return true;
+  return PARALLEL_KEYWORDS.some((kw) => t.includes(kw));
+}
+
+function filterAndRankComps(comps: SoldComp[], input: CardDescriptor): SoldComp[] {
+  const descriptor = buildFreeText(input).toLowerCase();
+  const userWantsParallel = hasParallelSignal(descriptor);
+
+  let filtered = comps;
+  if (!userWantsParallel) {
+    filtered = comps.filter((c) => !hasParallelSignal(c.title));
+  }
+
+  if (input.grade) {
+    const wantGrade = `${input.grader ?? ""} ${input.grade}`.trim().toLowerCase();
+    const gradeMatches = filtered.filter((c) => {
+      const g = (c.grade ?? "").toLowerCase();
+      const t = c.title.toLowerCase();
+      return (g && (g === wantGrade || g.includes(input.grade!.toLowerCase()))) ||
+        t.includes(wantGrade);
+    });
+    if (gradeMatches.length >= 3) filtered = gradeMatches;
+  } else {
+    const raw = filtered.filter((c) => !c.grade && !/psa|bgs|sgc|cgc/i.test(c.title));
+    if (raw.length >= 3) filtered = raw;
+  }
+
+  return filtered;
+}
+
 export async function fetchCardsightSoldComps(
   input: CardDescriptor,
   opts: { limit?: number; period?: string } = {},
 ): Promise<{ query: string; comps: SoldComp[]; error?: string }> {
   const period = opts.period ?? "3m";
-  const limit = opts.limit ?? 10;
+  const limit = opts.limit ?? 25;
 
   // Try progressively broader queries so uncommon cards still surface comps.
   const queries: string[] = [];
@@ -157,7 +202,7 @@ export async function fetchCardsightSoldComps(
   if (queries.length === 0) queries.push(input.player_name);
 
   const primary = queries[0];
-  const cacheKey = `${primary}|${period}|${limit}`;
+  const cacheKey = `${primary}|${period}|${limit}|filtered`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < TTL_MS) {
     return { query: primary, comps: cached.comps };
@@ -168,10 +213,11 @@ export async function fetchCardsightSoldComps(
     try {
       const { comps, empty, raw } = await runSearchPricing(q, period, limit);
       lastRaw = raw;
-      if (!empty && comps.length > 0) {
-        cache.set(cacheKey, { at: Date.now(), comps });
-        return { query: q, comps };
-      }
+      if (empty || comps.length === 0) continue;
+      const filtered = filterAndRankComps(comps, input);
+      const chosen = filtered.length > 0 ? filtered : comps;
+      cache.set(cacheKey, { at: Date.now(), comps: chosen });
+      return { query: q, comps: chosen };
     } catch (err) {
       return {
         query: q,

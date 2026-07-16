@@ -133,7 +133,7 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
           try {
             const parsed = extractJson<ScanResult>(structured);
             if (parsed.player_name && parsed.player_name.trim()) {
-              return parsed;
+              return await enrichWithMlb(parsed);
             }
             console.warn("Cardsight structured result had no player_name, falling back to AI vision");
           } catch (err) {
@@ -148,8 +148,36 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
     }
 
     // 3) Fallback: direct AI vision on the original data URL.
-    return scanViaAIVision(data.imageDataUrl);
+    const result = await scanViaAIVision(data.imageDataUrl);
+    return await enrichWithMlb(result);
   });
+
+// If team/position are missing, look them up from the free MLB Stats API.
+async function enrichWithMlb(result: ScanResult): Promise<ScanResult> {
+  if (!result.player_name || (result.team && result.position)) return result;
+  try {
+    const url = `https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(result.player_name)}&sportIds=1`;
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!res.ok) return result;
+    const body = await res.json();
+    const people = (body.people ?? []) as Array<{
+      fullName: string;
+      primaryPosition?: { abbreviation?: string };
+      currentTeam?: { name?: string };
+      active?: boolean;
+    }>;
+    if (people.length === 0) return result;
+    // Prefer active player; fall back to first match.
+    const pick = people.find((p) => p.active) ?? people[0];
+    return {
+      ...result,
+      team: result.team ?? pick.currentTeam?.name ?? null,
+      position: result.position ?? pick.primaryPosition?.abbreviation ?? null,
+    };
+  } catch {
+    return result;
+  }
+}
 
 
 // ---------- Value estimate + comparable sales (AI estimate) ----------
@@ -189,7 +217,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     let compsNote: string | null = null;
     try {
       const { fetchCardsightSoldComps } = await import("./cardsight.server");
-      const soldRes = await fetchCardsightSoldComps(data, { limit: 10, period: "6m" });
+      const soldRes = await fetchCardsightSoldComps(data, { limit: 25, period: "6m" });
       if (soldRes.comps.length > 0) {
         sales = soldRes.comps.map((c) => ({
           sold_at: c.soldAt,
