@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X } from "lucide-react";
 
@@ -113,6 +113,8 @@ function Dashboard() {
   const listFn = useServerFn(listCards);
   const updateFn = useServerFn(updateCardFields);
   const deleteFn = useServerFn(deleteCard);
+  const estimateFn = useServerFn(estimateCardValue);
+  const replaceValFn = useServerFn(replaceValuation);
   const qc = useQueryClient();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -124,6 +126,42 @@ function Dashboard() {
     queryFn: () => listFn(),
   });
   const cardData = (cardsQ.data ?? []) as Card[];
+
+  // Recalculate all card values once per app entry (session).
+  const revaluedRef = useRef(false);
+  useEffect(() => {
+    if (revaluedRef.current) return;
+    if (cardsQ.isLoading || cardData.length === 0) return;
+    revaluedRef.current = true;
+    (async () => {
+      for (const c of cardData) {
+        try {
+          const est = await estimateFn({
+            data: {
+              player_name: c.player_name,
+              year: c.year,
+              set_name: c.set_name,
+              card_number: c.card_number,
+              grade: c.grade,
+              grader: c.grader,
+            },
+          });
+          await replaceValFn({
+            data: {
+              card_id: c.id,
+              current_value: est.current_value,
+              value_delta_pct: est.value_delta_pct,
+              sales: est.sales,
+              history: est.history,
+            },
+          });
+        } catch (err) {
+          console.error("Auto-revalue failed for", c.player_name, err);
+        }
+      }
+      qc.invalidateQueries({ queryKey: ["cards"] });
+    })();
+  }, [cardsQ.isLoading, cardData, estimateFn, replaceValFn, qc]);
 
   const updateMut = useMutation({
     mutationFn: (v: { id: string; patch: Partial<Card> }) =>
