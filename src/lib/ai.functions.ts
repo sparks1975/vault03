@@ -110,7 +110,11 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
       try {
         const { identifyCardFromImageUrl } = await import("./cardsight.server");
         const { text, error } = await identifyCardFromImageUrl(signedUrl);
-        if (!error && text.trim()) {
+        console.log("Cardsight identify_card text:", text?.slice(0, 500), "error:", error);
+        const looksUnidentified =
+          !text?.trim() ||
+          /unable to identify|could not identify|no match|not.*identif|no card detected|error/i.test(text);
+        if (!error && !looksUnidentified) {
           // Convert Cardsight's human-readable response into our JSON schema.
           const structured = await callAI({
             model: MODEL,
@@ -127,7 +131,11 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
             ],
           });
           try {
-            return extractJson<ScanResult>(structured);
+            const parsed = extractJson<ScanResult>(structured);
+            if (parsed.player_name && parsed.player_name.trim()) {
+              return parsed;
+            }
+            console.warn("Cardsight structured result had no player_name, falling back to AI vision");
           } catch (err) {
             console.error("Failed to structure Cardsight identify_card text:", err);
           }
@@ -142,6 +150,7 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
     // 3) Fallback: direct AI vision on the original data URL.
     return scanViaAIVision(data.imageDataUrl);
   });
+
 
 // ---------- Value estimate + comparable sales (AI estimate) ----------
 export const estimateCardValue = createServerFn({ method: "POST" })
