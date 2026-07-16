@@ -155,10 +155,18 @@ function Dashboard() {
     const list = cardData;
     const totalValue = list.reduce((sum, c) => sum + Number(c.current_value ?? 0), 0);
     const graded = list.filter((c) => c.grade).length;
-    const topMover = [...list]
-      .filter((c) => c.value_delta_pct != null)
-      .sort((a, b) => Number(b.value_delta_pct) - Number(a.value_delta_pct))[0];
-    return { totalValue, count: list.length, gradedPct: list.length ? Math.round((graded / list.length) * 100) : 0, topMover };
+    const withGain = list
+      .map((c) => ({ card: c, gain: gainPct(c) }))
+      .filter((x): x is { card: Card; gain: number } => x.gain != null)
+      .sort((a, b) => b.gain - a.gain);
+    const top = withGain[0];
+    return {
+      totalValue,
+      count: list.length,
+      gradedPct: list.length ? Math.round((graded / list.length) * 100) : 0,
+      topMover: top?.card ?? null,
+      topMoverGain: top?.gain ?? null,
+    };
   }, [cardData]);
 
   return (
