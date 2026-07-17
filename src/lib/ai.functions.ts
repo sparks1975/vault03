@@ -253,7 +253,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       source: string;
       url: string | null;
     }> = [];
-    let compsMedian = 0;
+    let compsAverage = 0;
     let compsNote: string | null = null;
     try {
       const { fetchCardsightSoldComps } = await import("./cardsight.server");
@@ -266,8 +266,8 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           source: `Cardsight (${c.source} sold)`,
           url: c.url,
         }));
-        const prices = sales.map((s) => s.price).sort((a, b) => a - b);
-        compsMedian = prices[Math.floor(prices.length / 2)];
+        const prices = sales.map((s) => s.price);
+        compsAverage = prices.reduce((a, b) => a + b, 0) / prices.length;
       } else {
         compsNote = soldRes.error ?? null;
       }
@@ -304,11 +304,11 @@ If unable to value, return current_value: 0.`;
     }>(text);
 
     return {
-      current_value: compsMedian > 0 ? compsMedian : ai.current_value,
+      current_value: compsAverage > 0 ? compsAverage : ai.current_value,
       value_delta_pct: ai.value_delta_pct,
       sales,
       history: ai.history,
-      source: compsMedian > 0 ? ("cardsight" as const) : ("ai" as const),
+      source: compsAverage > 0 ? ("cardsight" as const) : ("ai" as const),
       note: compsNote,
     };
   });
