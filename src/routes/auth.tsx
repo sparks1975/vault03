@@ -87,6 +87,16 @@ function AuthPage() {
         return;
       }
       if (result.redirected) return;
+      // Popup flow: tokens set on the main window's supabase client.
+      // Navigate explicitly instead of relying on onAuthStateChange, which
+      // can miss the SIGNED_IN event if setSession fires before the listener.
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        navigate({ to: "/dashboard", replace: true });
+        return;
+      }
+      toast.error("Sign-in did not complete. Please try again.");
+      setLoading(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign-in failed");
       setLoading(false);
