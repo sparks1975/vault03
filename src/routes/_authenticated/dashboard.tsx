@@ -1251,7 +1251,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className={cn("text-[10px] font-mono uppercase tracking-widest text-muted-foreground", labelClassName)}>{label}</span>
+      <span className={`text-[10px] font-mono uppercase tracking-widest text-muted-foreground${labelClassName ? ` ${labelClassName}` : ""}`}>{label}</span>
       <input
         type={type}
         value={value}
