@@ -199,8 +199,6 @@ function filterAndRankComps(comps: SoldComp[], input: CardDescriptor): SoldComp[
 
   const wantAuto = !!input.is_autograph;
   const wantSerial = !!(input.serial_number && input.serial_number.trim().length > 0);
-  const wantParallelTokens = input.parallel ? parallelTokens(input.parallel) : [];
-  const wantParallel = wantParallelTokens.length > 0;
 
   let filtered = comps.filter((c) => {
     const cleaned = stripImplied(c.title);
@@ -208,20 +206,6 @@ function filterAndRankComps(comps: SoldComp[], input: CardDescriptor): SoldComp[
     const relic = hasRelicSignal(cleaned);
     const serial = hasSerialSignal(cleaned);
     const parallel = hasParallelColorSignal(cleaned);
-
-    // If the user picked a specific parallel, require every token from the
-    // parallel name to appear in the comp title. This keeps e.g. "Blue
-    // Refractor" comps out of a plain "Refractor" pick, and vice versa.
-    if (wantParallel) {
-      const titleLc = c.title.toLowerCase();
-      for (const tok of wantParallelTokens) {
-        if (!new RegExp(`\\b${tok}\\b`).test(titleLc)) return false;
-      }
-      if (wantAuto && !auto) return false;
-      if (!wantAuto && auto) return false;
-      if (relic) return false;
-      return true;
-    }
 
     // If the user's card is base (no auto, no serial), reject any listing that
     // looks like a hit, parallel, or serialized variant.
