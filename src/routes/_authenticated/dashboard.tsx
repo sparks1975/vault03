@@ -1122,6 +1122,7 @@ function AddCardDialog({
           card_number: form.card_number || null,
           serial_number: form.is_numbered ? (form.serial_number || null) : null,
           is_autograph: form.is_autograph,
+          is_rookie: form.is_rookie,
           grade: form.grade || null,
           grader: form.grader || null,
           purchase_price: form.purchase_price ? Number(form.purchase_price) : null,
