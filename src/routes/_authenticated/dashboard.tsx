@@ -329,54 +329,52 @@ function Dashboard() {
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 pt-8 md:pt-12">
-        {!mobileDetail && (
-          cardsQ.isLoading ? (
-            <header className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border animate-in-up">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="bg-background p-8 space-y-3">
-                  <Skeleton className="h-3 w-20" />
-                  <Skeleton className="h-8 w-24" />
-                  <Skeleton className="h-3 w-16" />
-                </div>
-              ))}
-              <div className="bg-background p-6 md:p-8 md:col-span-2 space-y-3">
+        {cardsQ.isLoading ? (
+          <header className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border animate-in-up">
+            {Array.from({ length: 2 }).map((_, i) => (
+              <div key={i} className="bg-background p-8 space-y-3">
                 <Skeleton className="h-3 w-20" />
-                <Skeleton className="h-5 w-2/3" />
-                <Skeleton className="h-3 w-1/3" />
+                <Skeleton className="h-8 w-24" />
+                <Skeleton className="h-3 w-16" />
               </div>
-            </header>
-          ) : (
-            <header className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border animate-in-up">
-              <StatCell label="Total Value" value={fmt(totals.totalValue)} sub={totals.count ? "Live" : "Add your first card"} subAccent={totals.count > 0} />
-              <StatCell label="Assets" value={String(totals.count)} sub={totals.count ? `Graded: ${totals.gradedPct}%` : "—"} />
-              <div className="bg-background p-6 md:p-8 md:col-span-2">
-                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Top Mover</p>
-                {totals.topMover ? (
-                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2">
-                    <div className="min-w-0">
-                      <h3 className="font-bold break-words">
-                        {totals.topMover.year ?? ""} {totals.topMover.set_name ?? ""} {totals.topMover.player_name}
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        {totals.topMover.grader ?? ""} {totals.topMover.grade ?? ""}
-                      </p>
-                    </div>
-                    <div className="sm:text-right shrink-0">
-                      <span className={`font-mono font-bold text-sm md:text-base ${(totals.topMoverDollars ?? 0) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
-                        {(totals.topMoverDollars ?? 0) >= 0 ? "+" : ""}{fmt(totals.topMoverDollars)}
-                        {totals.topMoverPct != null && ` (${fmtPct(totals.topMoverPct)})`}
-                      </span>
-                      <p className="text-[9px] font-mono text-muted-foreground uppercase">vs. purchase</p>
-                    </div>
+            ))}
+            <div className="bg-background p-6 md:p-8 md:col-span-2 space-y-3">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-5 w-2/3" />
+              <Skeleton className="h-3 w-1/3" />
+            </div>
+          </header>
+        ) : (
+          <header className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border animate-in-up">
+            <StatCell label="Total Value" value={fmt(totals.totalValue)} sub={totals.count ? "Live" : "Add your first card"} subAccent={totals.count > 0} />
+            <StatCell label="Assets" value={String(totals.count)} sub={totals.count ? `Graded: ${totals.gradedPct}%` : "—"} />
+            <div className="bg-background p-6 md:p-8 md:col-span-2">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Top Mover</p>
+              {totals.topMover ? (
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2">
+                  <div className="min-w-0">
+                    <h3 className="font-bold break-words">
+                      {totals.topMover.year ?? ""} {totals.topMover.set_name ?? ""} {totals.topMover.player_name}
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      {totals.topMover.grader ?? ""} {totals.topMover.grade ?? ""}
+                    </p>
                   </div>
-                ) : cardData.length > 0 ? (
-                  <p className="text-sm text-muted-foreground">Add a purchase price to your cards to see gains vs. current value.</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No valuations yet — add a card to see market movement.</p>
-                )}
-              </div>
-            </header>
-          )
+                  <div className="sm:text-right shrink-0">
+                    <span className={`font-mono font-bold text-sm md:text-base ${(totals.topMoverDollars ?? 0) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
+                      {(totals.topMoverDollars ?? 0) >= 0 ? "+" : ""}{fmt(totals.topMoverDollars)}
+                      {totals.topMoverPct != null && ` (${fmtPct(totals.topMoverPct)})`}
+                    </span>
+                    <p className="text-[9px] font-mono text-muted-foreground uppercase">vs. purchase</p>
+                  </div>
+                </div>
+              ) : cardData.length > 0 ? (
+                <p className="text-sm text-muted-foreground">Add a purchase price to your cards to see gains vs. current value.</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">No valuations yet — add a card to see market movement.</p>
+              )}
+            </div>
+          </header>
         )}
 
         <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
