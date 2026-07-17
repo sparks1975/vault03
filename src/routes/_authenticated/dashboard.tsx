@@ -442,6 +442,8 @@ function CardDetail({
       year: card.year,
       set_name: card.set_name,
       card_number: card.card_number,
+      serial_number: card.serial_number,
+      is_autograph: card.is_autograph ?? false,
       grade: card.grade,
       grader: card.grader,
       purchase_price: card.purchase_price,
