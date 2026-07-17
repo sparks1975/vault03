@@ -562,6 +562,7 @@ function CardDetail({
       is_first_bowman: card.is_first_bowman ?? false,
       is_rookie: card.is_rookie ?? false,
       grade: card.grade,
+      parallel: card.parallel,
 
       grader: card.grader,
       purchase_price: card.purchase_price,
