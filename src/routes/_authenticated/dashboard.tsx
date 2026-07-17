@@ -678,6 +678,18 @@ function CardDetail({
             {card.year ?? "—"} {card.set_name ?? ""} {card.card_number ? `#${card.card_number}` : ""}
           </p>
           <h2 className="text-2xl font-extrabold tracking-tight">{card.player_name}</h2>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {card.serial_number && (
+              <span className="px-1.5 py-0.5 border border-accent text-accent text-[10px] font-mono font-bold uppercase">
+                #d /{card.serial_number}
+              </span>
+            )}
+            {card.is_autograph && (
+              <span className="px-1.5 py-0.5 border border-accent text-accent text-[10px] font-mono font-bold uppercase">
+                Auto
+              </span>
+            )}
+          </div>
           <div className="flex justify-between items-end mt-2">
             <div className="text-xs text-muted-foreground">
               {card.grader} {card.grade} {card.team ? `• ${card.team}` : ""}
