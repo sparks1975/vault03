@@ -462,15 +462,30 @@ export async function listParallelsForDescriptor(
       if (page.length < 50) break;
     }
 
-    // 4) Restrict to the same set (e.g. "Base Set", "Chrome Prospects").
+    // 4) Include parallels AND refractor sibling sets from the same release.
+    //    Cardsight groups refractors under sibling sets (e.g. "Chrome Prospects"
+    //    vs "Chrome Prospects Refractors"), so restricting to a single set hides
+    //    variants like "Red Refractor". Keep the base set plus any sibling whose
+    //    name shares the canonical set as a prefix, or is a refractor/parallel set.
     const setKey = canonicalSet.toLowerCase();
-    const inSet = all.filter((p) => (p.set ?? "").toLowerCase() === setKey);
-    const items: ParallelOption[] = (inSet.length ? inSet : all).map((p) => ({
-      id: p.id,
-      name: p.name,
-      printRun: p.printRun,
-      set: p.set,
-    }));
+    const relevant = all.filter((p) => {
+      const s = (p.set ?? "").toLowerCase();
+      if (!s) return true;
+      if (s === setKey) return true;
+      if (s.startsWith(setKey)) return true;
+      if (setKey.startsWith(s)) return true;
+      if (/refractor|parallel|prizm|chrome/.test(s) && s.split(" ").some((w) => setKey.includes(w))) return true;
+      return false;
+    });
+    const items: ParallelOption[] = (relevant.length ? relevant : all).map((p) => {
+      // Prefix sibling-set variants with the set name so users can tell
+      // "Red Refractor" from "Red" in different sets.
+      const s = (p.set ?? "").toLowerCase();
+      const label = s && s !== setKey && !p.name.toLowerCase().includes(s)
+        ? `${p.set} — ${p.name}`
+        : p.name;
+      return { id: p.id, name: label, printRun: p.printRun, set: p.set };
+    });
 
     // Deduplicate on name+printRun to keep the dropdown short.
     const seen = new Set<string>();
