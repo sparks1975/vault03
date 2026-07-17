@@ -359,10 +359,10 @@ function Dashboard() {
               <h3 className="text-sm font-mono uppercase tracking-widest">Portfolio Holdings</h3>
               <div className="flex items-center gap-3">
                 <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-                  <SelectTrigger className="h-8 text-xs border-border bg-background rounded-sm focus:ring-accent focus:ring-1 w-32 sm:w-36">
+                  <SelectTrigger className="text-xs font-mono uppercase tracking-widest border-border bg-background rounded-sm focus:ring-accent focus:ring-1 px-3 py-1 w-32 sm:w-36">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
-                  <SelectContent className="border-border bg-background rounded-sm text-xs">
+                  <SelectContent className="border-border bg-background rounded-sm text-xs font-mono uppercase tracking-widest">
                     <SelectItem value="added">Date added</SelectItem>
                     <SelectItem value="value">Value</SelectItem>
                     <SelectItem value="player">Player</SelectItem>
