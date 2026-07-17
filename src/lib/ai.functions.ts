@@ -226,11 +226,13 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         grader: z.string().optional().nullable(),
         is_autograph: z.boolean().optional().nullable(),
         serial_number: z.string().optional().nullable(),
+        parallel: z.string().optional().nullable(),
       })
       .parse(d),
   )
   .handler(async ({ data }) => {
     const variantBits = [
+      data.parallel ? data.parallel : null,
       data.is_autograph ? "autograph" : null,
       data.serial_number ? `#/${data.serial_number.replace(/^.*\//, "")}` : null,
     ].filter(Boolean);
