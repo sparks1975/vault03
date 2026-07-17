@@ -465,7 +465,7 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
               {card.year ?? "—"} {card.set_name ?? ""} {card.card_number ? `#${card.card_number}` : ""}
             </p>
             <h4 className="font-extrabold text-lg leading-tight tracking-tight">{card.player_name}</h4>
-            <div className="flex gap-2 mt-1 items-center">
+            <div className="flex flex-wrap gap-2 mt-1 items-center">
               {card.grade && (
                 <span className="px-1.5 py-0.5 border border-accent text-accent text-[10px] font-mono font-bold">
                   {card.grader ?? ""} {card.grade}
@@ -491,13 +491,12 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
                   1st Bowman
                 </span>
               )}
-              {(card.team || card.position) && (
-
-                <span className="text-[10px] text-muted-foreground uppercase">
-                  {card.team ?? ""} {card.position ? `• ${card.position}` : ""}
-                </span>
-              )}
             </div>
+            {(card.team || card.position) && (
+              <div className="text-[10px] text-muted-foreground uppercase mt-1">
+                {card.team ?? ""} {card.position ? `• ${card.position}` : ""}
+              </div>
+            )}
           </div>
           <div className="text-right">
             <p className="font-mono font-bold text-sm">{fmt(card.current_value)}</p>
