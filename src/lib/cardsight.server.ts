@@ -12,7 +12,16 @@ export type CardDescriptor = {
   grader?: string | null;
   is_autograph?: boolean | null;
   serial_number?: string | null;
+  parallel?: string | null;
 };
+
+export type ParallelOption = {
+  id: string;
+  name: string;
+  printRun: string | null;
+  set: string | null;
+};
+
 
 export type SoldComp = {
   title: string;
@@ -76,11 +85,21 @@ function buildFreeText(input: CardDescriptor): string {
     input.set_name,
     input.player_name,
     input.card_number ? `#${input.card_number}` : null,
+    input.parallel ?? null,
     input.grader && input.grade ? `${input.grader} ${input.grade}` : null,
   ]
     .filter(Boolean)
     .join(" ");
 }
+
+function parallelTokens(parallel: string): string[] {
+  return parallel
+    .toLowerCase()
+    .replace(/\(\/\d+\)|\/\d+/g, " ")
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3);
+}
+
 
 // Parse the human-readable sold-comps block returned by `search_pricing`.
 // Example row:
@@ -196,6 +215,8 @@ function filterAndRankComps(comps: SoldComp[], input: CardDescriptor): SoldComp[
 
   const wantAuto = !!input.is_autograph;
   const wantSerial = !!(input.serial_number && input.serial_number.trim().length > 0);
+  const wantParallelTokens = input.parallel ? parallelTokens(input.parallel) : [];
+  const wantParallel = wantParallelTokens.length > 0;
 
   let filtered = comps.filter((c) => {
     const cleaned = stripImplied(c.title);
@@ -203,6 +224,20 @@ function filterAndRankComps(comps: SoldComp[], input: CardDescriptor): SoldComp[
     const relic = hasRelicSignal(cleaned);
     const serial = hasSerialSignal(cleaned);
     const parallel = hasParallelColorSignal(cleaned);
+
+    // If the user picked a specific parallel, require every token from the
+    // parallel name to appear in the comp title. This keeps e.g. "Blue
+    // Refractor" comps out of a plain "Refractor" pick, and vice versa.
+    if (wantParallel) {
+      const titleLc = c.title.toLowerCase();
+      for (const tok of wantParallelTokens) {
+        if (!new RegExp(`\\b${tok}\\b`).test(titleLc)) return false;
+      }
+      if (wantAuto && !auto) return false;
+      if (!wantAuto && auto) return false;
+      if (relic) return false;
+      return true;
+    }
 
     // If the user's card is base (no auto, no serial), reject any listing that
     // looks like a hit, parallel, or serialized variant.
@@ -270,8 +305,8 @@ export async function fetchCardsightSoldComps(
   if (queries.length === 0) queries.push(input.player_name);
 
   const primary = queries[0];
-  const variantKey = `${input.is_autograph ? "auto" : ""}${input.serial_number ? "|#" : ""}`;
-  const cacheKey = `${primary}|${period}|${limit}|${variantKey}|filtered-v2`;
+  const variantKey = `${input.is_autograph ? "auto" : ""}${input.serial_number ? "|#" : ""}${input.parallel ? `|p:${input.parallel}` : ""}`;
+  const cacheKey = `${primary}|${period}|${limit}|${variantKey}|filtered-v3`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < TTL_MS) {
     return { query: primary, comps: cached.comps };
@@ -322,3 +357,134 @@ export async function identifyCardFromImageUrl(
     return { text: "", error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+// --- Parallels lookup -------------------------------------------------------
+// Given a card descriptor, find the matching Cardsight card and return the
+// parallel variants available in the same set (release).
+
+type SearchCardHit = { id: string; number: string; setName: string; releaseName: string };
+
+function parseSearchCards(text: string): SearchCardHit[] {
+  const out: SearchCardHit[] = [];
+  const blocks = text.split(/\n(?=• )/g);
+  for (const block of blocks) {
+    const numberMatch = block.match(/^•\s+.*?#(\S+)/);
+    const setLine = block.match(/\n\s+(\d{4})\s+([^\n-]+?)\s+-\s+([^\n]+)/);
+    const idMatch = block.match(/Card ID:\s+([a-f0-9-]{36})/i);
+    if (!idMatch) continue;
+    out.push({
+      id: idMatch[1],
+      number: numberMatch?.[1] ?? "",
+      releaseName: setLine?.[2]?.trim() ?? "",
+      setName: setLine?.[3]?.trim() ?? "",
+    });
+  }
+  return out;
+}
+
+function parseCardDetail(text: string): { releaseId: string | null; setName: string | null } {
+  const releaseMatch = text.match(/Release ID:\s*\*\*\s*([a-f0-9-]{36})/i)
+    ?? text.match(/Release ID:\s*([a-f0-9-]{36})/i);
+  const setMatch = text.match(/\*\*Set:\*\*\s*([^\n]+)/i) ?? text.match(/Set:\s*([^\n]+)/i);
+  return {
+    releaseId: releaseMatch?.[1] ?? null,
+    setName: setMatch?.[1]?.trim() ?? null,
+  };
+}
+
+type ParallelListItem = { id: string; name: string; printRun: string | null; set: string | null };
+
+function parseParallels(text: string): ParallelListItem[] {
+  const out: ParallelListItem[] = [];
+  const blocks = text.split(/\n(?=- \*\*)/g);
+  for (const block of blocks) {
+    const nameMatch = block.match(/^- \*\*([^*]+)\*\*(?:\s*\(([^)]+)\))?/);
+    const setMatch = block.match(/Set:\s*([^\n]+)/);
+    const idMatch = block.match(/ID:\s*`([a-f0-9-]{36})`/i);
+    if (!nameMatch || !idMatch) continue;
+    out.push({
+      id: idMatch[1],
+      name: nameMatch[1].trim(),
+      printRun: nameMatch[2]?.trim() ?? null,
+      set: setMatch?.[1]?.trim() ?? null,
+    });
+  }
+  return out;
+}
+
+const parallelsCache = new Map<string, { at: number; items: ParallelOption[] }>();
+
+export async function listParallelsForDescriptor(
+  input: CardDescriptor,
+): Promise<{ parallels: ParallelOption[]; error?: string }> {
+  if (!input.player_name || !input.year || !input.set_name) {
+    return { parallels: [], error: "Player, year, and set are required to look up parallels." };
+  }
+  const cacheKey = `${input.year}|${input.set_name}|${input.card_number ?? ""}`.toLowerCase();
+  const cached = parallelsCache.get(cacheKey);
+  if (cached && Date.now() - cached.at < TTL_MS) return { parallels: cached.items };
+
+  try {
+    // 1) Find the card via search_cards.
+    const searchArgs: Record<string, unknown> = {
+      playerName: input.player_name,
+      year: String(input.year),
+      take: 20,
+    };
+    if (input.card_number) searchArgs.cardNumber = input.card_number;
+    const cardsText = await mcpCall("search_cards", searchArgs);
+    const hits = parseSearchCards(cardsText);
+    if (hits.length === 0) return { parallels: [], error: "No matching cards in Cardsight catalog." };
+
+    const setLc = (input.set_name ?? "").toLowerCase();
+    const bySet = hits.find(
+      (h) => setLc && (h.setName.toLowerCase().includes(setLc) || h.releaseName.toLowerCase().includes(setLc)),
+    );
+    const pick = bySet ?? hits[0];
+
+    // 2) Get card detail to find release id + canonical set name.
+    const detailText = await mcpCall("get_card", { id: pick.id });
+    const detail = parseCardDetail(detailText);
+    const canonicalSet = detail.setName ?? pick.setName;
+    if (!detail.releaseId) return { parallels: [], error: "Couldn't resolve release for this card." };
+
+    // 3) Page through parallels for that release.
+    const all: ParallelListItem[] = [];
+    for (let skip = 0; skip < 500; skip += 50) {
+      const text = await mcpCall("search_parallels", {
+        releaseId: detail.releaseId,
+        take: 50,
+        skip,
+      });
+      const page = parseParallels(text);
+      if (page.length === 0) break;
+      all.push(...page);
+      if (page.length < 50) break;
+    }
+
+    // 4) Restrict to the same set (e.g. "Base Set", "Chrome Prospects").
+    const setKey = canonicalSet.toLowerCase();
+    const inSet = all.filter((p) => (p.set ?? "").toLowerCase() === setKey);
+    const items: ParallelOption[] = (inSet.length ? inSet : all).map((p) => ({
+      id: p.id,
+      name: p.name,
+      printRun: p.printRun,
+      set: p.set,
+    }));
+
+    // Deduplicate on name+printRun to keep the dropdown short.
+    const seen = new Set<string>();
+    const unique = items.filter((p) => {
+      const k = `${p.name}|${p.printRun ?? ""}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    unique.sort((a, b) => a.name.localeCompare(b.name));
+    parallelsCache.set(cacheKey, { at: Date.now(), items: unique });
+    return { parallels: unique };
+  } catch (err) {
+    return { parallels: [], error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
