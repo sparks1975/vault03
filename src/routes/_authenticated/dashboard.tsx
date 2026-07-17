@@ -131,7 +131,7 @@ function fmt(n: number | null | undefined) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(n));
 }
 function fmtPct(n: number | null | undefined) {
-  if (n == null) return null;
+  if (n == null || !Number.isFinite(n)) return null;
   const v = Number(n);
   const sign = v >= 0 ? "+" : "";
   return `${sign}${v.toFixed(1)}%`;
@@ -445,10 +445,7 @@ function StatCell({ label, value, sub, subAccent }: { label: string; value: stri
 }
 
 function CardRow({ card, active, onClick }: { card: Card; active: boolean; onClick: () => void }) {
-  const delta =
-    card.purchase_price != null && card.current_value != null
-      ? (Number(card.current_value) - Number(card.purchase_price)) / Number(card.purchase_price)
-      : null;
+  const delta = gainPct(card);
   return (
     <button
       onClick={onClick}
@@ -849,9 +846,9 @@ function CardDetail({
             </div>
             <div className="text-right">
               <p className="text-2xl font-extrabold tracking-tight">{fmt(card.current_value)}</p>
-              {card.purchase_price != null && card.current_value != null && (
+              {gainPct(card) != null && (
                 <p className={`text-[10px] font-mono ${Number(card.current_value) >= Number(card.purchase_price) ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
-                  {fmtPct((Number(card.current_value) - Number(card.purchase_price)) / Number(card.purchase_price))} vs purchase
+                  {fmtPct(gainPct(card))} vs purchase
                 </p>
               )}
             </div>
