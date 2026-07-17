@@ -667,6 +667,8 @@ function CardDetail({
               {(draft.serial_number != null) && (
                 <Field
                   label='Serial (e.g. "1/50")'
+                  labelClassName="invisible"
+                  placeholder='Serial (e.g. "1/50")'
                   value={String(draft.serial_number ?? "")}
                   onChange={(v) => setDraft({ ...draft, serial_number: v })}
                 />
@@ -1176,6 +1178,8 @@ function AddCardDialog({
               {form.is_numbered && (
                 <Field
                   label='Serial (e.g. "1/50")'
+                  labelClassName="invisible"
+                  placeholder='Serial (e.g. "1/50")'
                   value={form.serial_number}
                   onChange={(v) => setForm({ ...form, serial_number: v })}
                 />
@@ -1235,18 +1239,23 @@ function Field({
   value,
   onChange,
   type = "text",
+  placeholder,
+  labelClassName,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
+  placeholder?: string;
+  labelClassName?: string;
 }) {
   return (
     <label className="block">
-      <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">{label}</span>
+      <span className={cn("text-[10px] font-mono uppercase tracking-widest text-muted-foreground", labelClassName)}>{label}</span>
       <input
         type={type}
         value={value}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         className="mt-1 w-full h-10 px-3 border border-border rounded-sm text-sm bg-background focus:outline-none focus:border-accent"
       />
