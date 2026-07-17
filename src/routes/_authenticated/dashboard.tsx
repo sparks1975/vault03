@@ -486,7 +486,13 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
                   Rookie
                 </span>
               )}
+              {card.is_first_bowman && (
+                <span className="px-1.5 py-0.5 border border-[color:var(--first-bowman)] text-[color:var(--first-bowman)] text-[10px] font-mono font-bold uppercase">
+                  1st Bowman
+                </span>
+              )}
               {(card.team || card.position) && (
+
                 <span className="text-[10px] text-muted-foreground uppercase">
                   {card.team ?? ""} {card.position ? `• ${card.position}` : ""}
                 </span>
@@ -725,7 +731,19 @@ function CardDetail({
                   <span className="text-[10px] font-mono uppercase tracking-widest">Rookie card</span>
                 </div>
               </label>
+              <label className="flex flex-col justify-end cursor-pointer">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">1st Bowman</span>
+                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={!!draft.is_first_bowman}
+                    onChange={(e) => setDraft({ ...draft, is_first_bowman: e.target.checked })}
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-widest">1st Bowman</span>
+                </div>
+              </label>
             </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="cursor-pointer">
                 <div className="flex h-10 items-center gap-2 border border-border px-3 hover:bg-secondary">
@@ -815,8 +833,14 @@ function CardDetail({
                 Rookie
               </span>
             )}
+            {card.is_first_bowman && (
+              <span className="px-1.5 py-0.5 border border-[color:var(--first-bowman)] text-[color:var(--first-bowman)] text-[10px] font-mono font-bold uppercase">
+                1st Bowman
+              </span>
+            )}
           </div>
           <div className="flex justify-between items-end mt-2">
+
             <div className="text-xs text-muted-foreground">
               {card.grader} {card.grade} {card.team ? `• ${card.team}` : ""}
             </div>
@@ -1258,7 +1282,19 @@ function AddCardDialog({
                   <span className="text-[10px] font-mono uppercase tracking-widest">Rookie card</span>
                 </div>
               </label>
+              <label className="flex flex-col justify-end cursor-pointer">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">1st Bowman</span>
+                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={form.is_first_bowman}
+                    onChange={(e) => setForm({ ...form, is_first_bowman: e.target.checked })}
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-widest">1st Bowman</span>
+                </div>
+              </label>
             </div>
+
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="cursor-pointer">
