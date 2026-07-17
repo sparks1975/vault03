@@ -113,6 +113,7 @@ type Card = {
   is_first_bowman: boolean | null;
   is_rookie: boolean | null;
   grade: string | null;
+  parallel: string | null;
 
   grader: string | null;
   purchase_price: number | null;
