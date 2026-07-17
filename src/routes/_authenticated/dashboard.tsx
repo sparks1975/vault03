@@ -819,7 +819,7 @@ function CardDetail({
           {!card.mlb_player_id ? (
             <p className="text-xs text-muted-foreground">Link an MLB player to see current stats (edit card and search).</p>
           ) : stats.isLoading ? (
-            <p className="text-xs text-muted-foreground">Loading MLB Stats API…</p>
+            <StatGridSkeleton />
           ) : stats.data?.stats ? (
             <StatGrid group={stats.data.group ?? "hitting"} s={stats.data.stats} />
           ) : (
