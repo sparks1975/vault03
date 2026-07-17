@@ -428,6 +428,11 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
                   {card.grader ?? ""} {card.grade}
                 </span>
               )}
+              {card.serial_number && (
+                <span className="px-1.5 py-0.5 border border-accent text-accent text-[10px] font-mono font-bold uppercase">
+                  #d /{card.serial_number}
+                </span>
+              )}
               {card.is_autograph && (
                 <span className="px-1.5 py-0.5 border border-accent text-accent text-[10px] font-mono font-bold uppercase">
                   Auto
