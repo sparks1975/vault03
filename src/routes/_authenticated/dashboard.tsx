@@ -445,7 +445,10 @@ function StatCell({ label, value, sub, subAccent }: { label: string; value: stri
 }
 
 function CardRow({ card, active, onClick }: { card: Card; active: boolean; onClick: () => void }) {
-  const delta = card.value_delta_pct == null ? null : Number(card.value_delta_pct);
+  const delta =
+    card.purchase_price != null && card.current_value != null
+      ? (Number(card.current_value) - Number(card.purchase_price)) / Number(card.purchase_price)
+      : null;
   return (
     <button
       onClick={onClick}
@@ -846,9 +849,9 @@ function CardDetail({
             </div>
             <div className="text-right">
               <p className="text-2xl font-extrabold tracking-tight">{fmt(card.current_value)}</p>
-              {card.value_delta_pct != null && (
-                <p className={`text-[10px] font-mono ${Number(card.value_delta_pct) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
-                  {fmtPct(Number(card.value_delta_pct))} / 30d
+              {card.purchase_price != null && card.current_value != null && (
+                <p className={`text-[10px] font-mono ${Number(card.current_value) >= Number(card.purchase_price) ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
+                  {fmtPct((Number(card.current_value) - Number(card.purchase_price)) / Number(card.purchase_price))} vs purchase
                 </p>
               )}
             </div>
