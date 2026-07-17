@@ -601,6 +601,33 @@ function CardDetail({
             <Field label="Grade" value={String(draft.grade ?? "")} onChange={(v) => setDraft({ ...draft, grade: v || null })} />
             <Field label="Purchase price (USD)" type="number" value={draft.purchase_price == null ? "" : String(draft.purchase_price)} onChange={(v) => setDraft({ ...draft, purchase_price: v ? Number(v) : null })} />
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="flex items-center gap-2 border border-border px-3 h-10 cursor-pointer hover:bg-secondary">
+              <input
+                type="checkbox"
+                checked={!!draft.serial_number || draft.serial_number === ""}
+                onChange={(e) => setDraft({ ...draft, serial_number: e.target.checked ? (draft.serial_number ?? "") : null })}
+              />
+              <span className="text-[10px] font-mono uppercase tracking-widest">Numbered card</span>
+            </label>
+            {(draft.serial_number != null) && (
+              <Field
+                label='Serial (e.g. "1/50")'
+                value={String(draft.serial_number ?? "")}
+                onChange={(v) => setDraft({ ...draft, serial_number: v })}
+              />
+            )}
+            <label className="flex items-center gap-2 border border-border px-3 h-10 cursor-pointer hover:bg-secondary">
+              <input
+                type="checkbox"
+                checked={!!draft.is_autograph}
+                onChange={(e) => setDraft({ ...draft, is_autograph: e.target.checked })}
+              />
+              <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
+            </label>
+          </div>
+          <div>
+
           <label className="block">
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Notes</span>
             <textarea
