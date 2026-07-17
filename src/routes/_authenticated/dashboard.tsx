@@ -1405,6 +1405,18 @@ function AddCardDialog({
               )}
             </div>
 
+            <ParallelSelect
+              descriptor={{
+                player_name: form.player_name,
+                year: form.year ? Number(form.year) : null,
+                set_name: form.set_name || null,
+                card_number: form.card_number || null,
+              }}
+              value={form.parallel}
+              onChange={(v) => setForm({ ...form, parallel: v })}
+            />
+
+
             <div className="border border-border p-4">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Link MLB player (for live stats)</p>
