@@ -1,0 +1,13 @@
+{
+  "name": "Vault.03",
+  "short_name": "Vault.03",
+  "description": "Catalogue your baseball cards, track live market values, comparable sales, and current player statistics in one collector-grade portfolio.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#6B21A8",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
