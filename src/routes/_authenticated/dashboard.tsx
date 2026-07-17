@@ -15,7 +15,6 @@ import {
   deleteCard,
   replaceValuation,
   uploadCardPhoto,
-  listCardParallels,
 } from "@/lib/cards.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
