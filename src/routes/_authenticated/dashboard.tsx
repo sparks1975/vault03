@@ -1135,6 +1135,8 @@ function AddCardDialog({
             card_number: created.card_number,
             grade: created.grade,
             grader: created.grader,
+            is_autograph: created.is_autograph,
+            serial_number: created.serial_number,
           },
         });
         await replaceValFn({
