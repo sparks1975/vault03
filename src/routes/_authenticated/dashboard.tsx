@@ -184,6 +184,8 @@ function Dashboard() {
               card_number: c.card_number,
               grade: c.grade,
               grader: c.grader,
+              is_autograph: c.is_autograph,
+              serial_number: c.serial_number,
             },
           });
           await replaceValFn({
@@ -588,6 +590,8 @@ function CardDetail({
           card_number: card.card_number,
           grade: card.grade,
           grader: card.grader,
+          is_autograph: card.is_autograph,
+          serial_number: card.serial_number,
         },
       });
       await replaceValFn({
@@ -1131,6 +1135,8 @@ function AddCardDialog({
             card_number: created.card_number,
             grade: created.grade,
             grader: created.grader,
+            is_autograph: created.is_autograph,
+            serial_number: created.serial_number,
           },
         });
         await replaceValFn({

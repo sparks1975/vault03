@@ -224,15 +224,22 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         card_number: z.string().optional().nullable(),
         grade: z.string().optional().nullable(),
         grader: z.string().optional().nullable(),
+        is_autograph: z.boolean().optional().nullable(),
+        serial_number: z.string().optional().nullable(),
       })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    const variantBits = [
+      data.is_autograph ? "autograph" : null,
+      data.serial_number ? `#/${data.serial_number.replace(/^.*\//, "")}` : null,
+    ].filter(Boolean);
     const descriptor = [
       data.year,
       data.set_name,
       data.player_name,
       data.card_number ? `#${data.card_number}` : null,
+      ...variantBits,
       data.grader && data.grade ? `${data.grader} ${data.grade}` : data.grade,
     ]
       .filter(Boolean)

@@ -10,6 +10,8 @@ export type CardDescriptor = {
   card_number?: string | null;
   grade?: string | null;
   grader?: string | null;
+  is_autograph?: boolean | null;
+  serial_number?: string | null;
 };
 
 export type SoldComp = {
@@ -137,34 +139,87 @@ async function runSearchPricing(
   return { comps, empty: comps.length === 0, raw: text };
 }
 
-// Parallel/insert/serial keywords that indicate a NON-base version of the card.
-// If the user's descriptor doesn't call these out, we exclude comps that do —
-// serialized/refractor/auto variants sell for wildly different prices.
-const PARALLEL_KEYWORDS = [
+// Signals that a listing is a NON-base variant (parallel, insert, refractor,
+// serialized, or a hit like an auto/patch/relic). We match with word-boundaries
+// on colors to avoid false positives inside URLs or set names like "Topps Chrome".
+const AUTO_KEYWORDS = ["auto", "autograph", "autographed", "signed", "signature"];
+const RELIC_KEYWORDS = ["patch", "relic", "jersey", "rpa", "logoman", "letterman"];
+const PARALLEL_COLOR_WORDS = [
   "refractor", "prizm", "mojo", "wave", "rainbow", "atomic", "superfractor",
+  "sapphire", "emerald", "ruby", "onyx",
   "gold", "silver", "black", "red", "blue", "orange", "purple", "pink", "green",
-  "sapphire", "emerald", "ruby", "onyx", "chrome",
-  "auto", "autograph", "signed", "patch", "relic", "jersey", "rpa",
-  "ssp", "short print", " sp ", "insert", "parallel", "variation", "printing plate",
-  "1/1", "one of one", "numbered",
+  "bronze", "camo", "shimmer", "holo", "xfractor", "disco", "lava", "mini-diamond",
+];
+const OTHER_PARALLEL_WORDS = [
+  "ssp", "short print", "insert", "parallel", "variation", "printing plate",
+  "1/1", "one of one", "numbered to", "case hit", "die-cut", "die cut",
 ];
 
-function hasParallelSignal(text: string): boolean {
+function hasSerialSignal(text: string): boolean {
   const t = ` ${text.toLowerCase()} `;
-  if (/\/\d{1,4}\b/.test(t)) return true; // serial number like /99, /25, /499
-  if (/#\d+\/\d+/.test(t)) return true;
-  return PARALLEL_KEYWORDS.some((kw) => t.includes(kw));
+  if (/\s\/\s?\d{1,4}\b/.test(t)) return true;   // "/99", " /25"
+  if (/#\d+\/\d+/.test(t)) return true;           // "#12/25"
+  if (/\bnumbered\b/.test(t)) return true;
+  return false;
+}
+
+function hasAutoSignal(text: string): boolean {
+  const t = ` ${text.toLowerCase()} `;
+  return AUTO_KEYWORDS.some((k) => new RegExp(`\\b${k}\\b`).test(t));
+}
+
+function hasRelicSignal(text: string): boolean {
+  const t = ` ${text.toLowerCase()} `;
+  return RELIC_KEYWORDS.some((k) => new RegExp(`\\b${k}\\b`).test(t));
+}
+
+function hasParallelColorSignal(text: string): boolean {
+  const t = text.toLowerCase();
+  // Only match as whole words to avoid substrings like "gold" inside URLs.
+  if (PARALLEL_COLOR_WORDS.some((k) => new RegExp(`\\b${k}\\b`).test(t))) return true;
+  if (OTHER_PARALLEL_WORDS.some((k) => t.includes(k))) return true;
+  return false;
 }
 
 function filterAndRankComps(comps: SoldComp[], input: CardDescriptor): SoldComp[] {
-  const descriptor = buildFreeText(input).toLowerCase();
-  const userWantsParallel = hasParallelSignal(descriptor);
+  const setLc = (input.set_name ?? "").toLowerCase();
+  // Words already implied by the user's set name shouldn't be treated as parallel
+  // signals in comp titles (e.g. base "Topps Chrome" contains "chrome").
+  const setImpliedColors = PARALLEL_COLOR_WORDS.filter((w) =>
+    new RegExp(`\\b${w}\\b`).test(setLc),
+  );
+  const stripImplied = (text: string): string => {
+    let out = text.toLowerCase();
+    for (const w of setImpliedColors) out = out.replace(new RegExp(`\\b${w}\\b`, "g"), "");
+    return out;
+  };
 
-  let filtered = comps;
-  if (!userWantsParallel) {
-    filtered = comps.filter((c) => !hasParallelSignal(c.title));
-  }
+  const wantAuto = !!input.is_autograph;
+  const wantSerial = !!(input.serial_number && input.serial_number.trim().length > 0);
 
+  let filtered = comps.filter((c) => {
+    const cleaned = stripImplied(c.title);
+    const auto = hasAutoSignal(cleaned);
+    const relic = hasRelicSignal(cleaned);
+    const serial = hasSerialSignal(cleaned);
+    const parallel = hasParallelColorSignal(cleaned);
+
+    // If the user's card is base (no auto, no serial), reject any listing that
+    // looks like a hit, parallel, or serialized variant.
+    if (!wantAuto && !wantSerial) {
+      if (auto || relic || serial || parallel) return false;
+      return true;
+    }
+    // If the user's card is an autograph, require the comp to be an auto.
+    if (wantAuto && !auto) return false;
+    // If it's a base auto (not serialized), still exclude serialized/patch/parallel autos.
+    if (wantAuto && !wantSerial && (serial || relic || parallel)) return false;
+    // If the user's card is serialized, require a serial signal in the comp.
+    if (wantSerial && !serial) return false;
+    return true;
+  });
+
+  // Grade match: prefer exact grade matches when we have enough.
   if (input.grade) {
     const wantGrade = `${input.grader ?? ""} ${input.grade}`.trim().toLowerCase();
     const gradeMatches = filtered.filter((c) => {
@@ -175,8 +230,21 @@ function filterAndRankComps(comps: SoldComp[], input: CardDescriptor): SoldComp[
     });
     if (gradeMatches.length >= 3) filtered = gradeMatches;
   } else {
-    const raw = filtered.filter((c) => !c.grade && !/psa|bgs|sgc|cgc/i.test(c.title));
+    const raw = filtered.filter((c) => !c.grade && !/\b(psa|bgs|sgc|cgc)\b/i.test(c.title));
     if (raw.length >= 3) filtered = raw;
+  }
+
+  // Trim outliers using IQR so a single mispriced listing doesn't skew the median.
+  if (filtered.length >= 5) {
+    const sorted = [...filtered].sort((a, b) => a.price - b.price);
+    const q = (p: number) => sorted[Math.floor((sorted.length - 1) * p)].price;
+    const q1 = q(0.25);
+    const q3 = q(0.75);
+    const iqr = q3 - q1;
+    const lo = q1 - 1.5 * iqr;
+    const hi = q3 + 1.5 * iqr;
+    const trimmed = filtered.filter((c) => c.price >= lo && c.price <= hi);
+    if (trimmed.length >= 3) filtered = trimmed;
   }
 
   return filtered;
@@ -202,7 +270,8 @@ export async function fetchCardsightSoldComps(
   if (queries.length === 0) queries.push(input.player_name);
 
   const primary = queries[0];
-  const cacheKey = `${primary}|${period}|${limit}|filtered`;
+  const variantKey = `${input.is_autograph ? "auto" : ""}${input.serial_number ? "|#" : ""}`;
+  const cacheKey = `${primary}|${period}|${limit}|${variantKey}|filtered-v2`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < TTL_MS) {
     return { query: primary, comps: cached.comps };
@@ -215,9 +284,11 @@ export async function fetchCardsightSoldComps(
       lastRaw = raw;
       if (empty || comps.length === 0) continue;
       const filtered = filterAndRankComps(comps, input);
-      const chosen = filtered.length > 0 ? filtered : comps;
-      cache.set(cacheKey, { at: Date.now(), comps: chosen });
-      return { query: q, comps: chosen };
+      // Do NOT fall back to unfiltered comps — that pollutes base card comps
+      // with parallel/auto/serialized variants and inflates the range.
+      if (filtered.length === 0) continue;
+      cache.set(cacheKey, { at: Date.now(), comps: filtered });
+      return { query: q, comps: filtered };
     } catch (err) {
       return {
         query: q,
@@ -227,11 +298,11 @@ export async function fetchCardsightSoldComps(
     }
   }
 
-  console.log("Cardsight search_pricing had no comps. Last response:", lastRaw?.slice(0, 300));
+  console.log("Cardsight search_pricing had no matching comps. Last response:", lastRaw?.slice(0, 300));
   return {
     query: primary,
     comps: [],
-    error: "Cardsight has no recent sold comps for this card.",
+    error: "No matching sold comps for this exact card variant.",
   };
 }
 
