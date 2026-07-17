@@ -445,7 +445,10 @@ function StatCell({ label, value, sub, subAccent }: { label: string; value: stri
 }
 
 function CardRow({ card, active, onClick }: { card: Card; active: boolean; onClick: () => void }) {
-  const delta = card.value_delta_pct == null ? null : Number(card.value_delta_pct);
+  const delta =
+    card.purchase_price != null && card.current_value != null
+      ? (Number(card.current_value) - Number(card.purchase_price)) / Number(card.purchase_price)
+      : null;
   return (
     <button
       onClick={onClick}
