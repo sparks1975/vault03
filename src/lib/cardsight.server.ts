@@ -85,11 +85,21 @@ function buildFreeText(input: CardDescriptor): string {
     input.set_name,
     input.player_name,
     input.card_number ? `#${input.card_number}` : null,
+    input.parallel ?? null,
     input.grader && input.grade ? `${input.grader} ${input.grade}` : null,
   ]
     .filter(Boolean)
     .join(" ");
 }
+
+function parallelTokens(parallel: string): string[] {
+  return parallel
+    .toLowerCase()
+    .replace(/\(\/\d+\)|\/\d+/g, " ")
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3);
+}
+
 
 // Parse the human-readable sold-comps block returned by `search_pricing`.
 // Example row:
