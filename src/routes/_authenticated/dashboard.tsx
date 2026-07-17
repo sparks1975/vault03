@@ -15,6 +15,7 @@ import {
   deleteCard,
   replaceValuation,
   uploadCardPhoto,
+  compressExistingPhotos,
 } from "@/lib/cards.functions";
 import { supabase } from "@/integrations/supabase/client";
 
