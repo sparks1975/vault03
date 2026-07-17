@@ -157,6 +157,7 @@ function Dashboard() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"value" | "player" | "added">("added");
   const [addOpen, setAddOpen] = useState(false);
 
   const cardsQ = useQuery({
