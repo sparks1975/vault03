@@ -224,6 +224,8 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         card_number: z.string().optional().nullable(),
         grade: z.string().optional().nullable(),
         grader: z.string().optional().nullable(),
+        is_autograph: z.boolean().optional().nullable(),
+        serial_number: z.string().optional().nullable(),
       })
       .parse(d),
   )
