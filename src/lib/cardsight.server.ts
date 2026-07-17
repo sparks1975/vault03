@@ -305,8 +305,8 @@ export async function fetchCardsightSoldComps(
   if (queries.length === 0) queries.push(input.player_name);
 
   const primary = queries[0];
-  const variantKey = `${input.is_autograph ? "auto" : ""}${input.serial_number ? "|#" : ""}`;
-  const cacheKey = `${primary}|${period}|${limit}|${variantKey}|filtered-v2`;
+  const variantKey = `${input.is_autograph ? "auto" : ""}${input.serial_number ? "|#" : ""}${input.parallel ? `|p:${input.parallel}` : ""}`;
+  const cacheKey = `${primary}|${period}|${limit}|${variantKey}|filtered-v3`;
   const cached = cache.get(cacheKey);
   if (cached && Date.now() - cached.at < TTL_MS) {
     return { query: primary, comps: cached.comps };
