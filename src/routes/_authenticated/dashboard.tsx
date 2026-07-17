@@ -805,6 +805,11 @@ function CardDetail({
                 Auto
               </span>
             )}
+            {card.is_rookie && (
+              <span className="px-1.5 py-0.5 border border-[color:var(--positive)] text-[color:var(--positive)] text-[10px] font-mono font-bold uppercase">
+                Rookie
+              </span>
+            )}
           </div>
           <div className="flex justify-between items-end mt-2">
             <div className="text-xs text-muted-foreground">
