@@ -13,8 +13,10 @@ const cardInputSchema = z.object({
   card_number: z.string().nullable().optional(),
   serial_number: z.string().nullable().optional(),
   is_autograph: z.boolean().optional(),
+  is_first_bowman: z.boolean().optional(),
   is_rookie: z.boolean().optional(),
   grade: z.string().nullable().optional(),
+
   grader: z.string().nullable().optional(),
   purchase_price: z.number().nullable().optional(),
   notes: z.string().nullable().optional(),
@@ -122,8 +124,10 @@ const allowed = [
       "card_number",
       "serial_number",
       "is_autograph",
+      "is_first_bowman",
       "is_rookie",
       "grade",
+
       "grader",
       "purchase_price",
       "notes",
