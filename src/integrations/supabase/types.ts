@@ -99,6 +99,7 @@ export type Database = {
           grader: string | null
           id: string
           is_autograph: boolean
+          is_rookie: boolean
           last_valued_at: string | null
           mlb_player_id: number | null
           notes: string | null
@@ -122,6 +123,7 @@ export type Database = {
           grader?: string | null
           id?: string
           is_autograph?: boolean
+          is_rookie?: boolean
           last_valued_at?: string | null
           mlb_player_id?: number | null
           notes?: string | null
@@ -145,6 +147,7 @@ export type Database = {
           grader?: string | null
           id?: string
           is_autograph?: boolean
+          is_rookie?: boolean
           last_valued_at?: string | null
           mlb_player_id?: number | null
           notes?: string | null

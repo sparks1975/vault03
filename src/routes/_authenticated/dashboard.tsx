@@ -146,6 +146,7 @@ type Card = {
   card_number: string | null;
   serial_number: string | null;
   is_autograph: boolean | null;
+  is_rookie: boolean | null;
   grade: string | null;
   grader: string | null;
   purchase_price: number | null;
@@ -490,6 +491,11 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
                   Auto
                 </span>
               )}
+              {card.is_rookie && (
+                <span className="px-1.5 py-0.5 border border-[color:var(--positive)] text-[color:var(--positive)] text-[10px] font-mono font-bold uppercase">
+                  Rookie
+                </span>
+              )}
               {(card.team || card.position) && (
                 <span className="text-[10px] text-muted-foreground uppercase">
                   {card.team ?? ""} {card.position ? `• ${card.position}` : ""}
@@ -546,6 +552,7 @@ function CardDetail({
       card_number: card.card_number,
       serial_number: card.serial_number,
       is_autograph: card.is_autograph ?? false,
+      is_rookie: card.is_rookie ?? false,
       grade: card.grade,
       grader: card.grader,
       purchase_price: card.purchase_price,
@@ -713,6 +720,17 @@ function CardDetail({
                   <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
                 </div>
               </label>
+              <label className="flex flex-col justify-end cursor-pointer">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Rookie</span>
+                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={!!draft.is_rookie}
+                    onChange={(e) => setDraft({ ...draft, is_rookie: e.target.checked })}
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-widest">Rookie card</span>
+                </div>
+              </label>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="cursor-pointer">
@@ -796,6 +814,11 @@ function CardDetail({
             {card.is_autograph && (
               <span className="px-1.5 py-0.5 border border-accent text-accent text-[10px] font-mono font-bold uppercase">
                 Auto
+              </span>
+            )}
+            {card.is_rookie && (
+              <span className="px-1.5 py-0.5 border border-[color:var(--positive)] text-[color:var(--positive)] text-[10px] font-mono font-bold uppercase">
+                Rookie
               </span>
             )}
           </div>
@@ -992,6 +1015,7 @@ function AddCardDialog({
     serial_number: "",
     is_numbered: false,
     is_autograph: false,
+    is_rookie: false,
     grade: "",
     grader: "",
     purchase_price: "",
@@ -1098,6 +1122,7 @@ function AddCardDialog({
           card_number: form.card_number || null,
           serial_number: form.is_numbered ? (form.serial_number || null) : null,
           is_autograph: form.is_autograph,
+          is_rookie: form.is_rookie,
           grade: form.grade || null,
           grader: form.grader || null,
           purchase_price: form.purchase_price ? Number(form.purchase_price) : null,
@@ -1220,6 +1245,17 @@ function AddCardDialog({
                     onChange={(e) => setForm({ ...form, is_autograph: e.target.checked })}
                   />
                   <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
+                </div>
+              </label>
+              <label className="flex flex-col justify-end cursor-pointer">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Rookie</span>
+                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={form.is_rookie}
+                    onChange={(e) => setForm({ ...form, is_rookie: e.target.checked })}
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-widest">Rookie card</span>
                 </div>
               </label>
             </div>
