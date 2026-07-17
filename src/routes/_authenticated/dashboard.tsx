@@ -626,9 +626,8 @@ function CardDetail({
               <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
             </label>
           </div>
-          <div>
-
           <label className="block">
+
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Notes</span>
             <textarea
               value={String(draft.notes ?? "")}
