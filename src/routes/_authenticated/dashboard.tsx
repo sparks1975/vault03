@@ -840,6 +840,16 @@ function CardDetail({
                 />
               )}
             </div>
+            <ParallelSelect
+              descriptor={{
+                player_name: String(draft.player_name ?? ""),
+                year: (draft.year ?? null) as number | null,
+                set_name: (draft.set_name ?? null) as string | null,
+                card_number: (draft.card_number ?? null) as string | null,
+              }}
+              value={String(draft.parallel ?? "")}
+              onChange={(v) => setDraft({ ...draft, parallel: v || null })}
+            />
           <label className="block">
 
 
