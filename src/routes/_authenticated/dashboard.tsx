@@ -18,6 +18,7 @@ import {
 } from "@/lib/cards.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function CardRowSkeleton() {
   return (
