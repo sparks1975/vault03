@@ -304,11 +304,11 @@ If unable to value, return current_value: 0.`;
     }>(text);
 
     return {
-      current_value: compsMedian > 0 ? compsMedian : ai.current_value,
+      current_value: compsAverage > 0 ? compsAverage : ai.current_value,
       value_delta_pct: ai.value_delta_pct,
       sales,
       history: ai.history,
-      source: compsMedian > 0 ? ("cardsight" as const) : ("ai" as const),
+      source: compsAverage > 0 ? ("cardsight" as const) : ("ai" as const),
       note: compsNote,
     };
   });
