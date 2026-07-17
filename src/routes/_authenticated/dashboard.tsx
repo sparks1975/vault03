@@ -18,6 +18,7 @@ import {
 } from "@/lib/cards.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function CardRowSkeleton() {
   return (
@@ -357,16 +358,16 @@ function Dashboard() {
             <div className="flex flex-wrap items-center justify-between mb-6 gap-3">
               <h3 className="text-sm font-mono uppercase tracking-widest">Portfolio Holdings</h3>
               <div className="flex items-center gap-3">
-                <select
-                  aria-label="Sort holdings"
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                  className="text-xs border border-border bg-background px-2 py-1 rounded-sm focus:outline-none focus:border-accent"
-                >
-                  <option value="added">Date added</option>
-                  <option value="value">Value</option>
-                  <option value="player">Player</option>
-                </select>
+                <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+                  <SelectTrigger className="h-8 text-xs border-border bg-background rounded-sm focus:ring-accent focus:ring-1 w-32 sm:w-36">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent className="border-border bg-background rounded-sm text-xs">
+                    <SelectItem value="added">Date added</SelectItem>
+                    <SelectItem value="value">Value</SelectItem>
+                    <SelectItem value="player">Player</SelectItem>
+                  </SelectContent>
+                </Select>
                 <input
                   type="text"
                   placeholder="Search cards…"
