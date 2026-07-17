@@ -381,7 +381,7 @@ function Dashboard() {
               <div className="space-y-2">
                 {Array.from({ length: 4 }).map((_, i) => <CardRowSkeleton key={i} />)}
               </div>
-            ) : filtered.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <div className="p-12 border border-border text-center">
                 <p className="text-sm text-muted-foreground mb-4">Your vault is empty.</p>
                 <button
@@ -393,7 +393,7 @@ function Dashboard() {
               </div>
             ) : (
               <div className="space-y-2">
-                {filtered.map((c) => (
+                {sorted.map((c) => (
                   <CardRow key={c.id} card={c} active={c.id === selected} onClick={() => selectCard(c.id)} />
                 ))}
               </div>
