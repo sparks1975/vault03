@@ -15,7 +15,6 @@ import {
   deleteCard,
   replaceValuation,
   uploadCardPhoto,
-  compressExistingPhotos,
 } from "@/lib/cards.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -58,43 +57,6 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
   component: Dashboard,
 });
 
-function CompressPhotosButton() {
-  const queryClient = useQueryClient();
-  const runFn = useServerFn(compressExistingPhotos);
-  const [busy, setBusy] = useState(false);
-  async function handle() {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const r = await runFn({});
-      const saved = Math.max(0, r.bytesBefore - r.bytesAfter);
-      const kb = (n: number) => `${(n / 1024).toFixed(0)}KB`;
-      toast.success(
-        `Compressed ${r.processed} photo${r.processed === 1 ? "" : "s"} · saved ${kb(saved)}` +
-          (r.skipped ? ` · ${r.skipped} skipped` : "") +
-          (r.failed ? ` · ${r.failed} failed` : ""),
-      );
-      await queryClient.invalidateQueries({ queryKey: ["cards"] });
-    } catch (err) {
-      console.error(err);
-      toast.error("Compression failed");
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <button
-      onClick={handle}
-      disabled={busy}
-      title="Compress existing photos via TinyPNG"
-      className="px-3 py-2 border border-border text-[10px] font-mono uppercase tracking-widest hover:bg-secondary disabled:opacity-50 inline-flex items-center gap-2"
-    >
-      {busy ? <Loader2 className="size-3.5 animate-spin" /> : null}
-      <span className="hidden sm:inline">Compress Photos</span>
-      <span className="sm:hidden">Compress</span>
-    </button>
-  );
-}
 
 function SignOutButton() {
   const navigate = useNavigate();
@@ -323,7 +285,6 @@ function Dashboard() {
           >
             <Plus className="size-3.5" /> <span className="hidden sm:inline">Add Card</span><span className="sm:hidden">Add</span>
           </button>
-          <CompressPhotosButton />
           <SignOutButton />
         </div>
       </nav>
