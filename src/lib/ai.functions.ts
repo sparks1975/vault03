@@ -266,8 +266,8 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           source: `Cardsight (${c.source} sold)`,
           url: c.url,
         }));
-        const prices = sales.map((s) => s.price).sort((a, b) => a - b);
-        compsMedian = prices[Math.floor(prices.length / 2)];
+        const prices = sales.map((s) => s.price);
+        compsAverage = prices.reduce((a, b) => a + b, 0) / prices.length;
       } else {
         compsNote = soldRes.error ?? null;
       }
