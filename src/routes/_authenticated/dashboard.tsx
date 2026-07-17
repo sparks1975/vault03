@@ -942,6 +942,13 @@ function CardDetail({
         </div>
       )}
 
+      {card.notes && !editing && (
+        <div className="mb-8">
+          <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-2 border-b border-border pb-2">Notes</h3>
+          <p className="text-sm whitespace-pre-wrap">{card.notes}</p>
+        </div>
+      )}
+
       <div className="space-y-8">
         {priceHistory.length >= 2 && (
           <div>
