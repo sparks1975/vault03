@@ -184,6 +184,8 @@ function Dashboard() {
               card_number: c.card_number,
               grade: c.grade,
               grader: c.grader,
+              is_autograph: c.is_autograph,
+              serial_number: c.serial_number,
             },
           });
           await replaceValFn({
