@@ -6,6 +6,7 @@ import { Loader2, Wallet, TrendingUp, Search, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { Button } from "@/components/ui/button";
+import { RouteLoading } from "@/components/RouteLoading";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -87,6 +88,16 @@ function AuthPage() {
         return;
       }
       if (result.redirected) return;
+      // Popup flow: tokens set on the main window's supabase client.
+      // Navigate explicitly instead of relying on onAuthStateChange, which
+      // can miss the SIGNED_IN event if setSession fires before the listener.
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        navigate({ to: "/dashboard", replace: true });
+        return;
+      }
+      toast.error("Sign-in did not complete. Please try again.");
+      setLoading(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Sign-in failed");
       setLoading(false);
@@ -94,11 +105,7 @@ function AuthPage() {
   }
 
   if (checking) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <RouteLoading />;
   }
 
   return (
