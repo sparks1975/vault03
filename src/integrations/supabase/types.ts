@@ -104,6 +104,7 @@ export type Database = {
           last_valued_at: string | null
           mlb_player_id: number | null
           notes: string | null
+          parallel: string | null
           photo_url: string | null
           player_name: string
           position: string | null
@@ -129,6 +130,7 @@ export type Database = {
           last_valued_at?: string | null
           mlb_player_id?: number | null
           notes?: string | null
+          parallel?: string | null
           photo_url?: string | null
           player_name: string
           position?: string | null
@@ -154,6 +156,7 @@ export type Database = {
           last_valued_at?: string | null
           mlb_player_id?: number | null
           notes?: string | null
+          parallel?: string | null
           photo_url?: string | null
           player_name?: string
           position?: string | null
