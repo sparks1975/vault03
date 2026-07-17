@@ -1111,13 +1111,16 @@ function AddCardDialog({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="flex items-center gap-2 border border-border px-3 h-10 cursor-pointer hover:bg-secondary">
-                <input
-                  type="checkbox"
-                  checked={form.is_numbered}
-                  onChange={(e) => setForm({ ...form, is_numbered: e.target.checked })}
-                />
-                <span className="text-[10px] font-mono uppercase tracking-widest">Numbered card</span>
+              <label className="flex flex-col justify-end cursor-pointer">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Numbered card</span>
+                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={form.is_numbered}
+                    onChange={(e) => setForm({ ...form, is_numbered: e.target.checked })}
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-widest">Numbered card</span>
+                </div>
               </label>
               {form.is_numbered && (
                 <Field
@@ -1126,13 +1129,16 @@ function AddCardDialog({
                   onChange={(v) => setForm({ ...form, serial_number: v })}
                 />
               )}
-              <label className="flex items-center gap-2 border border-border px-3 h-10 cursor-pointer hover:bg-secondary">
-                <input
-                  type="checkbox"
-                  checked={form.is_autograph}
-                  onChange={(e) => setForm({ ...form, is_autograph: e.target.checked })}
-                />
-                <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
+              <label className="flex flex-col justify-end cursor-pointer">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Autographed</span>
+                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={form.is_autograph}
+                    onChange={(e) => setForm({ ...form, is_autograph: e.target.checked })}
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
+                </div>
               </label>
             </div>
 
