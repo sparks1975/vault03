@@ -10,6 +10,8 @@ export type CardDescriptor = {
   card_number?: string | null;
   grade?: string | null;
   grader?: string | null;
+  is_autograph?: boolean | null;
+  serial_number?: string | null;
 };
 
 export type SoldComp = {
