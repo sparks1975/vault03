@@ -653,9 +653,8 @@ function CardDetail({
               </label>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="flex flex-col justify-end cursor-pointer">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Numbered card</span>
-                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
+              <label className="cursor-pointer">
+                <div className="flex h-10 items-center gap-2 border border-border px-3 hover:bg-secondary">
                   <input
                     type="checkbox"
                     checked={!!draft.serial_number || draft.serial_number === ""}
@@ -665,12 +664,12 @@ function CardDetail({
                 </div>
               </label>
               {(draft.serial_number != null) && (
-                <Field
-                  label='Serial (e.g. "1/50")'
-                  labelClassName="invisible"
+                <input
+                  type="text"
                   placeholder='Serial (e.g. "1/50")'
                   value={String(draft.serial_number ?? "")}
-                  onChange={(v) => setDraft({ ...draft, serial_number: v })}
+                  onChange={(e) => setDraft({ ...draft, serial_number: e.target.value })}
+                  className="h-10 w-full border border-border bg-background px-3 text-sm rounded-sm focus:outline-none focus:border-accent"
                 />
               )}
             </div>
@@ -1164,9 +1163,8 @@ function AddCardDialog({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="flex flex-col justify-end cursor-pointer">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Numbered card</span>
-                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
+              <label className="cursor-pointer">
+                <div className="flex h-10 items-center gap-2 border border-border px-3 hover:bg-secondary">
                   <input
                     type="checkbox"
                     checked={form.is_numbered}
@@ -1176,12 +1174,12 @@ function AddCardDialog({
                 </div>
               </label>
               {form.is_numbered && (
-                <Field
-                  label='Serial (e.g. "1/50")'
-                  labelClassName="invisible"
+                <input
+                  type="text"
                   placeholder='Serial (e.g. "1/50")'
                   value={form.serial_number}
-                  onChange={(v) => setForm({ ...form, serial_number: v })}
+                  onChange={(e) => setForm({ ...form, serial_number: e.target.value })}
+                  className="h-10 w-full border border-border bg-background px-3 text-sm rounded-sm focus:outline-none focus:border-accent"
                 />
               )}
             </div>
@@ -1240,18 +1238,16 @@ function Field({
   onChange,
   type = "text",
   placeholder,
-  labelClassName,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
   placeholder?: string;
-  labelClassName?: string;
 }) {
   return (
     <label className="block">
-      <span className={`text-[10px] font-mono uppercase tracking-widest text-muted-foreground${labelClassName ? ` ${labelClassName}` : ""}`}>{label}</span>
+      <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">{label}</span>
       <input
         type={type}
         value={value}
