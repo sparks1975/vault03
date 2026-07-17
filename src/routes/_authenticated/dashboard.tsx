@@ -157,6 +157,7 @@ function Dashboard() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"value" | "player" | "added">("added");
   const [addOpen, setAddOpen] = useState(false);
 
   const cardsQ = useQuery({
@@ -231,7 +232,20 @@ function Dashboard() {
     );
   }, [cardData, query]);
 
-  const selected = selectedId ?? filtered[0]?.id ?? null;
+  const sorted = useMemo(() => {
+    const list = [...filtered];
+    switch (sortBy) {
+      case "value":
+        return list.sort((a, b) => Number(b.current_value ?? 0) - Number(a.current_value ?? 0));
+      case "player":
+        return list.sort((a, b) => a.player_name.localeCompare(b.player_name));
+      case "added":
+      default:
+        return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+  }, [filtered, sortBy]);
+
+  const selected = selectedId ?? sorted[0]?.id ?? null;
   const selectedCard = selected ? cardData.find((card) => card.id === selected) ?? null : null;
 
   const totals = useMemo(() => {
@@ -340,22 +354,34 @@ function Dashboard() {
 
         <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
           <section className={`lg:col-span-7 animate-in-up [animation-delay:100ms] ${mobileDetail ? "hidden lg:block" : ""}`}>
-            <div className="flex items-center justify-between mb-6 gap-3">
+            <div className="flex flex-wrap items-center justify-between mb-6 gap-3">
               <h3 className="text-sm font-mono uppercase tracking-widest">Portfolio Holdings</h3>
-              <input
-                type="text"
-                placeholder="Search cards…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="text-xs border border-border px-3 py-1 w-32 sm:w-48 focus:outline-none focus:border-accent bg-background rounded-sm"
-              />
+              <div className="flex items-center gap-3">
+                <select
+                  aria-label="Sort holdings"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                  className="text-xs border border-border bg-background px-2 py-1 rounded-sm focus:outline-none focus:border-accent"
+                >
+                  <option value="added">Date added</option>
+                  <option value="value">Value</option>
+                  <option value="player">Player</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Search cards…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="text-xs border border-border px-3 py-1 w-32 sm:w-48 focus:outline-none focus:border-accent bg-background rounded-sm"
+                />
+              </div>
             </div>
 
             {cardsQ.isLoading ? (
               <div className="space-y-2">
                 {Array.from({ length: 4 }).map((_, i) => <CardRowSkeleton key={i} />)}
               </div>
-            ) : filtered.length === 0 ? (
+            ) : sorted.length === 0 ? (
               <div className="p-12 border border-border text-center">
                 <p className="text-sm text-muted-foreground mb-4">Your vault is empty.</p>
                 <button
@@ -367,7 +393,7 @@ function Dashboard() {
               </div>
             ) : (
               <div className="space-y-2">
-                {filtered.map((c) => (
+                {sorted.map((c) => (
                   <CardRow key={c.id} card={c} active={c.id === selected} onClick={() => selectCard(c.id)} />
                 ))}
               </div>
