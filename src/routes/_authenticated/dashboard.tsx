@@ -354,15 +354,27 @@ function Dashboard() {
 
         <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
           <section className={`lg:col-span-7 animate-in-up [animation-delay:100ms] ${mobileDetail ? "hidden lg:block" : ""}`}>
-            <div className="flex items-center justify-between mb-6 gap-3">
+            <div className="flex flex-wrap items-center justify-between mb-6 gap-3">
               <h3 className="text-sm font-mono uppercase tracking-widest">Portfolio Holdings</h3>
-              <input
-                type="text"
-                placeholder="Search cards…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="text-xs border border-border px-3 py-1 w-32 sm:w-48 focus:outline-none focus:border-accent bg-background rounded-sm"
-              />
+              <div className="flex items-center gap-3">
+                <select
+                  aria-label="Sort holdings"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                  className="text-xs border border-border bg-background px-2 py-1 rounded-sm focus:outline-none focus:border-accent"
+                >
+                  <option value="added">Date added</option>
+                  <option value="value">Value</option>
+                  <option value="player">Player</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="Search cards…"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="text-xs border border-border px-3 py-1 w-32 sm:w-48 focus:outline-none focus:border-accent bg-background rounded-sm"
+                />
+              </div>
             </div>
 
             {cardsQ.isLoading ? (
