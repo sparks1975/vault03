@@ -491,6 +491,11 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
                   Auto
                 </span>
               )}
+              {card.is_rookie && (
+                <span className="px-1.5 py-0.5 border border-[color:var(--positive)] text-[color:var(--positive)] text-[10px] font-mono font-bold uppercase">
+                  Rookie
+                </span>
+              )}
               {(card.team || card.position) && (
                 <span className="text-[10px] text-muted-foreground uppercase">
                   {card.team ?? ""} {card.position ? `• ${card.position}` : ""}
