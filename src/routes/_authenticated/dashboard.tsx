@@ -376,7 +376,9 @@ function Dashboard() {
             </div>
 
             {cardsQ.isLoading ? (
-              <div className="p-12 border border-border text-center text-sm text-muted-foreground">Loading your vault…</div>
+              <div className="space-y-2">
+                {Array.from({ length: 4 }).map((_, i) => <CardRowSkeleton key={i} />)}
+              </div>
             ) : filtered.length === 0 ? (
               <div className="p-12 border border-border text-center">
                 <p className="text-sm text-muted-foreground mb-4">Your vault is empty.</p>
