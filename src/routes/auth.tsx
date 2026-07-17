@@ -104,11 +104,7 @@ function AuthPage() {
   }
 
   if (checking) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-6">
-        <Loader2 className="size-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return <RouteLoading />;
   }
 
   return (
