@@ -15,7 +15,6 @@ import {
   deleteCard,
   replaceValuation,
   uploadCardPhoto,
-  listCardParallels,
 } from "@/lib/cards.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -113,8 +112,6 @@ type Card = {
   is_first_bowman: boolean | null;
   is_rookie: boolean | null;
   grade: string | null;
-  parallel: string | null;
-
   grader: string | null;
   purchase_price: number | null;
   current_value: number | null;
@@ -151,68 +148,6 @@ function gainPct(card: { purchase_price: number | null; current_value: number | 
   if (p <= 0) return null; // undefined % when cost basis is 0
   return ((v - p) / p) * 100;
 }
-
-function ParallelSelect({
-  descriptor,
-  value,
-  onChange,
-}: {
-  descriptor: { player_name: string; year: number | null; set_name: string | null; card_number: string | null };
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  const fn = useServerFn(listCardParallels);
-  const enabled = !!descriptor.player_name && !!descriptor.year && !!descriptor.set_name;
-  const q = useQuery({
-    queryKey: ["parallels", descriptor.player_name, descriptor.year, descriptor.set_name, descriptor.card_number],
-    queryFn: () =>
-      fn({
-        data: {
-          player_name: descriptor.player_name,
-          year: descriptor.year,
-          set_name: descriptor.set_name,
-          card_number: descriptor.card_number,
-        },
-      }),
-    enabled,
-    staleTime: 10 * 60 * 1000,
-  });
-  const parallels = q.data?.parallels ?? [];
-  const err = q.data?.error;
-  return (
-    <label className="flex flex-col">
-      <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-        Parallel / Refractor
-      </span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        disabled={!enabled || q.isLoading}
-        className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm rounded-sm focus:outline-none focus:border-accent disabled:opacity-60"
-      >
-        <option value="">
-          {!enabled
-            ? "Set player, year & set first"
-            : q.isLoading
-              ? "Loading parallels…"
-              : parallels.length === 0
-                ? (err ?? "Base / no parallel")
-                : "Base / no parallel"}
-        </option>
-        {parallels.map((p) => (
-          <option key={p.id} value={p.name}>
-            {p.name}
-            {p.printRun ? ` (${p.printRun})` : ""}
-          </option>
-        ))}
-        {value && !parallels.some((p) => p.name === value) && (
-          <option value={value}>{value} (current)</option>
-        )}
-      </select>
-    </label>
-  );
-}
-
 
 function Dashboard() {
   const listFn = useServerFn(listCards);
@@ -260,7 +195,6 @@ function Dashboard() {
               grader: c.grader,
               is_autograph: c.is_autograph,
               serial_number: c.serial_number,
-              parallel: c.parallel,
             },
           });
           await replaceValFn({
@@ -624,8 +558,6 @@ function CardDetail({
       is_first_bowman: card.is_first_bowman ?? false,
       is_rookie: card.is_rookie ?? false,
       grade: card.grade,
-      parallel: card.parallel,
-
       grader: card.grader,
       purchase_price: card.purchase_price,
       notes: card.notes,
@@ -676,7 +608,6 @@ function CardDetail({
           grader: card.grader,
           is_autograph: card.is_autograph,
           serial_number: card.serial_number,
-          parallel: card.parallel,
         },
       });
       await replaceValFn({
@@ -840,16 +771,6 @@ function CardDetail({
                 />
               )}
             </div>
-            <ParallelSelect
-              descriptor={{
-                player_name: String(draft.player_name ?? ""),
-                year: (draft.year ?? null) as number | null,
-                set_name: (draft.set_name ?? null) as string | null,
-                card_number: (draft.card_number ?? null) as string | null,
-              }}
-              value={String(draft.parallel ?? "")}
-              onChange={(v) => setDraft({ ...draft, parallel: v || null })}
-            />
           <label className="block">
 
 
@@ -958,7 +879,6 @@ function CardDetail({
             <SalesSparkline points={priceHistory} />
           </div>
         )}
-
 
 
 
@@ -1131,8 +1051,6 @@ function AddCardDialog({
     is_first_bowman: false,
     is_rookie: false,
     grade: "",
-    parallel: "",
-
     grader: "",
     purchase_price: "",
     notes: "",
@@ -1241,8 +1159,6 @@ function AddCardDialog({
           is_first_bowman: form.is_first_bowman,
           is_rookie: form.is_rookie,
           grade: form.grade || null,
-          parallel: form.parallel || null,
-
           grader: form.grader || null,
           purchase_price: form.purchase_price ? Number(form.purchase_price) : null,
           notes: form.notes || null,
@@ -1266,7 +1182,6 @@ function AddCardDialog({
             grader: created.grader,
             is_autograph: created.is_autograph,
             serial_number: created.serial_number,
-            parallel: created.parallel,
           },
         });
         await replaceValFn({
@@ -1415,18 +1330,6 @@ function AddCardDialog({
                 />
               )}
             </div>
-
-            <ParallelSelect
-              descriptor={{
-                player_name: form.player_name,
-                year: form.year ? Number(form.year) : null,
-                set_name: form.set_name || null,
-                card_number: form.card_number || null,
-              }}
-              value={form.parallel}
-              onChange={(v) => setForm({ ...form, parallel: v })}
-            />
-
 
             <div className="border border-border p-4">
               <div className="flex items-center justify-between mb-2">

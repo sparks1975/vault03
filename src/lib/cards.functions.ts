@@ -16,8 +16,6 @@ const cardInputSchema = z.object({
   is_first_bowman: z.boolean().optional(),
   is_rookie: z.boolean().optional(),
   grade: z.string().nullable().optional(),
-  parallel: z.string().nullable().optional(),
-
   grader: z.string().nullable().optional(),
   purchase_price: z.number().nullable().optional(),
   notes: z.string().nullable().optional(),
@@ -128,10 +126,6 @@ const allowed = [
       "is_first_bowman",
       "is_rookie",
       "grade",
-      "parallel",
-
-
-
       "grader",
       "purchase_price",
       "notes",
@@ -290,22 +284,4 @@ export const compressExistingPhotos = createServerFn({ method: "POST" })
       }
     }
     return { processed, skipped, failed, bytesBefore, bytesAfter };
-  });
-
-// ---------- List available parallels for a card (Cardsight catalog) ----------
-export const listCardParallels = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) =>
-    z
-      .object({
-        player_name: z.string().min(1),
-        year: z.number().int().nullable().optional(),
-        set_name: z.string().nullable().optional(),
-        card_number: z.string().nullable().optional(),
-      })
-      .parse(d),
-  )
-  .handler(async ({ data }) => {
-    const { listParallelsForDescriptor } = await import("./cardsight.server");
-    return await listParallelsForDescriptor(data);
   });
