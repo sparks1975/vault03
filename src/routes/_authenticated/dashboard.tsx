@@ -590,6 +590,8 @@ function CardDetail({
           card_number: card.card_number,
           grade: card.grade,
           grader: card.grader,
+          is_autograph: card.is_autograph,
+          serial_number: card.serial_number,
         },
       });
       await replaceValFn({
