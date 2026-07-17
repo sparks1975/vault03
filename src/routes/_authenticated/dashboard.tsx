@@ -552,6 +552,7 @@ function CardDetail({
       card_number: card.card_number,
       serial_number: card.serial_number,
       is_autograph: card.is_autograph ?? false,
+      is_rookie: card.is_rookie ?? false,
       grade: card.grade,
       grader: card.grader,
       purchase_price: card.purchase_price,
