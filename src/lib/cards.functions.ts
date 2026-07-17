@@ -49,7 +49,10 @@ export const uploadCardPhoto = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { bytes, contentType, ext } = dataUrlToBytes(data.imageDataUrl);
+    const src = dataUrlToBytes(data.imageDataUrl);
+    const { compressBytes } = await import("./tinypng.server");
+    const { bytes, contentType } = await compressBytes(src.bytes, src.contentType);
+    const ext = contentType.split("/")[1]?.split("+")[0] || src.ext;
     const path = `${userId}/cards/${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage
       .from("card-photos")
