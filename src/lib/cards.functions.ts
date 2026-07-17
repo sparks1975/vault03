@@ -116,6 +116,8 @@ export const updateCardFields = createServerFn({ method: "POST" })
       "year",
       "set_name",
       "card_number",
+      "serial_number",
+      "is_autograph",
       "grade",
       "grader",
       "purchase_price",
