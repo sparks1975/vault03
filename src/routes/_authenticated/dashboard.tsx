@@ -109,8 +109,10 @@ type Card = {
   card_number: string | null;
   serial_number: string | null;
   is_autograph: boolean | null;
+  is_first_bowman: boolean | null;
   is_rookie: boolean | null;
   grade: string | null;
+
   grader: string | null;
   purchase_price: number | null;
   current_value: number | null;
@@ -540,8 +542,10 @@ function CardDetail({
       card_number: card.card_number,
       serial_number: card.serial_number,
       is_autograph: card.is_autograph ?? false,
+      is_first_bowman: card.is_first_bowman ?? false,
       is_rookie: card.is_rookie ?? false,
       grade: card.grade,
+
       grader: card.grader,
       purchase_price: card.purchase_price,
       notes: card.notes,
@@ -1005,8 +1009,10 @@ function AddCardDialog({
     serial_number: "",
     is_numbered: false,
     is_autograph: false,
+    is_first_bowman: false,
     is_rookie: false,
     grade: "",
+
     grader: "",
     purchase_price: "",
     notes: "",
@@ -1112,8 +1118,10 @@ function AddCardDialog({
           card_number: form.card_number || null,
           serial_number: form.is_numbered ? (form.serial_number || null) : null,
           is_autograph: form.is_autograph,
+          is_first_bowman: form.is_first_bowman,
           is_rookie: form.is_rookie,
           grade: form.grade || null,
+
           grader: form.grader || null,
           purchase_price: form.purchase_price ? Number(form.purchase_price) : null,
           notes: form.notes || null,
