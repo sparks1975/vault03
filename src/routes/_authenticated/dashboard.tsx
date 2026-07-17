@@ -169,14 +169,22 @@ function Dashboard() {
   });
   const cardData = (cardsQ.data ?? []) as Card[];
 
-  // Recalculate all card values once per app entry (session).
+  // Recalculate card values only if stale (>30 days since last valuation).
   const revaluedRef = useRef(false);
   useEffect(() => {
     if (revaluedRef.current) return;
     if (cardsQ.isLoading || cardData.length === 0) return;
     revaluedRef.current = true;
+    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const stale = cardData.filter((c) => {
+      if (!c.last_valued_at) return true;
+      const ts = new Date(c.last_valued_at).getTime();
+      return !Number.isFinite(ts) || now - ts >= THIRTY_DAYS_MS;
+    });
+    if (stale.length === 0) return;
     (async () => {
-      for (const c of cardData) {
+      for (const c of stale) {
         try {
           const est = await estimateFn({
             data: {
@@ -206,6 +214,7 @@ function Dashboard() {
       qc.invalidateQueries({ queryKey: ["cards"] });
     })();
   }, [cardsQ.isLoading, cardData, estimateFn, replaceValFn, qc]);
+
 
   const updateMut = useMutation({
     mutationFn: (v: { id: string; patch: Partial<Card> }) =>
