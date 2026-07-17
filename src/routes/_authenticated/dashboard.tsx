@@ -1246,6 +1246,17 @@ function AddCardDialog({
                   <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
                 </div>
               </label>
+              <label className="flex flex-col justify-end cursor-pointer">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Rookie</span>
+                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={form.is_rookie}
+                    onChange={(e) => setForm({ ...form, is_rookie: e.target.checked })}
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-widest">Rookie card</span>
+                </div>
+              </label>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
