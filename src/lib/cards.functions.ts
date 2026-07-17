@@ -128,6 +128,9 @@ const allowed = [
       "is_first_bowman",
       "is_rookie",
       "grade",
+      "parallel",
+
+
 
       "grader",
       "purchase_price",
