@@ -113,7 +113,7 @@ export const updateCardFields = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    const allowed = [
+const allowed = [
       "player_name",
       "team",
       "position",
@@ -122,6 +122,7 @@ export const updateCardFields = createServerFn({ method: "POST" })
       "card_number",
       "serial_number",
       "is_autograph",
+      "is_rookie",
       "grade",
       "grader",
       "purchase_price",
