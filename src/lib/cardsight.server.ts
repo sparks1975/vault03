@@ -429,7 +429,7 @@ export async function listParallelsForDescriptor(
     const searchArgs: Record<string, unknown> = {
       playerName: input.player_name,
       year: String(input.year),
-      take: 20,
+      take: 50,
     };
     if (input.card_number) searchArgs.cardNumber = input.card_number;
     const cardsText = await mcpCall("search_cards", searchArgs);
@@ -437,51 +437,55 @@ export async function listParallelsForDescriptor(
     if (hits.length === 0) return { parallels: [], error: "No matching cards in Cardsight catalog." };
 
     const setLc = (input.set_name ?? "").toLowerCase();
-    const bySet = hits.find(
-      (h) => setLc && (h.setName.toLowerCase().includes(setLc) || h.releaseName.toLowerCase().includes(setLc)),
+    // Tokenize the requested set (e.g. "Bowman Chrome Prospects" -> ["bowman","chrome","prospects"])
+    // so we can match sibling releases like "Bowman Chrome Prospects Refractors".
+    const setTokens = setLc.split(/\s+/).filter((t) => t.length > 2);
+    const isSibling = (name: string) => {
+      const n = name.toLowerCase();
+      if (!n) return false;
+      if (setLc && (n.includes(setLc) || setLc.includes(n))) return true;
+      // Sibling if it shares all core tokens with the requested set family.
+      return setTokens.length > 0 && setTokens.every((t) => n.includes(t));
+    };
+
+    const siblingHits = hits.filter(
+      (h) => isSibling(h.setName) || isSibling(h.releaseName),
     );
-    const pick = bySet ?? hits[0];
+    const chosen = siblingHits.length ? siblingHits : [hits[0]];
 
-    // 2) Get card detail to find release id + canonical set name.
-    const detailText = await mcpCall("get_card", { id: pick.id });
-    const detail = parseCardDetail(detailText);
-    const canonicalSet = detail.setName ?? pick.setName;
-    if (!detail.releaseId) return { parallels: [], error: "Couldn't resolve release for this card." };
+    // 2) Resolve unique releaseIds across sibling hits + canonical set names.
+    const releases = new Map<string, string>(); // releaseId -> canonical set name
+    for (const hit of chosen) {
+      const detailText = await mcpCall("get_card", { id: hit.id });
+      const detail = parseCardDetail(detailText);
+      if (detail.releaseId && !releases.has(detail.releaseId)) {
+        releases.set(detail.releaseId, detail.setName ?? hit.setName);
+      }
+    }
+    if (releases.size === 0) return { parallels: [], error: "Couldn't resolve release for this card." };
 
-    // 3) Page through parallels for that release.
+    // 3) Page through parallels for each release and aggregate.
     const all: ParallelListItem[] = [];
-    for (let skip = 0; skip < 500; skip += 50) {
-      const text = await mcpCall("search_parallels", {
-        releaseId: detail.releaseId,
-        take: 50,
-        skip,
-      });
-      const page = parseParallels(text);
-      if (page.length === 0) break;
-      all.push(...page);
-      if (page.length < 50) break;
+    for (const [releaseId] of releases) {
+      for (let skip = 0; skip < 500; skip += 50) {
+        const text = await mcpCall("search_parallels", {
+          releaseId,
+          take: 50,
+          skip,
+        });
+        const page = parseParallels(text);
+        if (page.length === 0) break;
+        all.push(...page);
+        if (page.length < 50) break;
+      }
     }
 
-    // 4) Include parallels AND refractor sibling sets from the same release.
-    //    Cardsight groups refractors under sibling sets (e.g. "Chrome Prospects"
-    //    vs "Chrome Prospects Refractors"), so restricting to a single set hides
-    //    variants like "Red Refractor". Keep the base set plus any sibling whose
-    //    name shares the canonical set as a prefix, or is a refractor/parallel set.
-    const setKey = canonicalSet.toLowerCase();
-    const relevant = all.filter((p) => {
+    // 4) Label sibling-set variants with their set prefix so users can tell
+    // "Red Refractor" (Chrome Refractors) from "Red" (base) in different sets.
+    const primarySet = (releases.values().next().value ?? "").toLowerCase();
+    const items: ParallelOption[] = all.map((p) => {
       const s = (p.set ?? "").toLowerCase();
-      if (!s) return true;
-      if (s === setKey) return true;
-      if (s.startsWith(setKey)) return true;
-      if (setKey.startsWith(s)) return true;
-      if (/refractor|parallel|prizm|chrome/.test(s) && s.split(" ").some((w) => setKey.includes(w))) return true;
-      return false;
-    });
-    const items: ParallelOption[] = (relevant.length ? relevant : all).map((p) => {
-      // Prefix sibling-set variants with the set name so users can tell
-      // "Red Refractor" from "Red" in different sets.
-      const s = (p.set ?? "").toLowerCase();
-      const label = s && s !== setKey && !p.name.toLowerCase().includes(s)
+      const label = s && s !== primarySet && !p.name.toLowerCase().includes(s)
         ? `${p.set} — ${p.name}`
         : p.name;
       return { id: p.id, name: label, printRun: p.printRun, set: p.set };
@@ -498,6 +502,7 @@ export async function listParallelsForDescriptor(
     unique.sort((a, b) => a.name.localeCompare(b.name));
     parallelsCache.set(cacheKey, { at: Date.now(), items: unique });
     return { parallels: unique };
+
   } catch (err) {
     return { parallels: [], error: err instanceof Error ? err.message : String(err) };
   }
