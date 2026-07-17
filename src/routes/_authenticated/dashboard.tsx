@@ -71,6 +71,8 @@ type Card = {
   year: number | null;
   set_name: string | null;
   card_number: string | null;
+  serial_number: string | null;
+  is_autograph: boolean | null;
   grade: string | null;
   grader: string | null;
   purchase_price: number | null;
