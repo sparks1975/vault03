@@ -16,7 +16,7 @@ export async function compressBytes(
     const shrink = await fetch("https://api.tinify.com/shrink", {
       method: "POST",
       headers: { Authorization: auth, "Content-Type": contentType },
-      body: bytes,
+      body: new Blob([bytes as BlobPart], { type: contentType }),
     });
     if (!shrink.ok) {
       console.error("TinyPNG shrink failed", shrink.status, await shrink.text().catch(() => ""));
