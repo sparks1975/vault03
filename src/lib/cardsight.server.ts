@@ -12,14 +12,6 @@ export type CardDescriptor = {
   grader?: string | null;
   is_autograph?: boolean | null;
   serial_number?: string | null;
-  parallel?: string | null;
-};
-
-export type ParallelOption = {
-  id: string;
-  name: string;
-  printRun: string | null;
-  set: string | null;
 };
 
 
