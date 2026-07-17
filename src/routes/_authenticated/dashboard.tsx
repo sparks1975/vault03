@@ -871,7 +871,9 @@ function CardDetail({
 
         <div>
           <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4 border-b border-border pb-2">
-            {stats.data ? `${stats.data.season} Player Stats` : "Player Stats"}
+            {stats.data
+              ? `${stats.data.season} ${stats.data.league ? stats.data.league + " " : ""}Player Stats`
+              : "Player Stats"}
           </h3>
           {!card.mlb_player_id ? (
             <p className="text-xs text-muted-foreground">Link an MLB player to see current stats (edit card and search).</p>
