@@ -30,7 +30,9 @@
   --color-ring: var(--ring);
   --color-positive: var(--positive);
   --color-negative: var(--negative);
+  --color-first-bowman: var(--first-bowman);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
 }
@@ -58,7 +60,9 @@
   --ring: hsl(220 20% 10%);
   --positive: hsl(158 64% 40%);
   --negative: hsl(346 77% 50%);
+  --first-bowman: hsl(210 75% 45%);
 }
+
 
 .dark {
   --background: hsl(220 20% 8%);
@@ -82,7 +86,9 @@
   --ring: hsl(0 0% 96%);
   --positive: hsl(158 64% 52%);
   --negative: hsl(346 77% 60%);
+  --first-bowman: hsl(210 75% 60%);
 }
+
 
 @keyframes slideUp {
   from { opacity: 0; transform: translateY(10px); }
