@@ -1161,6 +1161,7 @@ function AddCardDialog({
           is_first_bowman: form.is_first_bowman,
           is_rookie: form.is_rookie,
           grade: form.grade || null,
+          parallel: form.parallel || null,
 
           grader: form.grader || null,
           purchase_price: form.purchase_price ? Number(form.purchase_price) : null,
