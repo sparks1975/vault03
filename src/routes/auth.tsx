@@ -78,27 +78,52 @@ function AuthPage() {
 
   async function handleGoogle() {
     setLoading(true);
+
+    // Poll for a session in parallel — if the popup postMessage handshake
+    // fails (mobile, popup blockers, cross-origin quirks) but tokens were
+    // still set on the supabase client, we still catch it and navigate.
+    let cancelled = false;
+    const pollStart = Date.now();
+    const poll = async () => {
+      while (!cancelled && Date.now() - pollStart < 120_000) {
+        await new Promise((r) => setTimeout(r, 800));
+        const { data } = await supabase.auth.getSession();
+        if (data.session) {
+          cancelled = true;
+          navigate({ to: "/dashboard", replace: true });
+          return;
+        }
+      }
+    };
+    void poll();
+
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+        redirect_uri: window.location.origin + "/auth",
       });
       if (result.error) {
+        cancelled = true;
         toast.error(result.error.message ?? "Sign-in failed");
         setLoading(false);
         return;
       }
       if (result.redirected) return;
-      // Popup flow: tokens set on the main window's supabase client.
-      // Navigate explicitly instead of relying on onAuthStateChange, which
-      // can miss the SIGNED_IN event if setSession fires before the listener.
       const { data } = await supabase.auth.getSession();
       if (data.session) {
+        cancelled = true;
         navigate({ to: "/dashboard", replace: true });
         return;
       }
-      toast.error("Sign-in did not complete. Please try again.");
-      setLoading(false);
+      // Leave polling running — some browsers deliver the session slightly
+      // after the popup resolves. Reset button after 10s if nothing lands.
+      setTimeout(() => {
+        if (!cancelled) {
+          cancelled = true;
+          setLoading(false);
+        }
+      }, 10_000);
     } catch (err) {
+      cancelled = true;
       toast.error(err instanceof Error ? err.message : "Sign-in failed");
       setLoading(false);
     }
