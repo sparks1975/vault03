@@ -11,6 +11,8 @@ const cardInputSchema = z.object({
   year: z.number().int().nullable().optional(),
   set_name: z.string().nullable().optional(),
   card_number: z.string().nullable().optional(),
+  serial_number: z.string().nullable().optional(),
+  is_autograph: z.boolean().optional(),
   grade: z.string().nullable().optional(),
   grader: z.string().nullable().optional(),
   purchase_price: z.number().nullable().optional(),
