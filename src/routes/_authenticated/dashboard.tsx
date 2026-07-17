@@ -373,7 +373,7 @@ function Dashboard() {
                   placeholder="Search cards…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  className="text-xs border border-border px-3 py-1 w-32 sm:w-48 focus:outline-none focus:border-accent bg-background rounded-sm"
+                  className="text-xs font-mono uppercase tracking-widest border-border bg-background rounded-sm focus:ring-accent focus:ring-1 px-3 py-1 w-32 sm:w-48 shadow-none placeholder:font-mono placeholder:uppercase placeholder:tracking-widest"
                 />
               </div>
             </div>
