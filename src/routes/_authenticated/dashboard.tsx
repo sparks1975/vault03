@@ -18,6 +18,40 @@ import {
   compressExistingPhotos,
 } from "@/lib/cards.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { Skeleton } from "@/components/ui/skeleton";
+
+function CardRowSkeleton() {
+  return (
+    <div className="w-full p-4 flex gap-4 border border-border bg-background">
+      <Skeleton className="w-16 h-24 shrink-0 rounded-none" />
+      <div className="flex-1 space-y-2">
+        <Skeleton className="h-3 w-32" />
+        <Skeleton className="h-5 w-40" />
+        <div className="flex gap-2 pt-1">
+          <Skeleton className="h-4 w-12" />
+          <Skeleton className="h-4 w-16" />
+        </div>
+      </div>
+      <div className="text-right space-y-2">
+        <Skeleton className="h-4 w-16 ml-auto" />
+        <Skeleton className="h-3 w-10 ml-auto" />
+      </div>
+    </div>
+  );
+}
+
+function StatGridSkeleton() {
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      {Array.from({ length: 8 }).map((_, i) => (
+        <div key={i} className="space-y-2">
+          <Skeleton className="h-3 w-10" />
+          <Skeleton className="h-5 w-14" />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   ssr: false,
