@@ -198,6 +198,7 @@ function Dashboard() {
               grader: c.grader,
               is_autograph: c.is_autograph,
               serial_number: c.serial_number,
+              parallel: c.parallel,
             },
           });
           await replaceValFn({
