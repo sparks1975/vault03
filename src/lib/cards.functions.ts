@@ -49,7 +49,10 @@ export const uploadCardPhoto = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { bytes, contentType, ext } = dataUrlToBytes(data.imageDataUrl);
+    const src = dataUrlToBytes(data.imageDataUrl);
+    const { compressBytes } = await import("./tinypng.server");
+    const { bytes, contentType } = await compressBytes(src.bytes, src.contentType);
+    const ext = contentType.split("/")[1]?.split("+")[0] || src.ext;
     const path = `${userId}/cards/${crypto.randomUUID()}.${ext}`;
     const { error } = await supabase.storage
       .from("card-photos")
@@ -214,4 +217,67 @@ export const replaceValuation = createServerFn({ method: "POST" })
       })
       .eq("id", data.card_id);
     return { ok: true };
+  });
+
+// ---------- Compress existing stored images via TinyPNG ----------
+export const compressExistingPhotos = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data: cards, error } = await supabase
+      .from("cards")
+      .select("id, photo_url")
+      .eq("user_id", userId);
+    if (error) throw error;
+    const { compressBytes } = await import("./tinypng.server");
+
+    let processed = 0;
+    let bytesBefore = 0;
+    let bytesAfter = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const card of cards ?? []) {
+      const path = card.photo_url as string | null;
+      if (!path || path.startsWith("http") || path.startsWith("data:")) {
+        skipped++;
+        continue;
+      }
+      try {
+        const { data: file, error: dlErr } = await supabase.storage
+          .from("card-photos")
+          .download(path);
+        if (dlErr || !file) {
+          failed++;
+          continue;
+        }
+        const type = file.type || "image/jpeg";
+        if (!/^image\/(png|jpe?g|webp)$/i.test(type)) {
+          skipped++;
+          continue;
+        }
+        const original = new Uint8Array(await file.arrayBuffer());
+        bytesBefore += original.byteLength;
+        const { bytes, contentType } = await compressBytes(original, type);
+        if (bytes.byteLength >= original.byteLength) {
+          bytesAfter += original.byteLength;
+          skipped++;
+          continue;
+        }
+        const { error: upErr } = await supabase.storage
+          .from("card-photos")
+          .upload(path, bytes, { contentType, upsert: true });
+        if (upErr) {
+          failed++;
+          bytesAfter += original.byteLength;
+          continue;
+        }
+        bytesAfter += bytes.byteLength;
+        processed++;
+      } catch (err) {
+        console.error("compressExistingPhotos error for", path, err);
+        failed++;
+      }
+    }
+    return { processed, skipped, failed, bytesBefore, bytesAfter };
   });
