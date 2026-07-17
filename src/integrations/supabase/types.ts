@@ -98,6 +98,7 @@ export type Database = {
           grade: string | null
           grader: string | null
           id: string
+          is_autograph: boolean
           last_valued_at: string | null
           mlb_player_id: number | null
           notes: string | null
@@ -105,6 +106,7 @@ export type Database = {
           player_name: string
           position: string | null
           purchase_price: number | null
+          serial_number: string | null
           set_name: string | null
           team: string | null
           updated_at: string
@@ -119,6 +121,7 @@ export type Database = {
           grade?: string | null
           grader?: string | null
           id?: string
+          is_autograph?: boolean
           last_valued_at?: string | null
           mlb_player_id?: number | null
           notes?: string | null
@@ -126,6 +129,7 @@ export type Database = {
           player_name: string
           position?: string | null
           purchase_price?: number | null
+          serial_number?: string | null
           set_name?: string | null
           team?: string | null
           updated_at?: string
@@ -140,6 +144,7 @@ export type Database = {
           grade?: string | null
           grader?: string | null
           id?: string
+          is_autograph?: boolean
           last_valued_at?: string | null
           mlb_player_id?: number | null
           notes?: string | null
@@ -147,6 +152,7 @@ export type Database = {
           player_name?: string
           position?: string | null
           purchase_price?: number | null
+          serial_number?: string | null
           set_name?: string | null
           team?: string | null
           updated_at?: string

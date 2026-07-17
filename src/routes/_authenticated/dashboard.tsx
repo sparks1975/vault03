@@ -71,6 +71,8 @@ type Card = {
   year: number | null;
   set_name: string | null;
   card_number: string | null;
+  serial_number: string | null;
+  is_autograph: boolean | null;
   grade: string | null;
   grader: string | null;
   purchase_price: number | null;
@@ -440,6 +442,8 @@ function CardDetail({
       year: card.year,
       set_name: card.set_name,
       card_number: card.card_number,
+      serial_number: card.serial_number,
+      is_autograph: card.is_autograph ?? false,
       grade: card.grade,
       grader: card.grader,
       purchase_price: card.purchase_price,
@@ -597,7 +601,33 @@ function CardDetail({
             <Field label="Grade" value={String(draft.grade ?? "")} onChange={(v) => setDraft({ ...draft, grade: v || null })} />
             <Field label="Purchase price (USD)" type="number" value={draft.purchase_price == null ? "" : String(draft.purchase_price)} onChange={(v) => setDraft({ ...draft, purchase_price: v ? Number(v) : null })} />
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <label className="flex items-center gap-2 border border-border px-3 h-10 cursor-pointer hover:bg-secondary">
+              <input
+                type="checkbox"
+                checked={!!draft.serial_number || draft.serial_number === ""}
+                onChange={(e) => setDraft({ ...draft, serial_number: e.target.checked ? (draft.serial_number ?? "") : null })}
+              />
+              <span className="text-[10px] font-mono uppercase tracking-widest">Numbered card</span>
+            </label>
+            {(draft.serial_number != null) && (
+              <Field
+                label='Serial (e.g. "1/50")'
+                value={String(draft.serial_number ?? "")}
+                onChange={(v) => setDraft({ ...draft, serial_number: v })}
+              />
+            )}
+            <label className="flex items-center gap-2 border border-border px-3 h-10 cursor-pointer hover:bg-secondary">
+              <input
+                type="checkbox"
+                checked={!!draft.is_autograph}
+                onChange={(e) => setDraft({ ...draft, is_autograph: e.target.checked })}
+              />
+              <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
+            </label>
+          </div>
           <label className="block">
+
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Notes</span>
             <textarea
               value={String(draft.notes ?? "")}
@@ -648,6 +678,18 @@ function CardDetail({
             {card.year ?? "—"} {card.set_name ?? ""} {card.card_number ? `#${card.card_number}` : ""}
           </p>
           <h2 className="text-2xl font-extrabold tracking-tight">{card.player_name}</h2>
+          <div className="flex flex-wrap gap-1.5 mt-2">
+            {card.serial_number && (
+              <span className="px-1.5 py-0.5 border border-accent text-accent text-[10px] font-mono font-bold uppercase">
+                #d /{card.serial_number}
+              </span>
+            )}
+            {card.is_autograph && (
+              <span className="px-1.5 py-0.5 border border-accent text-accent text-[10px] font-mono font-bold uppercase">
+                Auto
+              </span>
+            )}
+          </div>
           <div className="flex justify-between items-end mt-2">
             <div className="text-xs text-muted-foreground">
               {card.grader} {card.grade} {card.team ? `• ${card.team}` : ""}
@@ -838,6 +880,9 @@ function AddCardDialog({
     year: "",
     set_name: "",
     card_number: "",
+    serial_number: "",
+    is_numbered: false,
+    is_autograph: false,
     grade: "",
     grader: "",
     purchase_price: "",
@@ -942,6 +987,8 @@ function AddCardDialog({
           year: form.year ? Number(form.year) : null,
           set_name: form.set_name || null,
           card_number: form.card_number || null,
+          serial_number: form.is_numbered ? (form.serial_number || null) : null,
+          is_autograph: form.is_autograph,
           grade: form.grade || null,
           grader: form.grader || null,
           purchase_price: form.purchase_price ? Number(form.purchase_price) : null,
@@ -1055,6 +1102,32 @@ function AddCardDialog({
               <Field label="Grader (PSA/BGS/SGC)" value={form.grader} onChange={(v) => setForm({ ...form, grader: v })} />
               <Field label="Grade" value={form.grade} onChange={(v) => setForm({ ...form, grade: v })} />
               <Field label="Purchase price (USD)" type="number" value={form.purchase_price} onChange={(v) => setForm({ ...form, purchase_price: v })} />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="flex items-center gap-2 border border-border px-3 h-10 cursor-pointer hover:bg-secondary">
+                <input
+                  type="checkbox"
+                  checked={form.is_numbered}
+                  onChange={(e) => setForm({ ...form, is_numbered: e.target.checked })}
+                />
+                <span className="text-[10px] font-mono uppercase tracking-widest">Numbered card</span>
+              </label>
+              {form.is_numbered && (
+                <Field
+                  label='Serial (e.g. "1/50")'
+                  value={form.serial_number}
+                  onChange={(v) => setForm({ ...form, serial_number: v })}
+                />
+              )}
+              <label className="flex items-center gap-2 border border-border px-3 h-10 cursor-pointer hover:bg-secondary">
+                <input
+                  type="checkbox"
+                  checked={form.is_autograph}
+                  onChange={(e) => setForm({ ...form, is_autograph: e.target.checked })}
+                />
+                <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
+              </label>
             </div>
 
             <div className="border border-border p-4">
