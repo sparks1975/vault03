@@ -152,6 +152,67 @@ function gainPct(card: { purchase_price: number | null; current_value: number | 
   return ((v - p) / p) * 100;
 }
 
+function ParallelSelect({
+  descriptor,
+  value,
+  onChange,
+}: {
+  descriptor: { player_name: string; year: number | null; set_name: string | null; card_number: string | null };
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const fn = useServerFn(listCardParallels);
+  const enabled = !!descriptor.player_name && !!descriptor.year && !!descriptor.set_name;
+  const q = useQuery({
+    queryKey: ["parallels", descriptor.player_name, descriptor.year, descriptor.set_name, descriptor.card_number],
+    queryFn: () =>
+      fn({
+        data: {
+          player_name: descriptor.player_name,
+          year: descriptor.year,
+          set_name: descriptor.set_name,
+          card_number: descriptor.card_number,
+        },
+      }),
+    enabled,
+    staleTime: 10 * 60 * 1000,
+  });
+  const parallels = q.data?.parallels ?? [];
+  const err = q.data?.error;
+  return (
+    <label className="flex flex-col">
+      <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+        Parallel / Refractor
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={!enabled || q.isLoading}
+        className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm rounded-sm focus:outline-none focus:border-accent disabled:opacity-60"
+      >
+        <option value="">
+          {!enabled
+            ? "Set player, year & set first"
+            : q.isLoading
+              ? "Loading parallels…"
+              : parallels.length === 0
+                ? (err ?? "Base / no parallel")
+                : "Base / no parallel"}
+        </option>
+        {parallels.map((p) => (
+          <option key={p.id} value={p.name}>
+            {p.name}
+            {p.printRun ? ` (${p.printRun})` : ""}
+          </option>
+        ))}
+        {value && !parallels.some((p) => p.name === value) && (
+          <option value={value}>{value} (current)</option>
+        )}
+      </select>
+    </label>
+  );
+}
+
 
 function Dashboard() {
   const listFn = useServerFn(listCards);
