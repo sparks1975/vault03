@@ -253,7 +253,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       source: string;
       url: string | null;
     }> = [];
-    let compsMedian = 0;
+    let compsAverage = 0;
     let compsNote: string | null = null;
     try {
       const { fetchCardsightSoldComps } = await import("./cardsight.server");
