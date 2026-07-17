@@ -314,7 +314,7 @@ function Dashboard() {
               {totals.topMover ? (
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2">
                   <div className="min-w-0">
-                    <h3 className="font-bold break-words">
+                    <h3 className="font-bold break-words leading-tight">
                       {totals.topMover.year ?? ""} {totals.topMover.set_name ?? ""} {totals.topMover.player_name}
                     </h3>
                     <p className="text-xs text-muted-foreground">
