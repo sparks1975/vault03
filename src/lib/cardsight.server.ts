@@ -424,6 +424,11 @@ export async function listParallelsForDescriptor(
   const cached = parallelsCache.get(cacheKey);
   if (cached && Date.now() - cached.at < TTL_MS) return { parallels: cached.items };
 
+  const norm = (s: string) =>
+    s.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
+  const wantSet = norm(input.set_name);
+  const wantTokens = wantSet.split(" ").filter(Boolean);
+
   try {
     // 1) Find the card via search_cards.
     const searchArgs: Record<string, unknown> = {
@@ -436,65 +441,63 @@ export async function listParallelsForDescriptor(
     const hits = parseSearchCards(cardsText);
     if (hits.length === 0) return { parallels: [], error: "No matching cards in Cardsight catalog." };
 
-    const setLc = (input.set_name ?? "").toLowerCase();
-    // Tokenize the requested set (e.g. "Bowman Chrome Prospects" -> ["bowman","chrome","prospects"])
-    // so we can match sibling releases like "Bowman Chrome Prospects Refractors".
-    const setTokens = setLc.split(/\s+/).filter((t) => t.length > 2);
-    const isSibling = (name: string) => {
-      const n = name.toLowerCase();
-      if (!n) return false;
-      if (setLc && (n.includes(setLc) || setLc.includes(n))) return true;
-      // Sibling if it shares all core tokens with the requested set family.
-      return setTokens.length > 0 && setTokens.every((t) => n.includes(t));
-    };
+    // 2) Pick the ONE hit whose set name matches the user's set exactly.
+    //    Prefer exact-normalized equality; fall back to same-token-set match.
+    const scored = hits.map((h) => {
+      const setN = norm(h.setName);
+      const relN = norm(h.releaseName);
+      const exact = setN === wantSet || relN === wantSet ? 3 : 0;
+      const tokenSetEq =
+        setN.split(" ").sort().join(" ") === wantTokens.slice().sort().join(" ") ? 2 : 0;
+      const tokenRelEq =
+        relN.split(" ").sort().join(" ") === wantTokens.slice().sort().join(" ") ? 2 : 0;
+      const numberMatch = input.card_number && h.number === input.card_number ? 1 : 0;
+      return { hit: h, score: exact + tokenSetEq + tokenRelEq + numberMatch };
+    }).sort((a, b) => b.score - a.score);
 
-    const siblingHits = hits.filter(
-      (h) => isSibling(h.setName) || isSibling(h.releaseName),
-    );
-    const chosen = siblingHits.length ? siblingHits : [hits[0]];
-
-    // 2) Resolve unique releaseIds across sibling hits + canonical set names.
-    const releases = new Map<string, string>(); // releaseId -> canonical set name
-    for (const hit of chosen) {
-      const detailText = await mcpCall("get_card", { id: hit.id });
-      const detail = parseCardDetail(detailText);
-      if (detail.releaseId && !releases.has(detail.releaseId)) {
-        releases.set(detail.releaseId, detail.setName ?? hit.setName);
-      }
+    const best = scored[0];
+    if (!best || best.score < 2) {
+      return { parallels: [], error: "Couldn't match this exact set in the catalog." };
     }
-    if (releases.size === 0) return { parallels: [], error: "Couldn't resolve release for this card." };
+    const chosen = best.hit;
 
-    // 3) Page through parallels for each release and aggregate.
+    // 3) Resolve the single releaseId for the chosen card.
+    const detailText = await mcpCall("get_card", { id: chosen.id });
+    const detail = parseCardDetail(detailText);
+    if (!detail.releaseId) {
+      return { parallels: [], error: "Couldn't resolve release for this card." };
+    }
+    const releaseId = detail.releaseId;
+    const releaseSet = detail.setName ?? chosen.setName;
+    const releaseSetN = norm(releaseSet);
+
+    // 4) Page through parallels for ONLY that release.
     const all: ParallelListItem[] = [];
-    for (const [releaseId] of releases) {
-      for (let skip = 0; skip < 500; skip += 50) {
-        const text = await mcpCall("search_parallels", {
-          releaseId,
-          take: 50,
-          skip,
-        });
-        const page = parseParallels(text);
-        if (page.length === 0) break;
-        all.push(...page);
-        if (page.length < 50) break;
-      }
+    for (let skip = 0; skip < 500; skip += 50) {
+      const text = await mcpCall("search_parallels", { releaseId, take: 50, skip });
+      const page = parseParallels(text);
+      if (page.length === 0) break;
+      all.push(...page);
+      if (page.length < 50) break;
     }
 
-    // 4) Label sibling-set variants with their set prefix so users can tell
-    // "Red Refractor" (Chrome Refractors) from "Red" (base) in different sets.
-    const primarySet = (releases.values().next().value ?? "").toLowerCase();
-    const items: ParallelOption[] = all.map((p) => {
-      const s = (p.set ?? "").toLowerCase();
-      const label = s && s !== primarySet && !p.name.toLowerCase().includes(s)
-        ? `${p.set} — ${p.name}`
-        : p.name;
-      return { id: p.id, name: label, printRun: p.printRun, set: p.set };
+    // 5) Keep only parallels whose own `Set:` line matches this release (when present).
+    const filtered = all.filter((p) => {
+      if (!p.set) return true; // no set line — trust the release scoping
+      return norm(p.set) === releaseSetN;
     });
 
-    // Deduplicate on name+printRun to keep the dropdown short.
+    const items: ParallelOption[] = filtered.map((p) => ({
+      id: p.id,
+      name: p.name,
+      printRun: p.printRun,
+      set: p.set,
+    }));
+
+    // Deduplicate on name+printRun.
     const seen = new Set<string>();
     const unique = items.filter((p) => {
-      const k = `${p.name}|${p.printRun ?? ""}`;
+      const k = `${p.name.toLowerCase()}|${p.printRun ?? ""}`;
       if (seen.has(k)) return false;
       seen.add(k);
       return true;
@@ -507,4 +510,5 @@ export async function listParallelsForDescriptor(
     return { parallels: [], error: err instanceof Error ? err.message : String(err) };
   }
 }
+
 
