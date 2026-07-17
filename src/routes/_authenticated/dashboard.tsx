@@ -1015,6 +1015,7 @@ function AddCardDialog({
     serial_number: "",
     is_numbered: false,
     is_autograph: false,
+    is_rookie: false,
     grade: "",
     grader: "",
     purchase_price: "",
