@@ -629,49 +629,49 @@ function CardDetail({
       </div>
 
       {editing ? (
-        <div className="mb-8 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Player name*" value={String(draft.player_name ?? "")} onChange={(v) => setDraft({ ...draft, player_name: v })} />
-            <Field label="Team" value={String(draft.team ?? "")} onChange={(v) => setDraft({ ...draft, team: v || null })} />
-            <Field label="Year" type="number" value={draft.year == null ? "" : String(draft.year)} onChange={(v) => setDraft({ ...draft, year: v ? Number(v) : null })} />
-            <Field label="Set" value={String(draft.set_name ?? "")} onChange={(v) => setDraft({ ...draft, set_name: v || null })} />
-            <Field label="Card #" value={String(draft.card_number ?? "")} onChange={(v) => setDraft({ ...draft, card_number: v || null })} />
-            <Field label="Position" value={String(draft.position ?? "")} onChange={(v) => setDraft({ ...draft, position: v || null })} />
-            <Field label="Grader" value={String(draft.grader ?? "")} onChange={(v) => setDraft({ ...draft, grader: v || null })} />
-            <Field label="Grade" value={String(draft.grade ?? "")} onChange={(v) => setDraft({ ...draft, grade: v || null })} />
-            <Field label="Purchase price (USD)" type="number" value={draft.purchase_price == null ? "" : String(draft.purchase_price)} onChange={(v) => setDraft({ ...draft, purchase_price: v ? Number(v) : null })} />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <label className="flex flex-col justify-end cursor-pointer">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Numbered card</span>
-              <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
-                <input
-                  type="checkbox"
-                  checked={!!draft.serial_number || draft.serial_number === ""}
-                  onChange={(e) => setDraft({ ...draft, serial_number: e.target.checked ? (draft.serial_number ?? "") : null })}
+          <div className="mb-8 space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Player name*" value={String(draft.player_name ?? "")} onChange={(v) => setDraft({ ...draft, player_name: v })} />
+              <Field label="Team" value={String(draft.team ?? "")} onChange={(v) => setDraft({ ...draft, team: v || null })} />
+              <Field label="Year" type="number" value={draft.year == null ? "" : String(draft.year)} onChange={(v) => setDraft({ ...draft, year: v ? Number(v) : null })} />
+              <Field label="Set" value={String(draft.set_name ?? "")} onChange={(v) => setDraft({ ...draft, set_name: v || null })} />
+              <Field label="Card #" value={String(draft.card_number ?? "")} onChange={(v) => setDraft({ ...draft, card_number: v || null })} />
+              <Field label="Position" value={String(draft.position ?? "")} onChange={(v) => setDraft({ ...draft, position: v || null })} />
+              <Field label="Grader" value={String(draft.grader ?? "")} onChange={(v) => setDraft({ ...draft, grader: v || null })} />
+              <Field label="Grade" value={String(draft.grade ?? "")} onChange={(v) => setDraft({ ...draft, grade: v || null })} />
+              <Field label="Purchase price (USD)" type="number" value={draft.purchase_price == null ? "" : String(draft.purchase_price)} onChange={(v) => setDraft({ ...draft, purchase_price: v ? Number(v) : null })} />
+              <label className="flex flex-col justify-end cursor-pointer">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Autographed</span>
+                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={!!draft.is_autograph}
+                    onChange={(e) => setDraft({ ...draft, is_autograph: e.target.checked })}
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
+                </div>
+              </label>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="flex flex-col justify-end cursor-pointer">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Numbered card</span>
+                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={!!draft.serial_number || draft.serial_number === ""}
+                    onChange={(e) => setDraft({ ...draft, serial_number: e.target.checked ? (draft.serial_number ?? "") : null })}
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-widest">Numbered card</span>
+                </div>
+              </label>
+              {(draft.serial_number != null) && (
+                <Field
+                  label='Serial (e.g. "1/50")'
+                  value={String(draft.serial_number ?? "")}
+                  onChange={(v) => setDraft({ ...draft, serial_number: v })}
                 />
-                <span className="text-[10px] font-mono uppercase tracking-widest">Numbered card</span>
-              </div>
-            </label>
-            {(draft.serial_number != null) && (
-              <Field
-                label='Serial (e.g. "1/50")'
-                value={String(draft.serial_number ?? "")}
-                onChange={(v) => setDraft({ ...draft, serial_number: v })}
-              />
-            )}
-            <label className="flex flex-col justify-end cursor-pointer">
-              <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Autographed</span>
-              <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
-                <input
-                  type="checkbox"
-                  checked={!!draft.is_autograph}
-                  onChange={(e) => setDraft({ ...draft, is_autograph: e.target.checked })}
-                />
-                <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
-              </div>
-            </label>
-          </div>
+              )}
+            </div>
           <label className="block">
 
             <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Notes</span>
@@ -1148,6 +1148,17 @@ function AddCardDialog({
               <Field label="Grader (PSA/BGS/SGC)" value={form.grader} onChange={(v) => setForm({ ...form, grader: v })} />
               <Field label="Grade" value={form.grade} onChange={(v) => setForm({ ...form, grade: v })} />
               <Field label="Purchase price (USD)" type="number" value={form.purchase_price} onChange={(v) => setForm({ ...form, purchase_price: v })} />
+              <label className="flex flex-col justify-end cursor-pointer">
+                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Autographed</span>
+                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
+                  <input
+                    type="checkbox"
+                    checked={form.is_autograph}
+                    onChange={(e) => setForm({ ...form, is_autograph: e.target.checked })}
+                  />
+                  <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
+                </div>
+              </label>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1169,17 +1180,6 @@ function AddCardDialog({
                   onChange={(v) => setForm({ ...form, serial_number: v })}
                 />
               )}
-              <label className="flex flex-col justify-end cursor-pointer">
-                <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground invisible">Autographed</span>
-                <div className="mt-1 flex items-center gap-2 border border-border px-3 h-10 hover:bg-secondary">
-                  <input
-                    type="checkbox"
-                    checked={form.is_autograph}
-                    onChange={(e) => setForm({ ...form, is_autograph: e.target.checked })}
-                  />
-                  <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
-                </div>
-              </label>
             </div>
 
             <div className="border border-border p-4">
