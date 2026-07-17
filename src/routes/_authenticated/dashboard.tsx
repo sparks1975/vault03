@@ -250,6 +250,7 @@ function Dashboard() {
           >
             <Plus className="size-3.5" /> <span className="hidden sm:inline">Add Card</span><span className="sm:hidden">Add</span>
           </button>
+          <CompressPhotosButton />
           <SignOutButton />
         </div>
       </nav>
