@@ -1051,6 +1051,7 @@ function AddCardDialog({
     is_first_bowman: false,
     is_rookie: false,
     grade: "",
+    parallel: "",
 
     grader: "",
     purchase_price: "",
