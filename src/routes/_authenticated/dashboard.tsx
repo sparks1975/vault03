@@ -1104,6 +1104,32 @@ function AddCardDialog({
               <Field label="Purchase price (USD)" type="number" value={form.purchase_price} onChange={(v) => setForm({ ...form, purchase_price: v })} />
             </div>
 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="flex items-center gap-2 border border-border px-3 h-10 cursor-pointer hover:bg-secondary">
+                <input
+                  type="checkbox"
+                  checked={form.is_numbered}
+                  onChange={(e) => setForm({ ...form, is_numbered: e.target.checked })}
+                />
+                <span className="text-[10px] font-mono uppercase tracking-widest">Numbered card</span>
+              </label>
+              {form.is_numbered && (
+                <Field
+                  label='Serial (e.g. "1/50")'
+                  value={form.serial_number}
+                  onChange={(v) => setForm({ ...form, serial_number: v })}
+                />
+              )}
+              <label className="flex items-center gap-2 border border-border px-3 h-10 cursor-pointer hover:bg-secondary">
+                <input
+                  type="checkbox"
+                  checked={form.is_autograph}
+                  onChange={(e) => setForm({ ...form, is_autograph: e.target.checked })}
+                />
+                <span className="text-[10px] font-mono uppercase tracking-widest">Autographed</span>
+              </label>
+            </div>
+
             <div className="border border-border p-4">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Link MLB player (for live stats)</p>
