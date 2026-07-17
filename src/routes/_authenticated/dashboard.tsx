@@ -232,7 +232,20 @@ function Dashboard() {
     );
   }, [cardData, query]);
 
-  const selected = selectedId ?? filtered[0]?.id ?? null;
+  const sorted = useMemo(() => {
+    const list = [...filtered];
+    switch (sortBy) {
+      case "value":
+        return list.sort((a, b) => Number(b.current_value ?? 0) - Number(a.current_value ?? 0));
+      case "player":
+        return list.sort((a, b) => a.player_name.localeCompare(b.player_name));
+      case "added":
+      default:
+        return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    }
+  }, [filtered, sortBy]);
+
+  const selected = selectedId ?? sorted[0]?.id ?? null;
   const selectedCard = selected ? cardData.find((card) => card.id === selected) ?? null : null;
 
   const totals = useMemo(() => {
