@@ -15,6 +15,7 @@ import {
   deleteCard,
   replaceValuation,
   uploadCardPhoto,
+  listCardParallels,
 } from "@/lib/cards.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -149,6 +150,67 @@ function gainPct(card: { purchase_price: number | null; current_value: number | 
   const p = card.purchase_price == null ? 0 : Number(card.purchase_price);
   if (p <= 0) return null; // undefined % when cost basis is 0
   return ((v - p) / p) * 100;
+}
+
+function ParallelSelect({
+  descriptor,
+  value,
+  onChange,
+}: {
+  descriptor: { player_name: string; year: number | null; set_name: string | null; card_number: string | null };
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const fn = useServerFn(listCardParallels);
+  const enabled = !!descriptor.player_name && !!descriptor.year && !!descriptor.set_name;
+  const q = useQuery({
+    queryKey: ["parallels", descriptor.player_name, descriptor.year, descriptor.set_name, descriptor.card_number],
+    queryFn: () =>
+      fn({
+        data: {
+          player_name: descriptor.player_name,
+          year: descriptor.year,
+          set_name: descriptor.set_name,
+          card_number: descriptor.card_number,
+        },
+      }),
+    enabled,
+    staleTime: 10 * 60 * 1000,
+  });
+  const parallels = q.data?.parallels ?? [];
+  const err = q.data?.error;
+  return (
+    <label className="flex flex-col">
+      <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+        Parallel / Refractor
+      </span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={!enabled || q.isLoading}
+        className="mt-1 h-10 w-full border border-border bg-background px-3 text-sm rounded-sm focus:outline-none focus:border-accent disabled:opacity-60"
+      >
+        <option value="">
+          {!enabled
+            ? "Set player, year & set first"
+            : q.isLoading
+              ? "Loading parallels…"
+              : parallels.length === 0
+                ? (err ?? "Base / no parallel")
+                : "Base / no parallel"}
+        </option>
+        {parallels.map((p) => (
+          <option key={p.id} value={p.name}>
+            {p.name}
+            {p.printRun ? ` (${p.printRun})` : ""}
+          </option>
+        ))}
+        {value && !parallels.some((p) => p.name === value) && (
+          <option value={value}>{value} (current)</option>
+        )}
+      </select>
+    </label>
+  );
 }
 
 
@@ -778,6 +840,16 @@ function CardDetail({
                 />
               )}
             </div>
+            <ParallelSelect
+              descriptor={{
+                player_name: String(draft.player_name ?? ""),
+                year: (draft.year ?? null) as number | null,
+                set_name: (draft.set_name ?? null) as string | null,
+                card_number: (draft.card_number ?? null) as string | null,
+              }}
+              value={String(draft.parallel ?? "")}
+              onChange={(v) => setDraft({ ...draft, parallel: v || null })}
+            />
           <label className="block">
 
 
@@ -1337,6 +1409,16 @@ function AddCardDialog({
               )}
             </div>
 
+            <ParallelSelect
+              descriptor={{
+                player_name: form.player_name,
+                year: form.year ? Number(form.year) : null,
+                set_name: form.set_name || null,
+                card_number: form.card_number || null,
+              }}
+              value={form.parallel}
+              onChange={(v) => setForm({ ...form, parallel: v })}
+            />
 
 
             <div className="border border-border p-4">
