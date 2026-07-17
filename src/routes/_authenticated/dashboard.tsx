@@ -180,7 +180,7 @@ function ParallelSelect({
   const parallels = q.data?.parallels ?? [];
   return (
     <label className="flex flex-col">
-      <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Parallel</span>
+      <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Parallel / Refractor</span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -191,10 +191,8 @@ function ParallelSelect({
           {!enabled
             ? "Set player, year & set first"
             : q.isLoading
-              ? "Loading parallels…"
-              : parallels.length === 0
-                ? "Base / no parallel"
-                : "Base / no parallel"}
+              ? "Loading parallels & refractors…"
+              : "Base / no parallel"}
         </option>
         {parallels.map((p) => (
           <option key={p.id} value={p.name}>
