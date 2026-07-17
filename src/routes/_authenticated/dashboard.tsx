@@ -428,6 +428,11 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
                   {card.grader ?? ""} {card.grade}
                 </span>
               )}
+              {card.is_autograph && (
+                <span className="px-1.5 py-0.5 border border-accent text-accent text-[10px] font-mono font-bold uppercase">
+                  Auto
+                </span>
+              )}
               {(card.team || card.position) && (
                 <span className="text-[10px] text-muted-foreground uppercase">
                   {card.team ?? ""} {card.position ? `• ${card.position}` : ""}
