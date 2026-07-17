@@ -16,6 +16,7 @@ const cardInputSchema = z.object({
   is_first_bowman: z.boolean().optional(),
   is_rookie: z.boolean().optional(),
   grade: z.string().nullable().optional(),
+  parallel: z.string().nullable().optional(),
 
   grader: z.string().nullable().optional(),
   purchase_price: z.number().nullable().optional(),
