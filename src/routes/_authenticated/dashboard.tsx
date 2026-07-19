@@ -536,6 +536,35 @@ function Dashboard() {
           }}
         />
       )}
+
+      {revalueProgress.isRunning && (
+        <div className="fixed inset-0 z-50 bg-foreground/60 backdrop-blur-sm grid place-items-center p-4 fade-in">
+          <div className="bg-background border border-border w-full max-w-md p-6 md:p-8 space-y-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Re-valuing vault</p>
+                <h2 className="text-xl font-extrabold tracking-tight">Updating values…</h2>
+              </div>
+              <Loader2 className="size-5 animate-spin text-accent" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                <span>{revalueProgress.processed + revalueProgress.failed} / {revalueProgress.total}</span>
+                <span>{Math.round(((revalueProgress.processed + revalueProgress.failed) / Math.max(revalueProgress.total, 1)) * 100)}%</span>
+              </div>
+              <Progress value={((revalueProgress.processed + revalueProgress.failed) / Math.max(revalueProgress.total, 1)) * 100} />
+            </div>
+            {revalueProgress.currentName && (
+              <p className="text-xs text-muted-foreground truncate">
+                Current: <span className="font-medium text-foreground">{revalueProgress.currentName}</span>
+              </p>
+            )}
+            <p className="text-[10px] font-mono text-muted-foreground">
+              Please keep this tab open while values are refreshed.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
