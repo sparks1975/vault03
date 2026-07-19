@@ -199,6 +199,9 @@ function Dashboard() {
               grader: c.grader,
               is_autograph: c.is_autograph,
               serial_number: c.serial_number,
+              cardsight_card_id: c.cardsight_card_id,
+              cardsight_parallel_id: c.cardsight_parallel_id,
+              cardsight_grade_id: c.cardsight_grade_id,
             },
           });
           await replaceValFn({
