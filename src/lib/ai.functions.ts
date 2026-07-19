@@ -246,6 +246,12 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       }
     }
 
+    const normalizeSource = (raw: string) => {
+      const lower = String(raw ?? "").toLowerCase();
+      if (lower.includes("130") || lower.includes("ebay")) return "eBay sold";
+      return raw || "eBay sold";
+    };
+
     const priceFromSlice = async (slice: Awaited<ReturnType<typeof import("./cardsight.server").fetchPricing>>) => {
       const { median, trimOutliersIQR } = await import("./cardsight.server");
       const auctions = slice.auctionSales
@@ -263,7 +269,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             sold_at: r.date ?? null,
             grade: slice.gradeLabel,
             price: r.price,
-            source: `Cardsight (${r.source}${typeLabel ? ` · ${typeLabel}` : ""})`,
+            source: `${normalizeSource(r.source)}${typeLabel ? ` · ${typeLabel}` : ""}`,
             url: r.url ?? null,
           };
         });
