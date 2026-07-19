@@ -181,10 +181,11 @@ async function applyValuation(
     history: Array<{ recorded_at: string; value: number }>;
   },
 ) {
-  await supabase.from("card_sales").delete().eq("card_id", cardId);
-  await supabase.from("card_value_history").delete().eq("card_id", cardId);
+  const client = supabase as never;
+  await client.from("card_sales").delete().eq("card_id", cardId);
+  await client.from("card_value_history").delete().eq("card_id", cardId);
   if (valuation.sales.length) {
-    const { error } = await supabase.from("card_sales").insert(
+    const { error } = await client.from("card_sales").insert(
       valuation.sales.map((s) => ({
         card_id: cardId,
         user_id: userId,
@@ -198,7 +199,7 @@ async function applyValuation(
     if (error) throw error;
   }
   if (valuation.history.length) {
-    const { error } = await supabase.from("card_value_history").insert(
+    const { error } = await client.from("card_value_history").insert(
       valuation.history.map((h) => ({
         card_id: cardId,
         user_id: userId,
@@ -208,7 +209,7 @@ async function applyValuation(
     );
     if (error) throw error;
   }
-  await supabase
+  await client
     .from("cards")
     .update({
       current_value: valuation.current_value,
@@ -217,6 +218,7 @@ async function applyValuation(
     })
     .eq("id", cardId);
 }
+
 
 export const replaceValuation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
