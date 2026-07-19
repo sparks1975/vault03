@@ -21,6 +21,9 @@ const cardInputSchema = z.object({
   notes: z.string().nullable().optional(),
   photo_path: z.string().nullable().optional(),
   mlb_player_id: z.number().int().nullable().optional(),
+  cardsight_card_id: z.string().uuid().nullable().optional(),
+  cardsight_parallel_id: z.string().uuid().nullable().optional(),
+  cardsight_grade_id: z.string().uuid().nullable().optional(),
 });
 
 function dataUrlToBytes(dataUrl: string) {
