@@ -9,10 +9,27 @@ function apiKey(): string {
   return k;
 }
 
+// Global throttle: Cardsight allows 6 req/sec. We space calls ≥200ms apart
+// (5 rps) with a shared promise chain so concurrent server-fn invocations
+// (e.g. revaluing multiple cards) don't burst past the limit.
+const MIN_INTERVAL_MS = 220;
+let lastCallAt = 0;
+let gate: Promise<void> = Promise.resolve();
+function reserveSlot(): Promise<void> {
+  const next = gate.then(async () => {
+    const wait = lastCallAt + MIN_INTERVAL_MS - Date.now();
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    lastCallAt = Date.now();
+  });
+  gate = next.catch(() => {});
+  return next;
+}
+
 async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
   let lastBody = "";
   let lastStatus = 0;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    await reserveSlot();
     const res = await fetch(`${REST_BASE}${path}`, {
       ...init,
       headers: {
@@ -24,9 +41,10 @@ async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
     if (res.ok) return (await res.json()) as T;
     lastStatus = res.status;
     lastBody = await res.text().catch(() => "");
-    if (res.status !== 429) break;
+    if (res.status !== 429 && res.status < 500) break;
     const retryAfter = Number(res.headers.get("retry-after"));
-    await new Promise((resolve) => setTimeout(resolve, retryAfter > 0 ? retryAfter * 1000 : 1200 + attempt * 800));
+    const backoff = retryAfter > 0 ? retryAfter * 1000 : Math.min(8000, 800 * Math.pow(2, attempt));
+    await new Promise((resolve) => setTimeout(resolve, backoff));
   }
   throw new Error(`Cardsight ${path} ${lastStatus}: ${lastBody.slice(0, 200)}`);
 }
