@@ -441,9 +441,9 @@ export async function resolveGradeId(
 }
 
 // ---------- Pricing ----------
-// Cardsight's /pricing endpoint returns auction sales (bid side) and fixed
-// Buy-It-Now asking prices (ask side). Valuation uses auction sales only;
-// fixed listings are returned separately for future display.
+// Cardsight's /pricing endpoint returns market comps; `listing_type` describes
+// how the transaction/listing was formatted (auction vs fixed), not whether the
+// record is usable. Valuation uses the records returned by the structured API.
 export type PricingSlice = {
   auctionSales: PricingRecord[];
   askListings: PricingRecord[];  // kept for API-shape compatibility (unused)
@@ -498,11 +498,9 @@ export async function fetchPricing(
     records = resp.raw?.records ?? [];
   }
 
-  const sold = records.filter((r) => r.listing_type !== "fixed");
-  const asks = records.filter((r) => r.listing_type === "fixed");
   return {
-    auctionSales: sold,
-    askListings: asks,
+    auctionSales: records,
+    askListings: [],
     gradeLabel,
     rawResponseMeta: { query: resp.query, messages: resp.messages },
   };
