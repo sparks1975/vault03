@@ -243,9 +243,59 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       }
     }
 
+    const priceFromSlice = async (slice: Awaited<ReturnType<typeof import("./cardsight.server").fetchPricing>>) => {
+      const { median, trimOutliersIQR } = await import("./cardsight.server");
+      const auctions = slice.auctionSales
+        .filter((r) => Number.isFinite(r.price) && r.price > 0)
+        .sort((a, b) => {
+          const ta = a.date ? new Date(a.date).getTime() : 0;
+          const tb = b.date ? new Date(b.date).getTime() : 0;
+          return tb - ta;
+        });
+
+      if (auctions.length > 0) {
+        sales = auctions.slice(0, 25).map((r) => ({
+          sold_at: r.date ?? null,
+          grade: slice.gradeLabel,
+          price: r.price,
+          source: `Cardsight (${r.source})`,
+          url: r.url ?? null,
+        }));
+      }
+
+      if (auctions.length >= 3) {
+        const trimmed = trimOutliersIQR(auctions.map((r) => r.price));
+        currentValue = median(trimmed);
+
+        // 30-day vs prior-30-day delta on the same stream.
+        const now = Date.now();
+        const day = 24 * 60 * 60 * 1000;
+        const recent: number[] = [];
+        const prior: number[] = [];
+        for (const r of auctions) {
+          if (!r.date) continue;
+          const t = new Date(r.date).getTime();
+          if (!Number.isFinite(t)) continue;
+          const age = now - t;
+          if (age <= 30 * day) recent.push(r.price);
+          else if (age <= 60 * day) prior.push(r.price);
+        }
+        if (recent.length >= 2 && prior.length >= 2) {
+          const rMed = median(recent);
+          const pMed = median(prior);
+          if (pMed > 0) deltaPct = ((rMed - pMed) / pMed) * 100;
+        }
+
+        usedCardsight = true;
+        compsNote = null;
+      } else {
+        compsNote = `Only ${auctions.length} recent sold comp${auctions.length === 1 ? "" : "s"} — using AI estimate.`;
+      }
+    };
+
     if (resolvedCardId) {
       try {
-        const { fetchPricing, resolveGradeId, median, trimOutliersIQR } = await import(
+        const { fetchPricing, resolveGradeId } = await import(
           "./cardsight.server"
         );
         if (!resolvedGradeId && data.grader && data.grade) {
@@ -259,63 +309,72 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           const slice = await fetchPricing(resolvedCardId, {
             parallel_id: data.cardsight_parallel_id ?? null,
             grade_id: resolvedGradeId,
+            player_name: data.player_name,
+            year: data.year,
+            card_number: data.card_number,
             grader: data.grader,
             grade: data.grade,
+            is_autograph: data.is_autograph,
+            serial_number: data.serial_number,
             period: "30d",
           });
-
-        const auctions = slice.auctionSales
-          .filter((r) => Number.isFinite(r.price) && r.price > 0)
-          .sort((a, b) => {
-            const ta = a.date ? new Date(a.date).getTime() : 0;
-            const tb = b.date ? new Date(b.date).getTime() : 0;
-            return tb - ta;
-          });
-
-        if (auctions.length > 0) {
-          sales = auctions.slice(0, 25).map((r) => ({
-            sold_at: r.date ?? null,
-            grade: slice.gradeLabel,
-            price: r.price,
-            source: `Cardsight (${r.source})`,
-            url: r.url ?? null,
-          }));
-        }
-
-        if (auctions.length >= 3) {
-          const trimmed = trimOutliersIQR(auctions.map((r) => r.price));
-          currentValue = median(trimmed);
-
-          // 30-day vs prior-30-day delta on the same stream.
-          const now = Date.now();
-          const day = 24 * 60 * 60 * 1000;
-          const recent: number[] = [];
-          const prior: number[] = [];
-          for (const r of auctions) {
-            if (!r.date) continue;
-            const t = new Date(r.date).getTime();
-            if (!Number.isFinite(t)) continue;
-            const age = now - t;
-            if (age <= 30 * day) recent.push(r.price);
-            else if (age <= 60 * day) prior.push(r.price);
-          }
-          if (recent.length >= 2 && prior.length >= 2) {
-            const rMed = median(recent);
-            const pMed = median(prior);
-            if (pMed > 0) deltaPct = ((rMed - pMed) / pMed) * 100;
-          }
-
-          usedCardsight = true;
-        } else {
-          compsNote = `Only ${auctions.length} recent sold comp${auctions.length === 1 ? "" : "s"} — using AI estimate.`;
-        }
+          await priceFromSlice(slice);
         }
       } catch (err) {
         console.error("Cardsight pricing failed:", err);
         compsNote = err instanceof Error ? err.message : String(err);
       }
-    } else {
-      compsNote = "Couldn't match this card in Cardsight — using AI estimate.";
+    }
+
+    if (!usedCardsight) {
+      try {
+        const { searchPricingComps } = await import("./cardsight.server");
+        const searchSlice = await searchPricingComps(
+          {
+            player_name: data.player_name,
+            year: data.year,
+            set_name: data.set_name,
+            card_number: data.card_number,
+            is_autograph: data.is_autograph,
+            serial_number: data.serial_number,
+            grader: data.grader,
+            grade: data.grade,
+          },
+          { period: "30d", limit: 100 },
+        );
+        await priceFromSlice(searchSlice);
+        if (!usedCardsight && !compsNote) {
+          compsNote = resolvedCardId
+            ? "Cardsight returned too few comps for this exact catalog card — using pricing search fallback."
+            : "Couldn't match this card to a catalog ID, and pricing search found too few comps — using AI estimate.";
+        }
+      } catch (err) {
+        console.error("Cardsight pricing search failed:", err);
+        if (!compsNote) compsNote = err instanceof Error ? err.message : String(err);
+      }
+    }
+
+    const fallbackHistory = (baseValue: number) => {
+      const base = Number.isFinite(baseValue) && baseValue > 0 ? baseValue : 0;
+      const now = new Date();
+      return Array.from({ length: 6 }, (_, i) => {
+        const d = new Date(now);
+        d.setMonth(now.getMonth() - (5 - i));
+        return { recorded_at: d.toISOString(), value: base };
+      });
+    };
+
+    if (usedCardsight) {
+      return {
+        current_value: currentValue,
+        value_delta_pct: deltaPct,
+        sales,
+        history: fallbackHistory(currentValue),
+        source: "cardsight" as const,
+        note: compsNote,
+        resolved_cardsight_card_id: resolvedCardId,
+        resolved_cardsight_grade_id: resolvedGradeId,
+      };
     }
 
     // AI narrative fallback + history spark data.
@@ -361,11 +420,11 @@ If unable to value, return current_value: 0.`;
     }>(text);
 
     return {
-      current_value: usedCardsight ? currentValue : ai.current_value,
-      value_delta_pct: usedCardsight ? deltaPct : ai.value_delta_pct,
+      current_value: ai.current_value,
+      value_delta_pct: ai.value_delta_pct,
       sales,
       history: ai.history,
-      source: usedCardsight ? ("cardsight" as const) : ("ai" as const),
+      source: "ai" as const,
       note: compsNote,
       resolved_cardsight_card_id: resolvedCardId,
       resolved_cardsight_grade_id: resolvedGradeId,

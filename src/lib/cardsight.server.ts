@@ -10,19 +10,25 @@ function apiKey(): string {
 }
 
 async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${REST_BASE}${path}`, {
-    ...init,
-    headers: {
-      "X-API-Key": apiKey(),
-      Accept: "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Cardsight ${path} ${res.status}: ${body.slice(0, 200)}`);
+  let lastBody = "";
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(`${REST_BASE}${path}`, {
+      ...init,
+      headers: {
+        "X-API-Key": apiKey(),
+        Accept: "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+    if (res.ok) return (await res.json()) as T;
+    lastStatus = res.status;
+    lastBody = await res.text().catch(() => "");
+    if (res.status !== 429) break;
+    const retryAfter = Number(res.headers.get("retry-after"));
+    await new Promise((resolve) => setTimeout(resolve, retryAfter > 0 ? retryAfter * 1000 : 1200 + attempt * 800));
   }
-  return (await res.json()) as T;
+  throw new Error(`Cardsight ${path} ${lastStatus}: ${lastBody.slice(0, 200)}`);
 }
 
 // ---------- Types (subset of the OpenAPI schemas we actually use) ----------
@@ -163,6 +169,59 @@ function normalizeText(value: string | number | null | undefined): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
+}
+
+function compact(value: string | number | null | undefined): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function serialSearchTerm(serialNumber: string | null | undefined): string | null {
+  const raw = compact(serialNumber);
+  if (!raw) return null;
+  const denom = raw.match(/\/\s*(\d+)/)?.[1];
+  return denom ? `/${denom}` : raw;
+}
+
+function pricingRecordMatches(
+  record: PricingRecord,
+  lookup: {
+    player_name?: string | null;
+    year?: string | number | null;
+    card_number?: string | null;
+    is_autograph?: boolean | null;
+    serial_number?: string | null;
+    grader?: string | null;
+    grade?: string | null;
+  },
+): boolean {
+  const rawTitle = record.title ?? "";
+  const title = normalizeText(rawTitle);
+  const playerTokens = normalizeText(lookup.player_name)
+    .split(" ")
+    .filter((t) => t.length > 1);
+  if (playerTokens.length > 0 && !playerTokens.every((t) => title.includes(t))) return false;
+  const year = compact(lookup.year);
+  if (year && !rawTitle.includes(year)) return false;
+  const number = compact(lookup.card_number).replace(/^#\s*/, "");
+  if (number) {
+    const numberPattern = new RegExp(`(^|[^a-z0-9])#?${number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z0-9])`, "i");
+    if (!numberPattern.test(rawTitle)) return false;
+  }
+
+  const isAutoTitle = /\b(auto|autograph|autographs|signed|signature)\b/i.test(rawTitle);
+  if (lookup.is_autograph && !isAutoTitle) return false;
+  if (!lookup.is_autograph && isAutoTitle) return false;
+
+  const serial = serialSearchTerm(lookup.serial_number);
+  if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) return false;
+
+  if (lookup.grader && !title.includes(normalizeText(lookup.grader))) return false;
+  if (lookup.grade) {
+    const g = normalizeText(lookup.grade);
+    if (g && !title.includes(g)) return false;
+  }
+
+  return Number.isFinite(record.price) && record.price > 0;
 }
 
 function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): number {
@@ -456,8 +515,13 @@ export async function fetchPricing(
   opts: {
     parallel_id?: string | null;
     grade_id?: string | null;
+    player_name?: string | null;
+    year?: string | number | null;
+    card_number?: string | null;
     grader?: string | null;
     grade?: string | null;
+    is_autograph?: boolean | null;
+    serial_number?: string | null;
     period?: string;
     limit?: number;
   } = {},
@@ -498,11 +562,127 @@ export async function fetchPricing(
     records = resp.raw?.records ?? [];
   }
 
+  records = records.filter((r) => pricingRecordMatches(r, opts));
+
   return {
     auctionSales: records,
     askListings: [],
     gradeLabel,
     rawResponseMeta: { query: resp.query, messages: resp.messages },
+  };
+}
+
+type PricingSearchResponse = {
+  query?: Record<string, unknown>;
+  results?: PricingRecord[];
+  meta?: Record<string, unknown>;
+  messages?: Array<{ code?: string; message?: string }>;
+};
+
+type PricingSearchLookup = CardLookup & {
+  serial_number?: string | null;
+  grader?: string | null;
+  grade?: string | null;
+};
+
+function setBrand(setName: string | null | undefined): string | null {
+  const n = normalizeText(setName);
+  const brands = [
+    "bowman chrome",
+    "bowman",
+    "topps chrome",
+    "topps",
+    "bbm",
+    "panini",
+    "donruss",
+    "fleer",
+    "upper deck",
+    "ultra",
+    "select",
+    "prizm",
+  ];
+  return brands.find((b) => n.includes(b)) ?? null;
+}
+
+function uniquePricingQueries(lookup: PricingSearchLookup): string[] {
+  const player = compact(lookup.player_name);
+  const year = compact(lookup.year);
+  const set = compact(lookup.set_name)
+    .replace(/\bbase\s+set\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const brand = setBrand(lookup.set_name);
+  const number = compact(lookup.card_number).replace(/^#\s*/, "");
+  const auto = lookup.is_autograph ? "auto" : null;
+  const serial = serialSearchTerm(lookup.serial_number);
+  const grade = compact([lookup.grader, lookup.grade].filter(Boolean).join(" ")) || null;
+  const variants = [auto, serial, grade].filter(Boolean) as string[];
+  const strictCandidates = [
+    [year, set, player, number, ...variants],
+    [player, year, set, number, ...variants],
+    [player, set, number, ...variants],
+    [player, set, ...variants],
+  ];
+  const candidates = variants.length > 0
+    ? strictCandidates
+    : [
+        ...strictCandidates,
+        [player, brand, number],
+        [player, brand],
+        [player, set],
+      ];
+  const seen = new Set<string>();
+  return candidates
+    .map((parts) => parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim())
+    .filter((q) => {
+      if (q.length < 2 || seen.has(q)) return false;
+      seen.add(q);
+      return true;
+    });
+}
+
+function dedupePricingRecords(records: PricingRecord[]): PricingRecord[] {
+  const seen = new Set<string>();
+  const out: PricingRecord[] = [];
+  for (const r of records) {
+    const key = [r.url, r.title, r.date, r.price].map((v) => String(v ?? "")).join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out.sort((a, b) => {
+    const ta = a.date ? new Date(a.date).getTime() : 0;
+    const tb = b.date ? new Date(b.date).getTime() : 0;
+    return tb - ta;
+  });
+}
+
+export async function searchPricingComps(
+  lookup: PricingSearchLookup,
+  opts: { period?: string; limit?: number } = {},
+): Promise<PricingSlice> {
+  const queries = uniquePricingQueries(lookup);
+  const period = opts.period ?? "30d";
+  const limit = opts.limit ?? 100;
+  const all: PricingRecord[] = [];
+  let lastMeta: PricingSlice["rawResponseMeta"] = undefined;
+
+  for (const q of queries) {
+    const params = new URLSearchParams({ q, period, limit: String(limit) });
+    const resp = await csFetch<PricingSearchResponse>(`/v1/pricing/search?${params.toString()}`);
+    lastMeta = { query: resp.query, messages: resp.messages };
+    const matches = (resp.results ?? []).filter((r) => pricingRecordMatches(r, lookup));
+    if (matches.length > 0) {
+      all.push(...matches);
+      break;
+    }
+  }
+
+  return {
+    auctionSales: dedupePricingRecords(all),
+    askListings: [],
+    gradeLabel: compact([lookup.grader, lookup.grade].filter(Boolean).join(" ")) || null,
+    rawResponseMeta: lastMeta,
   };
 }
 

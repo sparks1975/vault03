@@ -181,6 +181,7 @@ function Dashboard() {
     const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
     const now = Date.now();
     const stale = cardData.filter((c) => {
+      if ((c.sales ?? []).length === 0) return true;
       if (!c.last_valued_at) return true;
       const ts = new Date(c.last_valued_at).getTime();
       return !Number.isFinite(ts) || now - ts >= THIRTY_DAYS_MS;
@@ -213,9 +214,16 @@ function Dashboard() {
               history: est.history,
             },
           });
+          const idPatch: Partial<Card> = {};
           if (!c.cardsight_card_id && est.resolved_cardsight_card_id) {
+            idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
+          }
+          if (!c.cardsight_grade_id && est.resolved_cardsight_grade_id) {
+            idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
+          }
+          if (Object.keys(idPatch).length > 0) {
             await updateFn({
-              data: { id: c.id, patch: { cardsight_card_id: est.resolved_cardsight_card_id } },
+              data: { id: c.id, patch: idPatch },
             });
           }
         } catch (err) {
@@ -636,8 +644,15 @@ function CardDetail({
           history: est.history,
         },
       });
+      const idPatch: Partial<Card> = {};
       if (!card.cardsight_card_id && est.resolved_cardsight_card_id) {
-        onUpdate(card.id, { cardsight_card_id: est.resolved_cardsight_card_id });
+        idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
+      }
+      if (!card.cardsight_grade_id && est.resolved_cardsight_grade_id) {
+        idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
+      }
+      if (Object.keys(idPatch).length > 0) {
+        onUpdate(card.id, idPatch);
       }
       qc.invalidateQueries({ queryKey: ["cards"] });
       if (est.note) toast.warning(est.note);
@@ -1228,6 +1243,16 @@ function AddCardDialog({
             history: est.history,
           },
         });
+        const idPatch: Partial<Card> = {};
+        if (!created.cardsight_card_id && est.resolved_cardsight_card_id) {
+          idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
+        }
+        if (!created.cardsight_grade_id && est.resolved_cardsight_grade_id) {
+          idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
+        }
+        if (Object.keys(idPatch).length > 0) {
+          await updateFn({ data: { id: created.id, patch: idPatch } });
+        }
         onCreated(created.id);
       } catch (e) {
         console.error("Valuation failed", e);
