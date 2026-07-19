@@ -205,12 +205,17 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         if (!resolvedGradeId && data.grader && data.grade) {
           resolvedGradeId = await resolveGradeId(data.grader, data.grade);
         }
-        const slice = await fetchPricing(data.cardsight_card_id, {
-          parallel_id: data.cardsight_parallel_id ?? null,
-          grade_id: resolvedGradeId,
-          period: "6m",
-          limit: 200,
-        });
+        // If the card is graded but we couldn't match a grade_id, skip Cardsight —
+        // we don't want to price a graded card against raw comps.
+        if (data.grader && data.grade && !resolvedGradeId) {
+          compsNote = `Couldn't match grade "${data.grader} ${data.grade}" in Cardsight — using AI estimate.`;
+        } else {
+          const slice = await fetchPricing(data.cardsight_card_id, {
+            parallel_id: data.cardsight_parallel_id ?? null,
+            grade_id: resolvedGradeId,
+            period: "6m",
+            limit: 200,
+          });
 
         const auctions = slice.auctionSales
           .filter((r) => Number.isFinite(r.price) && r.price > 0)
