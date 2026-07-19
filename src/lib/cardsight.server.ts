@@ -1,30 +1,7 @@
-// Server-only Cardsight client. Uses the MCP JSON-RPC endpoint with X-API-Key.
-// Do not import from client-reachable modules at top level.
+// Server-only Cardsight REST client. Do not import from client-reachable modules
+// at top level. See https://cardsight.ai/documentation/api-reference.
 
-const MCP_URL = "https://mcp.cardsight.ai/";
-
-export type CardDescriptor = {
-  player_name: string;
-  year?: number | null;
-  set_name?: string | null;
-  card_number?: string | null;
-  grade?: string | null;
-  grader?: string | null;
-  is_autograph?: boolean | null;
-  serial_number?: string | null;
-};
-
-
-export type SoldComp = {
-  title: string;
-  price: number;
-  currency: string;
-  soldAt: string | null;
-  url: string | null;
-  source: string;
-  listingType: string | null;
-  grade: string | null;
-};
+const REST_BASE = "https://api.cardsight.ai";
 
 function apiKey(): string {
   const k = process.env.CARDSIGHT_API_KEY;
@@ -32,299 +9,271 @@ function apiKey(): string {
   return k;
 }
 
-// Minimal MCP JSON-RPC caller. Handles both `application/json` and SSE responses.
-async function mcpCall(name: string, args: Record<string, unknown>): Promise<string> {
-  const res = await fetch(MCP_URL, {
-    method: "POST",
+async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${REST_BASE}${path}`, {
+    ...init,
     headers: {
       "X-API-Key": apiKey(),
-      "Content-Type": "application/json",
-      Accept: "application/json, text/event-stream",
+      Accept: "application/json",
+      ...(init?.headers ?? {}),
     },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: Date.now(),
-      method: "tools/call",
-      params: { name, arguments: args },
-    }),
   });
-  const raw = await res.text();
-  if (!res.ok) throw new Error(`Cardsight ${name} failed: ${res.status} ${raw.slice(0, 200)}`);
-
-  // SSE frames look like `event: message\ndata: {json}\n\n`. Strip the prefixes.
-  const jsonText = raw.includes("data: ")
-    ? raw
-        .split("\n")
-        .filter((l) => l.startsWith("data: "))
-        .map((l) => l.slice(6))
-        .join("")
-    : raw;
-
-  let parsed: { result?: { content?: Array<{ type: string; text?: string }>; isError?: boolean }; error?: { message: string } };
-  try {
-    parsed = JSON.parse(jsonText);
-  } catch {
-    throw new Error(`Cardsight ${name} returned unparseable body: ${raw.slice(0, 200)}`);
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Cardsight ${path} ${res.status}: ${body.slice(0, 200)}`);
   }
-  if (parsed.error) throw new Error(`Cardsight ${name}: ${parsed.error.message}`);
-  const text = parsed.result?.content?.map((c) => c.text ?? "").join("\n") ?? "";
-  return text;
+  return (await res.json()) as T;
 }
 
-function buildFreeText(input: CardDescriptor): string {
-  return [
-    input.year,
-    input.set_name,
-    input.player_name,
-    input.card_number ? `#${input.card_number}` : null,
-    input.grader && input.grade ? `${input.grader} ${input.grade}` : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
+// ---------- Types (subset of the OpenAPI schemas we actually use) ----------
+export type PricingRecord = {
+  title?: string | null;
+  price: number;
+  date?: string | null;
+  source: string;
+  listing_type?: "auction" | "fixed" | null;
+  url?: string | null;
+  parallel_id?: string | null;
+  parallel_name?: string | null;
+};
 
+type RawSection = { count: number; records: PricingRecord[] };
+type GradeGroup = { grade_value: string; grade_id: string; count: number; records: PricingRecord[] };
+type CompanyGroup = { company_name: string; company_id: string; grades: GradeGroup[] };
+type PricingResponse = {
+  card: { card_id: string; name: string };
+  raw: RawSection;
+  graded: CompanyGroup[];
+};
 
+type IdentifyResponse = {
+  success: boolean;
+  detections: Array<{
+    confidence: "High" | "Medium" | "Low";
+    card: {
+      id?: string;
+      releaseId?: string;
+      setId?: string;
+      year?: string;
+      manufacturer?: string;
+      releaseName?: string;
+      setName?: string;
+      name?: string;
+      number?: string;
+      attributes?: string[];
+    };
+    grading?: {
+      company?: { name?: string };
+      grade?: { value?: string };
+    };
+  }>;
+};
 
-// Parse the human-readable sold-comps block returned by `search_pricing`.
-// Example row:
-//   - $1300.00 (fixed) on ebay — 7/15/2026
-//      "Topps 2011 Update ..."
-//      → Mike Trout #US175 [card: `...`] · PSA 10
-//      https://showme.cards/xxxx
-function parseSoldComps(text: string): SoldComp[] {
-  const comps: SoldComp[] = [];
-  // Split into blocks that begin with a "- $" line.
-  const blocks = text.split(/\n(?=- \$)/g);
-  for (const block of blocks) {
-    const header = block.match(/^- \$([\d,]+(?:\.\d{1,2})?)\s*\(([^)]+)\)\s*on\s+([^\s—-]+)\s*[—-]\s*([\d/\-]+)/);
-    if (!header) continue;
-    const price = Number(header[1].replace(/,/g, ""));
-    if (!Number.isFinite(price) || price <= 0) continue;
-    const listingType = header[2].trim();
-    const source = header[3].trim();
-    const rawDate = header[4].trim();
-    let soldAt: string | null = null;
-    const parsed = new Date(rawDate);
-    if (!Number.isNaN(parsed.getTime())) soldAt = parsed.toISOString();
+// ---------- Identify ----------
+export type IdentifyResult = {
+  cardsight_card_id: string | null;
+  player_name: string | null;
+  team: string | null;
+  position: string | null;
+  year: number | null;
+  set_name: string | null;
+  card_number: string | null;
+  grade: string | null;
+  grader: string | null;
+  confidence: "high" | "medium" | "low";
+};
 
-    const titleMatch = block.match(/"([^"]+)"/);
-    const urlMatch = block.match(/https?:\/\/\S+/);
-    const gradeMatch = block.match(/·\s*([A-Z]{2,4}\s*\d{1,2}(?:\.\d)?)/);
-
-    comps.push({
-      title: titleMatch ? titleMatch[1] : "",
-      price,
-      currency: "USD",
-      soldAt,
-      url: urlMatch ? urlMatch[0] : null,
-      source,
-      listingType,
-      grade: gradeMatch ? gradeMatch[1].trim() : null,
-    });
-  }
-  return comps;
-}
-
-const cache = new Map<string, { at: number; comps: SoldComp[] }>();
-const TTL_MS = 10 * 60 * 1000;
-
-const NO_RESULTS_RE =
-  /no.*sold comps|no recent sales|no completed[- ]sale listings|no results|no listings/i;
-
-async function runSearchPricing(
-  q: string,
-  period: string,
-  limit: number,
-): Promise<{ comps: SoldComp[]; empty: boolean; raw: string }> {
-  const text = await mcpCall("search_pricing", { q, period, limit });
-  if (NO_RESULTS_RE.test(text)) return { comps: [], empty: true, raw: text };
-  const comps = parseSoldComps(text);
-  return { comps, empty: comps.length === 0, raw: text };
-}
-
-// Signals that a listing is a NON-base variant (parallel, insert, refractor,
-// serialized, or a hit like an auto/patch/relic). We match with word-boundaries
-// on colors to avoid false positives inside URLs or set names like "Topps Chrome".
-const AUTO_KEYWORDS = ["auto", "autograph", "autographed", "signed", "signature"];
-const RELIC_KEYWORDS = ["patch", "relic", "jersey", "rpa", "logoman", "letterman"];
-const PARALLEL_COLOR_WORDS = [
-  "refractor", "prizm", "mojo", "wave", "rainbow", "atomic", "superfractor",
-  "sapphire", "emerald", "ruby", "onyx",
-  "gold", "silver", "black", "red", "blue", "orange", "purple", "pink", "green",
-  "bronze", "camo", "shimmer", "holo", "xfractor", "disco", "lava", "mini-diamond",
-];
-const OTHER_PARALLEL_WORDS = [
-  "ssp", "short print", "insert", "parallel", "variation", "printing plate",
-  "1/1", "one of one", "numbered to", "case hit", "die-cut", "die cut",
-];
-
-function hasSerialSignal(text: string): boolean {
-  const t = ` ${text.toLowerCase()} `;
-  if (/\s\/\s?\d{1,4}\b/.test(t)) return true;   // "/99", " /25"
-  if (/#\d+\/\d+/.test(t)) return true;           // "#12/25"
-  if (/\bnumbered\b/.test(t)) return true;
-  return false;
-}
-
-function hasAutoSignal(text: string): boolean {
-  const t = ` ${text.toLowerCase()} `;
-  return AUTO_KEYWORDS.some((k) => new RegExp(`\\b${k}\\b`).test(t));
-}
-
-function hasRelicSignal(text: string): boolean {
-  const t = ` ${text.toLowerCase()} `;
-  return RELIC_KEYWORDS.some((k) => new RegExp(`\\b${k}\\b`).test(t));
-}
-
-function hasParallelColorSignal(text: string): boolean {
-  const t = text.toLowerCase();
-  // Only match as whole words to avoid substrings like "gold" inside URLs.
-  if (PARALLEL_COLOR_WORDS.some((k) => new RegExp(`\\b${k}\\b`).test(t))) return true;
-  if (OTHER_PARALLEL_WORDS.some((k) => t.includes(k))) return true;
-  return false;
-}
-
-function filterAndRankComps(comps: SoldComp[], input: CardDescriptor): SoldComp[] {
-  const setLc = (input.set_name ?? "").toLowerCase();
-  // Words already implied by the user's set name shouldn't be treated as parallel
-  // signals in comp titles (e.g. base "Topps Chrome" contains "chrome").
-  const setImpliedColors = PARALLEL_COLOR_WORDS.filter((w) =>
-    new RegExp(`\\b${w}\\b`).test(setLc),
-  );
-  const stripImplied = (text: string): string => {
-    let out = text.toLowerCase();
-    for (const w of setImpliedColors) out = out.replace(new RegExp(`\\b${w}\\b`, "g"), "");
-    return out;
-  };
-
-  const wantAuto = !!input.is_autograph;
-  const wantSerial = !!(input.serial_number && input.serial_number.trim().length > 0);
-
-  let filtered = comps.filter((c) => {
-    const cleaned = stripImplied(c.title);
-    const auto = hasAutoSignal(cleaned);
-    const relic = hasRelicSignal(cleaned);
-    const serial = hasSerialSignal(cleaned);
-    const parallel = hasParallelColorSignal(cleaned);
-
-    // If the user's card is base (no auto, no serial), reject any listing that
-    // looks like a hit, parallel, or serialized variant.
-    if (!wantAuto && !wantSerial) {
-      if (auto || relic || serial || parallel) return false;
-      return true;
-    }
-    // If the user's card is an autograph, require the comp to be an auto.
-    if (wantAuto && !auto) return false;
-    // If it's a base auto (not serialized), still exclude serialized/patch/parallel autos.
-    if (wantAuto && !wantSerial && (serial || relic || parallel)) return false;
-    // If the user's card is serialized, require a serial signal in the comp.
-    if (wantSerial && !serial) return false;
-    return true;
+export async function identifyCardRest(
+  bytes: Uint8Array,
+  contentType: string,
+): Promise<IdentifyResult | null> {
+  const ct = /^image\/(jpeg|png|webp)$/i.test(contentType) ? contentType : "image/jpeg";
+  const body = new Blob([bytes], { type: ct });
+  const res = await fetch(`${REST_BASE}/v1/identify/card`, {
+    method: "POST",
+    headers: { "X-API-Key": apiKey(), "Content-Type": ct, Accept: "application/json" },
+    body,
   });
-
-  // Grade match: prefer exact grade matches when we have enough.
-  if (input.grade) {
-    const wantGrade = `${input.grader ?? ""} ${input.grade}`.trim().toLowerCase();
-    const gradeMatches = filtered.filter((c) => {
-      const g = (c.grade ?? "").toLowerCase();
-      const t = c.title.toLowerCase();
-      return (g && (g === wantGrade || g.includes(input.grade!.toLowerCase()))) ||
-        t.includes(wantGrade);
-    });
-    if (gradeMatches.length >= 3) filtered = gradeMatches;
-  } else {
-    const raw = filtered.filter((c) => !c.grade && !/\b(psa|bgs|sgc|cgc)\b/i.test(c.title));
-    if (raw.length >= 3) filtered = raw;
+  if (!res.ok) {
+    console.error("Cardsight identify failed", res.status, (await res.text()).slice(0, 200));
+    return null;
   }
-
-  // Trim outliers using IQR so a single mispriced listing doesn't skew the median.
-  if (filtered.length >= 5) {
-    const sorted = [...filtered].sort((a, b) => a.price - b.price);
-    const q = (p: number) => sorted[Math.floor((sorted.length - 1) * p)].price;
-    const q1 = q(0.25);
-    const q3 = q(0.75);
-    const iqr = q3 - q1;
-    const lo = q1 - 1.5 * iqr;
-    const hi = q3 + 1.5 * iqr;
-    const trimmed = filtered.filter((c) => c.price >= lo && c.price <= hi);
-    if (trimmed.length >= 3) filtered = trimmed;
-  }
-
-  return filtered;
-}
-
-export async function fetchCardsightSoldComps(
-  input: CardDescriptor,
-  opts: { limit?: number; period?: string } = {},
-): Promise<{ query: string; comps: SoldComp[]; error?: string }> {
-  const period = opts.period ?? "3m";
-  const limit = opts.limit ?? 25;
-
-  // Try progressively broader queries so uncommon cards still surface comps.
-  const queries: string[] = [];
-  const full = buildFreeText(input);
-  if (full) queries.push(full);
-  const noGrade = buildFreeText({ ...input, grade: null, grader: null });
-  if (noGrade && !queries.includes(noGrade)) queries.push(noGrade);
-  const noNumber = buildFreeText({ ...input, grade: null, grader: null, card_number: null });
-  if (noNumber && !queries.includes(noNumber)) queries.push(noNumber);
-  const nameYear = [input.year, input.player_name].filter(Boolean).join(" ");
-  if (nameYear && !queries.includes(nameYear)) queries.push(nameYear);
-  if (queries.length === 0) queries.push(input.player_name);
-
-  const primary = queries[0];
-  const variantKey = `${input.is_autograph ? "auto" : ""}${input.serial_number ? "|#" : ""}`;
-  const cacheKey = `${primary}|${period}|${limit}|${variantKey}|filtered-v3`;
-  const cached = cache.get(cacheKey);
-  if (cached && Date.now() - cached.at < TTL_MS) {
-    return { query: primary, comps: cached.comps };
-  }
-
-  let lastRaw = "";
-  for (const q of queries) {
-    try {
-      const { comps, empty, raw } = await runSearchPricing(q, period, limit);
-      lastRaw = raw;
-      if (empty || comps.length === 0) continue;
-      const filtered = filterAndRankComps(comps, input);
-      // Do NOT fall back to unfiltered comps — that pollutes base card comps
-      // with parallel/auto/serialized variants and inflates the range.
-      if (filtered.length === 0) continue;
-      cache.set(cacheKey, { at: Date.now(), comps: filtered });
-      return { query: q, comps: filtered };
-    } catch (err) {
-      return {
-        query: q,
-        comps: [],
-        error: err instanceof Error ? err.message : String(err),
-      };
-    }
-  }
-
-  console.log("Cardsight search_pricing had no matching comps. Last response:", lastRaw?.slice(0, 300));
+  const j = (await res.json()) as IdentifyResponse;
+  const det = j.detections?.[0];
+  if (!det || !det.card) return null;
+  const c = det.card;
   return {
-    query: primary,
-    comps: [],
-    error: "No matching sold comps for this exact card variant.",
+    cardsight_card_id: c.id ?? null,
+    player_name: c.name ?? null,
+    team: null,
+    position: null,
+    year: c.year ? Number(c.year) || null : null,
+    set_name: [c.releaseName, c.setName].filter(Boolean).join(" ") || null,
+    card_number: c.number ?? null,
+    grade: det.grading?.grade?.value ?? null,
+    grader: det.grading?.company?.name ?? null,
+    confidence: (det.confidence?.toLowerCase() as "high" | "medium" | "low") ?? "medium",
   };
 }
 
+// ---------- Parallels for a card's release (scoped to the card's set) ----------
+export type ParallelOption = { id: string; name: string; setId: string };
 
-// Call Cardsight's identify_card with a public https image URL. Returns raw
-// human-readable text so the caller can feed it into an LLM structurer.
-export async function identifyCardFromImageUrl(
-  imageUrl: string,
-): Promise<{ text: string; error?: string }> {
-  try {
-    const text = await mcpCall("identify_card", { imageUrl });
-    if (/identification failed|invalid input|expected.*imageUrl|received undefined/i.test(text)) {
-      return { text: "", error: text };
+type DetailedCard = { id: string; releaseId: string; setId: string; parallelCount?: number };
+type ParallelsResp = {
+  parallels: Array<{ id: string; setId: string; name: string; isPartial?: boolean }>;
+  total_count: number;
+};
+
+const catalogCache = new Map<string, DetailedCard>();
+const parallelsCache = new Map<string, ParallelOption[]>();
+
+export async function listParallelsForCard(card_id: string): Promise<ParallelOption[]> {
+  const cached = parallelsCache.get(card_id);
+  if (cached) return cached;
+  let card = catalogCache.get(card_id);
+  if (!card) {
+    card = await csFetch<DetailedCard>(`/v1/catalog/cards/${card_id}`);
+    catalogCache.set(card_id, card);
+  }
+  const all: ParallelOption[] = [];
+  let skip = 0;
+  const take = 100;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const page = await csFetch<ParallelsResp>(
+      `/v1/catalog/parallels?releaseId=${encodeURIComponent(card.releaseId)}&take=${take}&skip=${skip}`,
+    );
+    for (const p of page.parallels) {
+      if (p.setId === card.setId) all.push({ id: p.id, name: p.name, setId: p.setId });
     }
-    return { text };
+    skip += page.parallels.length;
+    if (page.parallels.length < take || skip >= page.total_count) break;
+  }
+  // Sort by name for stable UI order.
+  all.sort((a, b) => a.name.localeCompare(b.name));
+  parallelsCache.set(card_id, all);
+  return all;
+}
+
+// ---------- Grade resolution: (grader, grade) → cardsight grade_id ----------
+type Company = { id: string; name: string };
+type GradingType = { id: string; name: string };
+type Grade = { id: string; grade: string };
+
+const gradeIdCache = new Map<string, string | null>();
+let companiesCache: Company[] | null = null;
+
+async function loadCompanies(): Promise<Company[]> {
+  if (companiesCache) return companiesCache;
+  const j = await csFetch<{ companies: Company[] }>("/v1/grades/companies");
+  companiesCache = j.companies;
+  return companiesCache;
+}
+
+export async function resolveGradeId(
+  grader: string | null | undefined,
+  grade: string | null | undefined,
+): Promise<string | null> {
+  if (!grader || !grade) return null;
+  const key = `${grader.toLowerCase()}|${grade.toLowerCase()}`;
+  if (gradeIdCache.has(key)) return gradeIdCache.get(key) ?? null;
+  try {
+    const companies = await loadCompanies();
+    const company = companies.find((c) => c.name.toLowerCase() === grader.toLowerCase());
+    if (!company) {
+      gradeIdCache.set(key, null);
+      return null;
+    }
+    const types = await csFetch<{ types: GradingType[] }>(
+      `/v1/grades/companies/${company.id}/types`,
+    );
+    // Prefer "Regular" grading type; fall back to first.
+    const type =
+      types.types.find((t) => /regular/i.test(t.name)) ?? types.types[0];
+    if (!type) {
+      gradeIdCache.set(key, null);
+      return null;
+    }
+    const grades = await csFetch<{ grades: Grade[] }>(
+      `/v1/grades/companies/${company.id}/types/${type.id}/grades`,
+    );
+    const wanted = grade.trim().toLowerCase();
+    const match = grades.grades.find((g) => g.grade.toLowerCase() === wanted);
+    const id = match?.id ?? null;
+    gradeIdCache.set(key, id);
+    return id;
   } catch (err) {
-    return { text: "", error: err instanceof Error ? err.message : String(err) };
+    console.error("resolveGradeId failed:", err);
+    gradeIdCache.set(key, null);
+    return null;
   }
 }
 
+// ---------- Pricing ----------
+export type PricingSlice = {
+  auctionSales: PricingRecord[];
+  askListings: PricingRecord[];
+  gradeLabel: string | null;
+};
 
+export async function fetchPricing(
+  card_id: string,
+  opts: {
+    parallel_id?: string | null;
+    grade_id?: string | null;
+    period?: string;
+    limit?: number;
+  } = {},
+): Promise<PricingSlice> {
+  const params = new URLSearchParams();
+  // "null" = base only / ungraded only per the API contract.
+  params.set("parallel_id", opts.parallel_id ?? "null");
+  params.set("grade_id", opts.grade_id ?? "null");
+  params.set("period", opts.period ?? "6m");
+  params.set("listing_type", "both");
+  params.set("limit", String(opts.limit ?? 200));
+  const resp = await csFetch<PricingResponse>(
+    `/v1/pricing/${card_id}?${params.toString()}`,
+  );
 
+  let records: PricingRecord[] = [];
+  let gradeLabel: string | null = null;
+  if (opts.grade_id) {
+    for (const company of resp.graded) {
+      const g = company.grades.find((gr) => gr.grade_id === opts.grade_id);
+      if (g) {
+        records = g.records;
+        gradeLabel = `${company.company_name} ${g.grade_value}`;
+        break;
+      }
+    }
+  } else {
+    records = resp.raw?.records ?? [];
+  }
+
+  const auctionSales = records.filter((r) => r.listing_type === "auction");
+  const askListings = records.filter((r) => r.listing_type === "fixed");
+  return { auctionSales, askListings, gradeLabel };
+}
+
+// ---------- Stats helpers used by the valuation pipeline ----------
+export function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const s = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+export function trimOutliersIQR(values: number[]): number[] {
+  if (values.length < 5) return values;
+  const s = [...values].sort((a, b) => a - b);
+  const q = (p: number) => s[Math.floor((s.length - 1) * p)];
+  const q1 = q(0.25);
+  const q3 = q(0.75);
+  const iqr = q3 - q1;
+  const lo = q1 - 1.5 * iqr;
+  const hi = q3 + 1.5 * iqr;
+  const trimmed = s.filter((v) => v >= lo && v <= hi);
+  return trimmed.length >= 3 ? trimmed : s;
+}
