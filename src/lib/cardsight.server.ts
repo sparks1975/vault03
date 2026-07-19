@@ -294,6 +294,14 @@ export async function listParallelsForCard(card_id: string): Promise<ParallelOpt
     catalogCache.set(card_id, card);
   }
 
+  if (card.variationOf) {
+    const baseParallels = await listParallelsForCard(card.variationOf);
+    if (baseParallels.length > 0) {
+      parallelsCache.set(card_id, baseParallels);
+      return baseParallels;
+    }
+  }
+
   // The card detail response already returns the exact parallels/refractors
   // available for this card's own set. Prefer it over release-wide filtering.
   if (Array.isArray(card.parallels) && card.parallels.length > 0) {

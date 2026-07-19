@@ -17,15 +17,22 @@ export const listCardsightParallels = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { listParallelsForCard, searchCatalogCardByFields } = await import("./cardsight.server");
     try {
-      const cardId = data.card_id ?? await searchCatalogCardByFields({
+      const lookup = {
         player_name: data.player_name,
         year: data.year,
         set_name: data.set_name,
         card_number: data.card_number,
         descriptor: data.descriptor,
-      });
-      if (!cardId) return [];
-      return await listParallelsForCard(cardId);
+      };
+
+      if (data.card_id) {
+        const fromSavedId = await listParallelsForCard(data.card_id);
+        if (fromSavedId.length > 0) return fromSavedId;
+      }
+
+      const resolvedId = await searchCatalogCardByFields(lookup);
+      if (!resolvedId || resolvedId === data.card_id) return [];
+      return await listParallelsForCard(resolvedId);
     } catch (err) {
       console.error("listParallelsForCard failed:", err);
       return [];
