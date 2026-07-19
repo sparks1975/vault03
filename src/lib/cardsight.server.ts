@@ -606,14 +606,20 @@ function uniquePricingQueries(lookup: PricingSearchLookup): string[] {
   const serial = serialSearchTerm(lookup.serial_number);
   const grade = compact([lookup.grader, lookup.grade].filter(Boolean).join(" ")) || null;
   const variants = [auto, serial, grade].filter(Boolean) as string[];
-  const candidates = [
+  const strictCandidates = [
     [year, set, player, number, ...variants],
     [player, year, set, number, ...variants],
     [player, set, number, ...variants],
-    [player, brand, number, ...variants],
-    [player, brand, ...variants],
     [player, set, ...variants],
   ];
+  const candidates = variants.length > 0
+    ? strictCandidates
+    : [
+        ...strictCandidates,
+        [player, brand, number],
+        [player, brand],
+        [player, set],
+      ];
   const seen = new Set<string>();
   return candidates
     .map((parts) => parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim())
