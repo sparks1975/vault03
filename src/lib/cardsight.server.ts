@@ -10,19 +10,25 @@ function apiKey(): string {
 }
 
 async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${REST_BASE}${path}`, {
-    ...init,
-    headers: {
-      "X-API-Key": apiKey(),
-      Accept: "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(`Cardsight ${path} ${res.status}: ${body.slice(0, 200)}`);
+  let lastBody = "";
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(`${REST_BASE}${path}`, {
+      ...init,
+      headers: {
+        "X-API-Key": apiKey(),
+        Accept: "application/json",
+        ...(init?.headers ?? {}),
+      },
+    });
+    if (res.ok) return (await res.json()) as T;
+    lastStatus = res.status;
+    lastBody = await res.text().catch(() => "");
+    if (res.status !== 429) break;
+    const retryAfter = Number(res.headers.get("retry-after"));
+    await new Promise((resolve) => setTimeout(resolve, Number.isFinite(retryAfter) ? retryAfter * 1000 : 1200 + attempt * 800));
   }
-  return (await res.json()) as T;
+  throw new Error(`Cardsight ${path} ${lastStatus}: ${lastBody.slice(0, 200)}`);
 }
 
 // ---------- Types (subset of the OpenAPI schemas we actually use) ----------
