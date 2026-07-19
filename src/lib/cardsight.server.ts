@@ -506,6 +506,148 @@ export async function fetchPricing(
   };
 }
 
+type PricingSearchResponse = {
+  query?: Record<string, unknown>;
+  results?: PricingRecord[];
+  meta?: Record<string, unknown>;
+  messages?: Array<{ code?: string; message?: string }>;
+};
+
+type PricingSearchLookup = CardLookup & {
+  serial_number?: string | null;
+  grader?: string | null;
+  grade?: string | null;
+};
+
+function compact(value: string | number | null | undefined): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function setBrand(setName: string | null | undefined): string | null {
+  const n = normalizeText(setName);
+  const brands = [
+    "bowman chrome",
+    "bowman",
+    "topps chrome",
+    "topps",
+    "bbm",
+    "panini",
+    "donruss",
+    "fleer",
+    "upper deck",
+    "ultra",
+    "select",
+    "prizm",
+  ];
+  return brands.find((b) => n.includes(b)) ?? null;
+}
+
+function serialSearchTerm(serialNumber: string | null | undefined): string | null {
+  const raw = compact(serialNumber);
+  if (!raw) return null;
+  const denom = raw.match(/\/\s*(\d+)/)?.[1];
+  return denom ? `/${denom}` : raw;
+}
+
+function uniquePricingQueries(lookup: PricingSearchLookup): string[] {
+  const player = compact(lookup.player_name);
+  const year = compact(lookup.year);
+  const set = compact(lookup.set_name)
+    .replace(/\bbase\s+set\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const brand = setBrand(lookup.set_name);
+  const number = compact(lookup.card_number).replace(/^#\s*/, "");
+  const auto = lookup.is_autograph ? "auto" : null;
+  const serial = serialSearchTerm(lookup.serial_number);
+  const grade = compact([lookup.grader, lookup.grade].filter(Boolean).join(" ")) || null;
+  const variants = [auto, serial, grade].filter(Boolean) as string[];
+  const candidates = [
+    [year, set, player, number, ...variants],
+    [player, year, set, number, ...variants],
+    [player, set, number, ...variants],
+    [player, brand, number, ...variants],
+    [player, brand, ...variants],
+    [player, set, ...variants],
+  ];
+  const seen = new Set<string>();
+  return candidates
+    .map((parts) => parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim())
+    .filter((q) => {
+      if (q.length < 2 || seen.has(q)) return false;
+      seen.add(q);
+      return true;
+    });
+}
+
+function pricingRecordMatches(record: PricingRecord, lookup: PricingSearchLookup): boolean {
+  const title = normalizeText(record.title);
+  const playerTokens = normalizeText(lookup.player_name)
+    .split(" ")
+    .filter((t) => t.length > 1);
+  if (playerTokens.length > 0 && !playerTokens.every((t) => title.includes(t))) return false;
+
+  const isAutoTitle = /\b(auto|autograph|autographs|signed|signature)\b/i.test(record.title ?? "");
+  if (lookup.is_autograph && !isAutoTitle) return false;
+  if (!lookup.is_autograph && isAutoTitle) return false;
+
+  const serial = serialSearchTerm(lookup.serial_number);
+  if (serial && !(record.title ?? "").toLowerCase().includes(serial.toLowerCase())) return false;
+
+  if (lookup.grader && !title.includes(normalizeText(lookup.grader))) return false;
+  if (lookup.grade) {
+    const g = normalizeText(lookup.grade);
+    if (g && !title.includes(g)) return false;
+  }
+
+  return Number.isFinite(record.price) && record.price > 0;
+}
+
+function dedupePricingRecords(records: PricingRecord[]): PricingRecord[] {
+  const seen = new Set<string>();
+  const out: PricingRecord[] = [];
+  for (const r of records) {
+    const key = [r.url, r.title, r.date, r.price].map((v) => String(v ?? "")).join("|");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(r);
+  }
+  return out.sort((a, b) => {
+    const ta = a.date ? new Date(a.date).getTime() : 0;
+    const tb = b.date ? new Date(b.date).getTime() : 0;
+    return tb - ta;
+  });
+}
+
+export async function searchPricingComps(
+  lookup: PricingSearchLookup,
+  opts: { period?: string; limit?: number } = {},
+): Promise<PricingSlice> {
+  const queries = uniquePricingQueries(lookup);
+  const period = opts.period ?? "30d";
+  const limit = opts.limit ?? 100;
+  const all: PricingRecord[] = [];
+  let lastMeta: PricingSlice["rawResponseMeta"] = undefined;
+
+  for (const q of queries) {
+    const params = new URLSearchParams({ q, period, limit: String(limit) });
+    const resp = await csFetch<PricingSearchResponse>(`/v1/pricing/search?${params.toString()}`);
+    lastMeta = { query: resp.query, messages: resp.messages };
+    const matches = (resp.results ?? []).filter((r) => pricingRecordMatches(r, lookup));
+    if (matches.length > 0) {
+      all.push(...matches);
+      break;
+    }
+  }
+
+  return {
+    auctionSales: dedupePricingRecords(all),
+    askListings: [],
+    gradeLabel: compact([lookup.grader, lookup.grade].filter(Boolean).join(" ")) || null,
+    rawResponseMeta: lastMeta,
+  };
+}
+
 // ---------- Stats helpers used by the valuation pipeline ----------
 export function median(values: number[]): number {
   if (values.length === 0) return 0;
