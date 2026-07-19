@@ -354,6 +354,29 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       }
     }
 
+    const fallbackHistory = (baseValue: number) => {
+      const base = Number.isFinite(baseValue) && baseValue > 0 ? baseValue : 0;
+      const now = new Date();
+      return Array.from({ length: 6 }, (_, i) => {
+        const d = new Date(now);
+        d.setMonth(now.getMonth() - (5 - i));
+        return { recorded_at: d.toISOString(), value: base };
+      });
+    };
+
+    if (usedCardsight) {
+      return {
+        current_value: currentValue,
+        value_delta_pct: deltaPct,
+        sales,
+        history: fallbackHistory(currentValue),
+        source: "cardsight" as const,
+        note: compsNote,
+        resolved_cardsight_card_id: resolvedCardId,
+        resolved_cardsight_grade_id: resolvedGradeId,
+      };
+    }
+
     // AI narrative fallback + history spark data.
     const variantBits = [
       data.is_autograph ? "autograph" : null,
@@ -397,11 +420,11 @@ If unable to value, return current_value: 0.`;
     }>(text);
 
     return {
-      current_value: usedCardsight ? currentValue : ai.current_value,
-      value_delta_pct: usedCardsight ? deltaPct : ai.value_delta_pct,
+      current_value: ai.current_value,
+      value_delta_pct: ai.value_delta_pct,
       sales,
       history: ai.history,
-      source: usedCardsight ? ("cardsight" as const) : ("ai" as const),
+      source: "ai" as const,
       note: compsNote,
       resolved_cardsight_card_id: resolvedCardId,
       resolved_cardsight_grade_id: resolvedGradeId,
