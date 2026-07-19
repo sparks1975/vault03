@@ -440,11 +440,11 @@ export async function resolveGradeId(
 }
 
 // ---------- Pricing ----------
-// Cardsight's /pricing endpoint returns realized sales; `listing_type`
-// just says whether the sale happened via auction or Buy-It-Now. Treating
-// only "auction" as sold makes modern releases (mostly BIN) look empty.
+// Cardsight's /pricing endpoint returns auction sales (bid side) and fixed
+// Buy-It-Now asking prices (ask side). Valuation uses auction sales only;
+// fixed listings are returned separately for future display.
 export type PricingSlice = {
-  auctionSales: PricingRecord[]; // all sold comps (auction + fixed)
+  auctionSales: PricingRecord[];
   askListings: PricingRecord[];  // kept for API-shape compatibility (unused)
   gradeLabel: string | null;
   rawResponseMeta?: { query?: Record<string, unknown>; messages?: Array<{ code?: string; message?: string }> };
