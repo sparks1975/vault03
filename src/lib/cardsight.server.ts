@@ -165,6 +165,50 @@ function normalizeText(value: string | number | null | undefined): string {
     .trim();
 }
 
+function compact(value: string | number | null | undefined): string {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function serialSearchTerm(serialNumber: string | null | undefined): string | null {
+  const raw = compact(serialNumber);
+  if (!raw) return null;
+  const denom = raw.match(/\/\s*(\d+)/)?.[1];
+  return denom ? `/${denom}` : raw;
+}
+
+function pricingRecordMatches(
+  record: PricingRecord,
+  lookup: {
+    player_name?: string | null;
+    is_autograph?: boolean | null;
+    serial_number?: string | null;
+    grader?: string | null;
+    grade?: string | null;
+  },
+): boolean {
+  const rawTitle = record.title ?? "";
+  const title = normalizeText(rawTitle);
+  const playerTokens = normalizeText(lookup.player_name)
+    .split(" ")
+    .filter((t) => t.length > 1);
+  if (playerTokens.length > 0 && !playerTokens.every((t) => title.includes(t))) return false;
+
+  const isAutoTitle = /\b(auto|autograph|autographs|signed|signature)\b/i.test(rawTitle);
+  if (lookup.is_autograph && !isAutoTitle) return false;
+  if (!lookup.is_autograph && isAutoTitle) return false;
+
+  const serial = serialSearchTerm(lookup.serial_number);
+  if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) return false;
+
+  if (lookup.grader && !title.includes(normalizeText(lookup.grader))) return false;
+  if (lookup.grade) {
+    const g = normalizeText(lookup.grade);
+    if (g && !title.includes(g)) return false;
+  }
+
+  return Number.isFinite(record.price) && record.price > 0;
+}
+
 function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): number {
   const haystack = normalizeText([
     "releaseName" in candidate ? candidate.releaseName : null,
@@ -519,10 +563,6 @@ type PricingSearchLookup = CardLookup & {
   grade?: string | null;
 };
 
-function compact(value: string | number | null | undefined): string {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
-}
-
 function setBrand(setName: string | null | undefined): string | null {
   const n = normalizeText(setName);
   const brands = [
@@ -540,13 +580,6 @@ function setBrand(setName: string | null | undefined): string | null {
     "prizm",
   ];
   return brands.find((b) => n.includes(b)) ?? null;
-}
-
-function serialSearchTerm(serialNumber: string | null | undefined): string | null {
-  const raw = compact(serialNumber);
-  if (!raw) return null;
-  const denom = raw.match(/\/\s*(\d+)/)?.[1];
-  return denom ? `/${denom}` : raw;
 }
 
 function uniquePricingQueries(lookup: PricingSearchLookup): string[] {
@@ -578,29 +611,6 @@ function uniquePricingQueries(lookup: PricingSearchLookup): string[] {
       seen.add(q);
       return true;
     });
-}
-
-function pricingRecordMatches(record: PricingRecord, lookup: PricingSearchLookup): boolean {
-  const title = normalizeText(record.title);
-  const playerTokens = normalizeText(lookup.player_name)
-    .split(" ")
-    .filter((t) => t.length > 1);
-  if (playerTokens.length > 0 && !playerTokens.every((t) => title.includes(t))) return false;
-
-  const isAutoTitle = /\b(auto|autograph|autographs|signed|signature)\b/i.test(record.title ?? "");
-  if (lookup.is_autograph && !isAutoTitle) return false;
-  if (!lookup.is_autograph && isAutoTitle) return false;
-
-  const serial = serialSearchTerm(lookup.serial_number);
-  if (serial && !(record.title ?? "").toLowerCase().includes(serial.toLowerCase())) return false;
-
-  if (lookup.grader && !title.includes(normalizeText(lookup.grader))) return false;
-  if (lookup.grade) {
-    const g = normalizeText(lookup.grade);
-    if (g && !title.includes(g)) return false;
-  }
-
-  return Number.isFinite(record.price) && record.price > 0;
 }
 
 function dedupePricingRecords(records: PricingRecord[]): PricingRecord[] {
