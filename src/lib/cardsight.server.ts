@@ -500,8 +500,11 @@ export async function fetchPricing(
   opts: {
     parallel_id?: string | null;
     grade_id?: string | null;
+    player_name?: string | null;
     grader?: string | null;
     grade?: string | null;
+    is_autograph?: boolean | null;
+    serial_number?: string | null;
     period?: string;
     limit?: number;
   } = {},
@@ -541,6 +544,8 @@ export async function fetchPricing(
   } else {
     records = resp.raw?.records ?? [];
   }
+
+  records = records.filter((r) => pricingRecordMatches(r, opts));
 
   return {
     auctionSales: records,
