@@ -623,7 +623,7 @@ export async function fetchPricing(
     records = resp.raw?.records ?? [];
   }
 
-  records = records.filter((r) => r.listing_type === "auction" && pricingRecordMatchesStructured(r, opts));
+  records = records.filter((r) => pricingRecordMatchesStructured(r, opts));
 
   return {
     auctionSales: records,
