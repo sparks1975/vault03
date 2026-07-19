@@ -336,5 +336,7 @@ If unable to value, return current_value: 0.`;
       history: ai.history,
       source: usedCardsight ? ("cardsight" as const) : ("ai" as const),
       note: compsNote,
+      resolved_cardsight_card_id: resolvedCardId,
+      resolved_cardsight_grade_id: resolvedGradeId,
     };
   });
