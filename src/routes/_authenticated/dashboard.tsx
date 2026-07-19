@@ -1481,7 +1481,7 @@ function ParallelSelect({
   const descriptor = cardDescriptor(lookup);
   const canLookup = !!cardId || descriptor.trim().length > 2;
   const q = useQuery({
-    queryKey: ["cardsight-parallels", cardId, lookup.year, lookup.set_name, lookup.player_name, lookup.card_number],
+    queryKey: ["cardsight-parallels-v2", cardId, lookup.year, lookup.set_name, lookup.player_name, lookup.card_number],
     queryFn: () => listFn({
       data: {
         card_id: cardId,
