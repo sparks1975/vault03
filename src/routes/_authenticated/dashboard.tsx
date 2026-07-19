@@ -1178,6 +1178,8 @@ function AddCardDialog({
           notes: form.notes || null,
           photo_path: photoPath,
           mlb_player_id: form.mlb_player_id,
+          cardsight_card_id: form.cardsight_card_id,
+          cardsight_parallel_id: form.cardsight_parallel_id,
         },
       });
 
