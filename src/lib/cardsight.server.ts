@@ -88,7 +88,10 @@ export async function identifyCardRest(
   contentType: string,
 ): Promise<IdentifyResult | null> {
   const ct = /^image\/(jpeg|png|webp)$/i.test(contentType) ? contentType : "image/jpeg";
-  const body = new Blob([bytes], { type: ct });
+  // Copy into a fresh ArrayBuffer to satisfy Blob's BlobPart typing.
+  const buf = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buf).set(bytes);
+  const body = new Blob([buf], { type: ct });
   const res = await fetch(`${REST_BASE}/v1/identify/card`, {
     method: "POST",
     headers: { "X-API-Key": apiKey(), "Content-Type": ct, Accept: "application/json" },
