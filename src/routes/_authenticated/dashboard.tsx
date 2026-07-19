@@ -213,6 +213,11 @@ function Dashboard() {
               history: est.history,
             },
           });
+          if (!c.cardsight_card_id && est.resolved_cardsight_card_id) {
+            await updateFn({
+              data: { id: c.id, patch: { cardsight_card_id: est.resolved_cardsight_card_id } },
+            });
+          }
         } catch (err) {
           console.error("Auto-revalue failed for", c.player_name, err);
         }
