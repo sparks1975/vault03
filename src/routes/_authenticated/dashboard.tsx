@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X, ChevronLeft } from "lucide-react";
 
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
+import { listCardsightParallels } from "@/lib/cardsight.functions";
 import { CardCropDialog } from "@/components/CardCropDialog";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
 import {
