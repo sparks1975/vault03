@@ -673,7 +673,10 @@ export async function searchPricingComps(
     const params = new URLSearchParams({ q, period, limit: String(limit) });
     const resp = await csFetch<PricingSearchResponse>(`/v1/pricing/search?${params.toString()}`);
     lastMeta = { query: resp.query, messages: resp.messages };
-    const matches = (resp.results ?? []).filter((r) => pricingRecordMatches(r, lookup));
+    const matches = (resp.results ?? []).filter(
+      (r) => r.listing_type === "auction" && pricingRecordMatches(r, lookup),
+    );
+
     if (matches.length > 0) {
       all.push(...matches);
       break;
