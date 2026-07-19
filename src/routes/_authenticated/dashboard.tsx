@@ -634,6 +634,7 @@ function CardDetail({
           cardsight_card_id: card.cardsight_card_id,
           cardsight_parallel_id: card.cardsight_parallel_id,
           cardsight_grade_id: card.cardsight_grade_id,
+          card_id: card.id,
         },
       });
       await replaceValFn({
