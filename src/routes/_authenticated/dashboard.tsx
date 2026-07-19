@@ -161,7 +161,6 @@ function Dashboard() {
   const deleteFn = useServerFn(deleteCard);
   const estimateFn = useServerFn(estimateCardValue);
   const replaceValFn = useServerFn(replaceValuation);
-  const revalueAllFn = useServerFn(revalueAllCards);
   const qc = useQueryClient();
 
 
@@ -169,6 +168,13 @@ function Dashboard() {
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<"value" | "player" | "added">("added");
   const [addOpen, setAddOpen] = useState(false);
+  const [revalueProgress, setRevalueProgress] = useState<{
+    isRunning: boolean;
+    processed: number;
+    failed: number;
+    total: number;
+    currentName: string | null;
+  }>({ isRunning: false, processed: 0, failed: 0, total: 0, currentName: null });
 
   const cardsQ = useQuery({
     queryKey: ["cards"],
