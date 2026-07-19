@@ -316,13 +316,57 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             grade: data.grade,
             is_autograph: data.is_autograph,
             serial_number: data.serial_number,
-            period: "30d",
+            period: "6m",
           });
           await priceFromSlice(slice);
         }
       } catch (err) {
         console.error("Cardsight pricing failed:", err);
         compsNote = err instanceof Error ? err.message : String(err);
+      }
+    }
+
+    // Existing rows may have an older/wrong catalog ID saved from prior loose
+    // matching. If exact structured pricing returns too few sold comps, resolve
+    // the catalog card again from the editable fields and retry before using the
+    // broader pricing-search fallback.
+    if (!usedCardsight && resolvedCardId && !(data.grader && data.grade && !resolvedGradeId)) {
+      try {
+        const { fetchPricing, searchCatalogCardByFields } = await import("./cardsight.server");
+        const descriptorForRetry = [
+          data.year,
+          data.set_name,
+          data.player_name,
+          data.card_number ? `#${data.card_number}` : null,
+        ]
+          .filter(Boolean)
+          .join(" ");
+        const retryCardId = await searchCatalogCardByFields({
+          player_name: data.player_name,
+          year: data.year,
+          set_name: data.set_name,
+          card_number: data.card_number,
+          descriptor: descriptorForRetry,
+          is_autograph: data.is_autograph,
+        });
+        if (retryCardId && retryCardId !== resolvedCardId) {
+          const retrySlice = await fetchPricing(retryCardId, {
+            parallel_id: data.cardsight_parallel_id ?? null,
+            grade_id: resolvedGradeId,
+            player_name: data.player_name,
+            year: data.year,
+            card_number: data.card_number,
+            grader: data.grader,
+            grade: data.grade,
+            is_autograph: data.is_autograph,
+            serial_number: data.serial_number,
+            period: "6m",
+          });
+          await priceFromSlice(retrySlice);
+          if (usedCardsight) resolvedCardId = retryCardId;
+        }
+      } catch (err) {
+        console.error("Cardsight pricing retry failed:", err);
       }
     }
 
@@ -340,7 +384,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             grader: data.grader,
             grade: data.grade,
           },
-          { period: "30d", limit: 100 },
+          { period: "6m", limit: 100 },
         );
         await priceFromSlice(searchSlice);
         if (!usedCardsight && !compsNote) {
