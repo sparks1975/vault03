@@ -987,6 +987,10 @@ function CardDetail({
                   {sales.map((s) => {
                     const url = (s as { url?: string | null }).url ?? null;
                     const dateStr = s.sold_at ? new Date(s.sold_at).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "2-digit" }) : "Active";
+                    const rawSource = s.source ?? "—";
+                    const displaySource = rawSource.toLowerCase().includes("130") || rawSource.toLowerCase().includes("cardsight")
+                      ? rawSource.replace(/130\s?point/gi, "eBay sold").replace(/Cardsight \(eBay sold/gi, "eBay sold").replace(/Cardsight \(/gi, "eBay sold · ").replace(/\)/g, "")
+                      : rawSource;
                     return (
                       <tr key={s.id} className="text-xs border-b border-border/50 hover:bg-muted/30 transition-colors">
                         <td className="py-2 whitespace-nowrap">
@@ -1000,10 +1004,10 @@ function CardDetail({
                         <td className="py-2 text-muted-foreground whitespace-nowrap">
                           {url ? (
                             <a href={url} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-foreground inline-flex items-center gap-1">
-                              {s.source ?? "link"}
+                              {displaySource}
                               <span aria-hidden>↗</span>
                             </a>
-                          ) : (s.source ?? "—")}
+                          ) : displaySource}
                         </td>
                         <td className="py-2 text-right font-mono whitespace-nowrap">{fmt(Number(s.price))}</td>
                       </tr>
