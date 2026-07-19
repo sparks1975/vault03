@@ -171,7 +171,7 @@ export const deleteCard = createServerFn({ method: "POST" })
   });
 
 async function applyValuation(
-  supabase: Awaited<ReturnType<typeof import("@supabase/supabase-js").createClient>>,
+  supabase: unknown,
   userId: string,
   cardId: string,
   valuation: {
@@ -218,6 +218,7 @@ async function applyValuation(
     })
     .eq("id", cardId);
 }
+
 
 
 export const replaceValuation = createServerFn({ method: "POST" })
