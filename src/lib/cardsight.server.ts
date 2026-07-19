@@ -564,7 +564,7 @@ export async function fetchPricing(
     records = resp.raw?.records ?? [];
   }
 
-  records = records.filter((r) => pricingRecordMatches(r, opts));
+  records = records.filter((r) => r.listing_type === "auction" && pricingRecordMatches(r, opts));
 
   return {
     auctionSales: records,
