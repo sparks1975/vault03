@@ -173,10 +173,11 @@ export const deleteCard = createServerFn({ method: "POST" })
   });
 
 async function applyValuation(
-  supabase: unknown,
+  supabase: Awaited<ReturnType<typeof import("@supabase/supabase-js").createClient<Database>>>,
   userId: string,
   cardId: string,
   valuation: {
+
     current_value: number;
     value_delta_pct: number;
     sales: Array<{ sold_at: string | null; grade: string | null; price: number; source: string; url: string | null }>;
