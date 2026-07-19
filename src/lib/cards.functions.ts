@@ -292,7 +292,7 @@ export const revalueAllCards = createServerFn({ method: "POST" })
           sales: est.sales,
           history: est.history,
         });
-        const idPatch: Record<string, unknown> = {};
+        const idPatch: Record<string, string> = {};
         if (!c.cardsight_card_id && est.resolved_cardsight_card_id) {
           idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
         }
@@ -300,8 +300,9 @@ export const revalueAllCards = createServerFn({ method: "POST" })
           idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
         }
         if (Object.keys(idPatch).length > 0) {
-          await supabase.from("cards").update(idPatch).eq("id", c.id);
+          await (supabase as never).from("cards").update(idPatch).eq("id", c.id);
         }
+
         processed++;
       } catch (err) {
         console.error("Revalue failed for", c.player_name, err);
