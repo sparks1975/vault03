@@ -42,8 +42,11 @@ type GradeGroup = { grade_value: string; grade_id: string; count: number; record
 type CompanyGroup = { company_name: string; company_id: string; grades: GradeGroup[] };
 type PricingResponse = {
   card: { card_id: string; name: string };
+  query?: Record<string, unknown>;
   raw: RawSection;
   graded: CompanyGroup[];
+  meta?: Record<string, unknown>;
+  messages?: Array<{ code?: string; message?: string }>;
 };
 
 type IdentifyResponse = {
@@ -152,6 +155,7 @@ type CardLookup = {
   set_name?: string | null;
   card_number?: string | null;
   descriptor?: string | null;
+  is_autograph?: boolean | null;
 };
 
 function normalizeText(value: string | number | null | undefined): string {
@@ -179,8 +183,29 @@ function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): n
   if (setName && haystack.includes(setName)) score += 35;
   if (year && haystack.includes(year)) score += 20;
   if (number && "number" in candidate && normalizeText(candidate.number) === number) score += 25;
+  if (!lookup.is_autograph && /\b(auto|autograph|autographs|signature|signatures)\b/.test(haystack)) score -= 60;
+  if (lookup.is_autograph && /\b(auto|autograph|autographs|signature|signatures)\b/.test(haystack)) score += 30;
   if ("variationOf" in candidate && candidate.variationOf) score -= 20;
   return score;
+}
+
+function expandSetSearchTerms(setName: string | null | undefined): string[] {
+  const raw = String(setName ?? "").trim();
+  if (!raw) return [];
+  const variants = new Set<string>([raw]);
+  const simplified = raw
+    .replace(/all[-\s]*stars?/gi, "All")
+    .replace(/all[-\s]*star\s+aces/gi, "All Aces")
+    .replace(/\bseries\s+\d+\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (simplified) variants.add(simplified);
+  const noBrandNoise = simplified
+    .replace(/\bbase\s+set\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (noBrandNoise) variants.add(noBrandNoise);
+  return [...variants];
 }
 
 function parseDescriptor(descriptor: string): CardLookup {
@@ -232,21 +257,45 @@ export async function findCatalogCard(lookup: CardLookup): Promise<CatalogCard |
     return candidates.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
   }
 
-  const textQuery = [player, setName].filter(Boolean).join(" ") || merged.descriptor || "";
-  if (textQuery.trim().length >= 2) {
+  const searchQueries = new Set<string>();
+  for (const setTerm of expandSetSearchTerms(setName)) {
+    if (player) searchQueries.add([player, setTerm].filter(Boolean).join(" "));
+    if (year && player) searchQueries.add([year, player, setTerm].filter(Boolean).join(" "));
+  }
+  if (merged.descriptor) searchQueries.add(merged.descriptor);
+  if (player && searchQueries.size === 0) searchQueries.add(player);
+
+  const searchCandidates = new Map<string, SearchResult>();
+  for (const textQuery of searchQueries) {
+    if (textQuery.trim().length < 2) continue;
     try {
       const resp = await csFetch<{ results: SearchResult[] }>(
         `/v1/catalog/search?type=card&take=25&q=${encodeURIComponent(textQuery.slice(0, 200))}`,
       );
-      const card = resp.results
-        .filter((r) => r.type === "card")
-        .sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
-      if (card) {
-        return await csFetch<CatalogCard>(`/v1/catalog/cards/${card.id}`);
+      for (const result of resp.results ?? []) {
+        if (result.type === "card" && !searchCandidates.has(result.id)) {
+          searchCandidates.set(result.id, result);
+        }
       }
     } catch (err) {
       console.error("Cardsight search lookup failed:", err);
     }
+  }
+
+  if (searchCandidates.size > 0) {
+    const detailed: CatalogCard[] = [];
+    for (const result of [...searchCandidates.values()].slice(0, 10)) {
+      try {
+        detailed.push(await csFetch<CatalogCard>(`/v1/catalog/cards/${result.id}`));
+      } catch {
+        // Fall back to scoring the lightweight search result below.
+      }
+    }
+    if (detailed.length > 0) {
+      return detailed.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+    }
+    const card = [...searchCandidates.values()].sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+    if (card) return await csFetch<CatalogCard>(`/v1/catalog/cards/${card.id}`);
   }
 
   return null;
@@ -398,6 +447,7 @@ export type PricingSlice = {
   auctionSales: PricingRecord[]; // all sold comps (auction + fixed)
   askListings: PricingRecord[];  // kept for API-shape compatibility (unused)
   gradeLabel: string | null;
+  rawResponseMeta?: { query?: Record<string, unknown>; messages?: Array<{ code?: string; message?: string }> };
 };
 
 export async function fetchPricing(
@@ -405,37 +455,56 @@ export async function fetchPricing(
   opts: {
     parallel_id?: string | null;
     grade_id?: string | null;
+    grader?: string | null;
+    grade?: string | null;
     period?: string;
     limit?: number;
   } = {},
 ): Promise<PricingSlice> {
   const params = new URLSearchParams();
-  // "null" = base only / ungraded only per the API contract.
-  params.set("parallel_id", opts.parallel_id ?? "null");
-  params.set("grade_id", opts.grade_id ?? "null");
-  params.set("period", opts.period ?? "6m");
-  params.set("listing_type", "both");
-  params.set("limit", String(opts.limit ?? 200));
+  // Keep the default request aligned with Cardsight's documented endpoint:
+  // GET /v1/pricing/{card_id}?period=30d. Only add filters when the user
+  // explicitly selected a parallel/refractor or we resolved a grade id.
+  params.set("period", opts.period ?? "30d");
+  if (opts.parallel_id) params.set("parallel_id", opts.parallel_id);
+  if (opts.grade_id) params.set("grade_id", opts.grade_id);
+  if (opts.limit) params.set("limit", String(opts.limit));
   const resp = await csFetch<PricingResponse>(
     `/v1/pricing/${card_id}?${params.toString()}`,
   );
 
   let records: PricingRecord[] = [];
   let gradeLabel: string | null = null;
-  if (opts.grade_id) {
+  const wantedGrader = normalizeText(opts.grader);
+  const wantedGrade = normalizeText(opts.grade);
+  if (opts.grade_id || wantedGrade || wantedGrader) {
     for (const company of resp.graded) {
-      const g = company.grades.find((gr) => gr.grade_id === opts.grade_id);
+      const g = company.grades.find((gr) => {
+        if (opts.grade_id && gr.grade_id === opts.grade_id) return true;
+        const companyMatches = !wantedGrader || normalizeText(company.company_name) === wantedGrader;
+        const gradeMatches = !wantedGrade || normalizeText(gr.grade_value) === wantedGrade;
+        return companyMatches && gradeMatches;
+      });
       if (g) {
         records = g.records;
         gradeLabel = `${company.company_name} ${g.grade_value}`;
         break;
       }
     }
+    // If the requested graded bucket is absent, leave records empty instead of
+    // silently pricing a graded card from raw comps.
   } else {
     records = resp.raw?.records ?? [];
   }
 
-  return { auctionSales: records, askListings: [], gradeLabel };
+  const sold = records.filter((r) => r.listing_type !== "fixed");
+  const asks = records.filter((r) => r.listing_type === "fixed");
+  return {
+    auctionSales: sold,
+    askListings: asks,
+    gradeLabel,
+    rawResponseMeta: { query: resp.query, messages: resp.messages },
+  };
 }
 
 // ---------- Stats helpers used by the valuation pipeline ----------
