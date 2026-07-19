@@ -1424,3 +1424,51 @@ function Field({
     </label>
   );
 }
+
+function ParallelSelect({
+  cardId,
+  value,
+  onChange,
+}: {
+  cardId: string | null;
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const listFn = useServerFn(listCardsightParallels);
+  const q = useQuery({
+    queryKey: ["cardsight-parallels", cardId],
+    queryFn: () => listFn({ data: { card_id: cardId! } }),
+    enabled: !!cardId,
+    staleTime: 60 * 60 * 1000,
+  });
+  if (!cardId) return null;
+  return (
+    <label className="block">
+      <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+        Parallel / Refractor
+      </span>
+      <select
+        value={value ?? ""}
+        disabled={q.isLoading}
+        onChange={(e) => onChange(e.target.value || null)}
+        className="mt-1 w-full h-10 px-3 border border-border rounded-sm text-sm bg-background focus:outline-none focus:border-accent"
+      >
+        <option value="">Base card</option>
+        {(q.data ?? []).map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      {q.isLoading && (
+        <span className="text-[9px] font-mono text-muted-foreground">Loading parallels…</span>
+      )}
+      {!q.isLoading && (q.data?.length ?? 0) === 0 && (
+        <span className="text-[9px] font-mono text-muted-foreground">
+          No parallels found for this set.
+        </span>
+      )}
+    </label>
+  );
+}
+
