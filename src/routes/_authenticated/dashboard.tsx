@@ -121,6 +121,9 @@ type Card = {
   photo_url: string | null;
   mlb_player_id: number | null;
   last_valued_at: string | null;
+  cardsight_card_id: string | null;
+  cardsight_parallel_id: string | null;
+  cardsight_grade_id: string | null;
   created_at: string;
   sales: Sale[];
   history: HistoryPoint[];
