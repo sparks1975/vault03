@@ -729,11 +729,11 @@ export async function searchPricingComps(
   let lastMeta: PricingSlice["rawResponseMeta"] = undefined;
 
   for (const q of queries) {
-    const params = new URLSearchParams({ q, period, limit: String(limit), listing_type: "auction" });
+    const params = new URLSearchParams({ q, period, limit: String(limit) });
     const resp = await csFetch<PricingSearchResponse>(`/v1/pricing/search?${params.toString()}`);
     lastMeta = { query: resp.query, messages: resp.messages };
     const matches = (resp.results ?? []).filter(
-      (r) => r.listing_type === "auction" && pricingRecordMatches(r, lookup),
+      (r) => pricingRecordMatches(r, lookup),
     );
 
     if (matches.length > 0) {
