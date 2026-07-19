@@ -203,6 +203,7 @@ function Dashboard() {
               cardsight_card_id: c.cardsight_card_id,
               cardsight_parallel_id: c.cardsight_parallel_id,
               cardsight_grade_id: c.cardsight_grade_id,
+              card_id: c.id,
             },
           });
           await replaceValFn({
@@ -633,6 +634,7 @@ function CardDetail({
           cardsight_card_id: card.cardsight_card_id,
           cardsight_parallel_id: card.cardsight_parallel_id,
           cardsight_grade_id: card.cardsight_grade_id,
+          card_id: card.id,
         },
       });
       await replaceValFn({
@@ -1250,6 +1252,7 @@ function AddCardDialog({
             cardsight_card_id: created.cardsight_card_id,
             cardsight_parallel_id: created.cardsight_parallel_id,
             cardsight_grade_id: created.cardsight_grade_id,
+            card_id: created.id,
           },
         });
         await replaceValFn({

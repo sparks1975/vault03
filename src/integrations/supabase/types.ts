@@ -204,6 +204,50 @@ export type Database = {
         }
         Relationships: []
       }
+      pt130_comps: {
+        Row: {
+          card_id: string
+          id: string
+          listing_type: string | null
+          price: number
+          scraped_at: string
+          sold_at: string | null
+          title: string | null
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          card_id: string
+          id?: string
+          listing_type?: string | null
+          price: number
+          scraped_at?: string
+          sold_at?: string | null
+          title?: string | null
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          card_id?: string
+          id?: string
+          listing_type?: string | null
+          price?: number
+          scraped_at?: string
+          sold_at?: string | null
+          title?: string | null
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pt130_comps_card_id_fkey"
+            columns: ["card_id"]
+            isOneToOne: false
+            referencedRelation: "cards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
