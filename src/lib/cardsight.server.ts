@@ -242,6 +242,46 @@ function pricingRecordMatches(
   return Number.isFinite(record.price) && record.price > 0;
 }
 
+function pricingRecordMatchesStructured(
+  record: PricingRecord,
+  lookup: {
+    parallel_id?: string | null;
+    is_autograph?: boolean | null;
+    serial_number?: string | null;
+  },
+): boolean {
+  if (!Number.isFinite(record.price) || record.price <= 0) return false;
+
+  // The structured endpoint is already scoped by canonical card_id, so don't
+  // re-check player/year/card number against marketplace titles. OCR/catalog
+  // text can be wrong (for example All Aces numbers), and title matching was
+  // discarding valid comps for the identified card.
+  if (lookup.parallel_id) {
+    if (record.parallel_id && record.parallel_id !== lookup.parallel_id) return false;
+  } else if (record.parallel_id || record.parallel_name) {
+    return false;
+  }
+
+  const rawTitle = record.title ?? "";
+  const isAutoTitle = /\b(auto|autograph|autographs|signed|signature)\b/i.test(rawTitle);
+  if (lookup.is_autograph && !isAutoTitle) return false;
+  if (!lookup.is_autograph && isAutoTitle) return false;
+
+  const serial = serialSearchTerm(lookup.serial_number);
+  if (serial) return rawTitle.toLowerCase().includes(serial.toLowerCase());
+
+  // Base cards should not absorb obvious serial-numbered or color parallel
+  // comps if Cardsight didn't attach a parallel_id to a marketplace record.
+  if (/\b(black|blue|gold|green|orange|pink|platinum|purple|red|rose gold|foilfractor|refractor|superfractor)\b/i.test(rawTitle)) {
+    return false;
+  }
+  if (/(^|[^\w])(\d+\s*\/\s*\d+|\/\s*\d{1,4})(?=$|[^\w])/i.test(rawTitle)) {
+    return false;
+  }
+
+  return true;
+}
+
 function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): number {
   const haystack = normalizeText([
     "releaseName" in candidate ? candidate.releaseName : null,
@@ -545,10 +585,10 @@ export async function fetchPricing(
   } = {},
 ): Promise<PricingSlice> {
   const params = new URLSearchParams();
-  // Keep the default request aligned with Cardsight's documented endpoint:
-  // GET /v1/pricing/{card_id}?period=30d. Restrict to completed auction sales
+  // Keep the default request aligned with our valuation window:
+  // GET /v1/pricing/{card_id}?period=6m. Restrict to completed auction sales
   // (the "bid" side) so we never surface active Buy-It-Now listings as comps.
-  params.set("period", opts.period ?? "30d");
+  params.set("period", opts.period ?? "6m");
   params.set("listing_type", "auction");
   if (opts.parallel_id) params.set("parallel_id", opts.parallel_id);
   if (opts.grade_id) params.set("grade_id", opts.grade_id);
@@ -582,7 +622,7 @@ export async function fetchPricing(
     records = resp.raw?.records ?? [];
   }
 
-  records = records.filter((r) => r.listing_type === "auction" && pricingRecordMatches(r, opts));
+  records = records.filter((r) => r.listing_type === "auction" && pricingRecordMatchesStructured(r, opts));
 
   return {
     auctionSales: records,
@@ -688,7 +728,7 @@ export async function searchPricingComps(
   let lastMeta: PricingSlice["rawResponseMeta"] = undefined;
 
   for (const q of queries) {
-    const params = new URLSearchParams({ q, period, limit: String(limit) });
+    const params = new URLSearchParams({ q, period, limit: String(limit), listing_type: "auction" });
     const resp = await csFetch<PricingSearchResponse>(`/v1/pricing/search?${params.toString()}`);
     lastMeta = { query: resp.query, messages: resp.messages };
     const matches = (resp.results ?? []).filter(
