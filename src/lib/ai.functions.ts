@@ -184,6 +184,7 @@ async function enrichWithMlb(result: ScanResult): Promise<ScanResult> {
 // Uses Cardsight's structured /v1/pricing endpoint when we have a canonical
 // card_id. Falls back to an AI estimate when comps are insufficient.
 export const estimateCardValue = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
     z
       .object({
@@ -200,10 +201,12 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         cardsight_card_id: z.string().uuid().optional().nullable(),
         cardsight_parallel_id: z.string().uuid().optional().nullable(),
         cardsight_grade_id: z.string().uuid().optional().nullable(),
+        // Optional card_id enables merging cached 130point comps into the pool.
+        card_id: z.string().uuid().optional().nullable(),
       })
       .parse(d),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     let sales: Array<{
       sold_at: string | null;
       grade: string | null;
