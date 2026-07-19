@@ -136,6 +136,9 @@ const allowed = [
       "current_value",
       "value_delta_pct",
       "last_valued_at",
+      "cardsight_card_id",
+      "cardsight_parallel_id",
+      "cardsight_grade_id",
     ];
     const clean: Record<string, unknown> = {};
     for (const k of allowed) if (k in data.patch) clean[k] = data.patch[k];
