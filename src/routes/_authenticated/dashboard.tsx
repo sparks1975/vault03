@@ -16,11 +16,11 @@ import {
   deleteCard,
   replaceValuation,
   uploadCardPhoto,
-  revalueAllCards,
 } from "@/lib/cards.functions";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function CardRowSkeleton() {
@@ -161,7 +161,6 @@ function Dashboard() {
   const deleteFn = useServerFn(deleteCard);
   const estimateFn = useServerFn(estimateCardValue);
   const replaceValFn = useServerFn(replaceValuation);
-  const revalueAllFn = useServerFn(revalueAllCards);
   const qc = useQueryClient();
 
 
@@ -169,6 +168,13 @@ function Dashboard() {
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState<"value" | "player" | "added">("added");
   const [addOpen, setAddOpen] = useState(false);
+  const [revalueProgress, setRevalueProgress] = useState<{
+    isRunning: boolean;
+    processed: number;
+    failed: number;
+    total: number;
+    currentName: string | null;
+  }>({ isRunning: false, processed: 0, failed: 0, total: 0, currentName: null });
 
   const cardsQ = useQuery({
     queryKey: ["cards"],
@@ -251,16 +257,62 @@ function Dashboard() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cards"] }),
   });
 
-  const revalueAllMut = useMutation({
-    mutationFn: () => revalueAllFn(),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ["cards"] });
-      toast.success(`Re-valued ${res.processed} card${res.processed === 1 ? "" : "s"}${res.failed > 0 ? ` (${res.failed} failed)` : ""}`);
-    },
-    onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Re-value failed");
-    },
-  });
+  async function runRevalueAll() {
+    if (revalueProgress.isRunning || cardData.length === 0) return;
+    setRevalueProgress({ isRunning: true, processed: 0, failed: 0, total: cardData.length, currentName: null });
+    let processed = 0;
+    let failed = 0;
+    for (const c of cardData) {
+      setRevalueProgress((prev) => ({ ...prev, currentName: c.player_name }));
+      try {
+        const est = await estimateFn({
+          data: {
+            player_name: c.player_name,
+            year: c.year,
+            set_name: c.set_name,
+            card_number: c.card_number,
+            grade: c.grade,
+            grader: c.grader,
+            is_autograph: c.is_autograph,
+            serial_number: c.serial_number,
+            cardsight_card_id: c.cardsight_card_id,
+            cardsight_parallel_id: c.cardsight_parallel_id,
+            cardsight_grade_id: c.cardsight_grade_id,
+            card_id: c.id,
+          },
+        });
+        await replaceValFn({
+          data: {
+            card_id: c.id,
+            current_value: est.current_value,
+            value_delta_pct: est.value_delta_pct,
+            sales: est.sales,
+            history: est.history,
+          },
+        });
+        const idPatch: Partial<Card> = {};
+        if (!c.cardsight_card_id && est.resolved_cardsight_card_id) {
+          idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
+        }
+        if (!c.cardsight_grade_id && est.resolved_cardsight_grade_id) {
+          idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
+        }
+        if (Object.keys(idPatch).length > 0) {
+          await updateFn({
+            data: { id: c.id, patch: idPatch },
+          });
+        }
+        processed++;
+      } catch (err) {
+        console.error("Revalue failed for", c.player_name, err);
+        failed++;
+      }
+      setRevalueProgress((prev) => ({ ...prev, processed, failed }));
+    }
+    await qc.invalidateQueries({ queryKey: ["cards"] });
+    toast.success(`Re-valued ${processed} card${processed === 1 ? "" : "s"}${failed > 0 ? ` (${failed} failed)` : ""}`);
+    setRevalueProgress({ isRunning: false, processed: 0, failed: 0, total: 0, currentName: null });
+  }
 
   function updateCard(cardId: string, patch: Partial<Card>) {
 
@@ -344,12 +396,12 @@ function Dashboard() {
         </div>
         <div className="flex gap-2 md:gap-3 items-center shrink-0">
           <button
-            onClick={() => revalueAllMut.mutate()}
-            disabled={revalueAllMut.isPending || cardData.length === 0}
+            onClick={() => runRevalueAll()}
+            disabled={revalueProgress.isRunning || cardData.length === 0}
             title="Re-value all cards"
             className="px-3 md:px-4 py-2 border border-border text-foreground text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-secondary transition-colors inline-flex items-center gap-2 disabled:opacity-50"
           >
-            {revalueAllMut.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+            {revalueProgress.isRunning ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
             <span className="hidden sm:inline">Re-value</span>
           </button>
           <button
@@ -483,6 +535,35 @@ function Dashboard() {
             qc.invalidateQueries({ queryKey: ["cards"] });
           }}
         />
+      )}
+
+      {revalueProgress.isRunning && (
+        <div className="fixed inset-0 z-50 bg-foreground/60 backdrop-blur-sm grid place-items-center p-4 fade-in">
+          <div className="bg-background border border-border w-full max-w-md p-6 md:p-8 space-y-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Re-valuing vault</p>
+                <h2 className="text-xl font-extrabold tracking-tight">Updating values…</h2>
+              </div>
+              <Loader2 className="size-5 animate-spin text-accent" />
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-xs font-mono uppercase tracking-widest text-muted-foreground">
+                <span>{revalueProgress.processed + revalueProgress.failed} / {revalueProgress.total}</span>
+                <span>{Math.round(((revalueProgress.processed + revalueProgress.failed) / Math.max(revalueProgress.total, 1)) * 100)}%</span>
+              </div>
+              <Progress value={((revalueProgress.processed + revalueProgress.failed) / Math.max(revalueProgress.total, 1)) * 100} />
+            </div>
+            {revalueProgress.currentName && (
+              <p className="text-xs text-muted-foreground truncate">
+                Current: <span className="font-medium text-foreground">{revalueProgress.currentName}</span>
+              </p>
+            )}
+            <p className="text-[10px] font-mono text-muted-foreground">
+              Please keep this tab open while values are refreshed.
+            </p>
+          </div>
+        </div>
       )}
     </div>
   );
