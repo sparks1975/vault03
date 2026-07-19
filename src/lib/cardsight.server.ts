@@ -167,7 +167,7 @@ function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): n
     "setName" in candidate ? candidate.setName : null,
     candidate.name,
     "number" in candidate ? candidate.number : null,
-    "releaseYear" in candidate ? candidate.releaseYear : candidate.year,
+    "releaseYear" in candidate ? candidate.releaseYear : "year" in candidate ? candidate.year : null,
   ].filter(Boolean).join(" "));
   let score = "relevance" in candidate ? candidate.relevance : 0;
   const player = normalizeText(lookup.player_name);
