@@ -224,7 +224,7 @@ function Dashboard() {
       }
       qc.invalidateQueries({ queryKey: ["cards"] });
     })();
-  }, [cardsQ.isLoading, cardData, estimateFn, replaceValFn, qc]);
+  }, [cardsQ.isLoading, cardData, estimateFn, replaceValFn, updateFn, qc]);
 
 
   const updateMut = useMutation({
