@@ -242,20 +242,63 @@ function pricingRecordMatches(
   return Number.isFinite(record.price) && record.price > 0;
 }
 
+// Shared parallel/variant regexes used by both the structured and pt130 paths.
+// Any word or phrase here in a marketplace title indicates the record is NOT a
+// plain base card — reject when the caller hasn't opted into that parallel.
+const PARALLEL_COLOR_RE = /\b(atomic|black|blue|bronze|camo|clear cut|cracked ice|die[- ]?cut|foilfractor|gold|green|mojo|negative|orange|pink|platinum|prism|purple|rainbow|red|rose gold|sepia|shimmer|silver|superfractor|refractor|red hot|x-?fractor|yellow|aqua|teal|wave|nebula|scope|hyper|lava|dragon|tiger|zebra|snake|choice|holo|holographic|1st bowman|ssp|printing plate)\b/i;
+const SERIAL_RE = /(^|[^\w])(#?\s*\d+\s*\/\s*\d+|\/\s*\d{1,4})(?=$|[^\w])/i;
+const AUTO_RE = /\b(auto|autograph|autographs|signed|signature|signatures)\b/i;
+const GRADED_RE = /\b(psa|bgs|sgc|cgc)\b/i;
+
+// Reject titles that clearly indicate a different variation than the submitted
+// base card. Applies to both structured Cardsight pricing and pt130 comps.
+export function isVariantTitle(
+  title: string,
+  opts: { hasSelectedParallel?: boolean; is_autograph?: boolean | null; serial_number?: string | null } = {},
+): boolean {
+  if (!title) return false;
+  if (!opts.hasSelectedParallel && PARALLEL_COLOR_RE.test(title)) return true;
+  if (!opts.hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(title)) return true;
+  if (!opts.is_autograph && AUTO_RE.test(title)) return true;
+  return false;
+}
+
+export function titleMatchesCard(
+  title: string,
+  lookup: {
+    player_name?: string | null;
+    year?: string | number | null;
+    card_number?: string | null;
+  },
+): boolean {
+  if (!title) return true; // no title = can't disqualify
+  if (lookup.player_name) {
+    const t = normalizeText(title);
+    const tokens = normalizeText(lookup.player_name).split(" ").filter((x) => x.length > 1);
+    if (tokens.length > 0 && !tokens.every((x) => t.includes(x))) return false;
+  }
+  if (lookup.year && !String(title).includes(String(lookup.year))) return false;
+  const number = compact(lookup.card_number).replace(/^#\s*/, "");
+  if (number) {
+    const numRe = new RegExp(`(^|[^a-z0-9])#?${number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z0-9])`, "i");
+    if (!numRe.test(title)) return false;
+  }
+  return true;
+}
+
 function pricingRecordMatchesStructured(
   record: PricingRecord,
   lookup: {
     parallel_id?: string | null;
     is_autograph?: boolean | null;
     serial_number?: string | null;
+    player_name?: string | null;
+    year?: string | number | null;
+    card_number?: string | null;
   },
 ): boolean {
   if (!Number.isFinite(record.price) || record.price <= 0) return false;
 
-  // The structured endpoint is already scoped by canonical card_id, so don't
-  // re-check player/year/card number against marketplace titles. OCR/catalog
-  // text can be wrong (for example All Aces numbers), and title matching was
-  // discarding valid comps for the identified card.
   const hasSelectedParallel = Boolean(lookup.parallel_id);
   if (lookup.parallel_id) {
     if (record.parallel_id && record.parallel_id !== lookup.parallel_id) return false;
@@ -264,19 +307,22 @@ function pricingRecordMatchesStructured(
   }
 
   const rawTitle = record.title ?? "";
-  const isAutoTitle = /\b(auto|autograph|autographs|signed|signature)\b/i.test(rawTitle);
+
+  // Defensive: even though the structured endpoint is scoped by canonical
+  // card_id, if the wrong catalog card was matched (e.g. a completely
+  // different player) the returned comps would silently pollute pricing.
+  // Require player-name tokens, year, and card_number to appear in the title
+  // when we have them.
+  if (!titleMatchesCard(rawTitle, lookup)) return false;
+
+  const isAutoTitle = AUTO_RE.test(rawTitle);
   if (lookup.is_autograph && !isAutoTitle) return false;
   if (!lookup.is_autograph && isAutoTitle) return false;
 
   const serial = serialSearchTerm(lookup.serial_number);
   if (serial) return rawTitle.toLowerCase().includes(serial.toLowerCase());
 
-  // Base cards should not absorb obvious serial-numbered or color parallel
-  // comps if Cardsight didn't attach a parallel_id to a marketplace record.
-  if (!hasSelectedParallel && /\b(black|blue|gold|green|orange|pink|platinum|purple|red|rose gold|foilfractor|refractor|superfractor)\b/i.test(rawTitle)) {
-    return false;
-  }
-  if (!hasSelectedParallel && /(^|[^\w])(\d+\s*\/\s*\d+|\/\s*\d{1,4})(?=$|[^\w])/i.test(rawTitle)) {
+  if (isVariantTitle(rawTitle, { hasSelectedParallel, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number })) {
     return false;
   }
 
