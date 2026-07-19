@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X, ChevronLeft } from "lucide-react";
+import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X, ChevronLeft, RefreshCw } from "lucide-react";
 
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
 import { listCardsightParallels } from "@/lib/cardsight.functions";
@@ -16,7 +16,9 @@ import {
   deleteCard,
   replaceValuation,
   uploadCardPhoto,
+  revalueAllCards,
 } from "@/lib/cards.functions";
+
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
