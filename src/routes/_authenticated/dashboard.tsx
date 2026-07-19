@@ -161,7 +161,9 @@ function Dashboard() {
   const deleteFn = useServerFn(deleteCard);
   const estimateFn = useServerFn(estimateCardValue);
   const replaceValFn = useServerFn(replaceValuation);
+  const revalueAllFn = useServerFn(revalueAllCards);
   const qc = useQueryClient();
+
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
