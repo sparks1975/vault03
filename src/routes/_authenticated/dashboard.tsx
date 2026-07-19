@@ -783,6 +783,11 @@ function CardDetail({
                 />
               )}
             </div>
+            <ParallelSelect
+              cardId={(draft.cardsight_card_id ?? card.cardsight_card_id) ?? null}
+              value={draft.cardsight_parallel_id ?? null}
+              onChange={(id) => setDraft({ ...draft, cardsight_parallel_id: id })}
+            />
           <label className="block">
 
 
