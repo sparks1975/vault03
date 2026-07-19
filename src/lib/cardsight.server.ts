@@ -119,6 +119,32 @@ export async function identifyCardRest(
   };
 }
 
+// ---------- Free-text catalog search (resolve descriptor → cardsight card id) ----------
+type SearchResult = {
+  type: "card" | "set" | "release" | "parallel";
+  id: string;
+  name: string;
+  relevance: number;
+  year?: string;
+  setName?: string;
+  releaseName?: string;
+};
+
+export async function searchCatalogCard(descriptor: string): Promise<string | null> {
+  const q = descriptor.trim().replace(/\s+/g, " ");
+  if (q.length < 2) return null;
+  try {
+    const resp = await csFetch<{ results: SearchResult[] }>(
+      `/v1/catalog/search?type=card&take=5&q=${encodeURIComponent(q.slice(0, 200))}`,
+    );
+    const card = resp.results.find((r) => r.type === "card");
+    return card?.id ?? null;
+  } catch (err) {
+    console.error("Cardsight search failed:", err);
+    return null;
+  }
+}
+
 // ---------- Parallels for a card's release (scoped to the card's set) ----------
 export type ParallelOption = { id: string; name: string; setId: string };
 
