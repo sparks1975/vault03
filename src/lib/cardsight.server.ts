@@ -528,15 +528,17 @@ export async function fetchPricing(
 ): Promise<PricingSlice> {
   const params = new URLSearchParams();
   // Keep the default request aligned with Cardsight's documented endpoint:
-  // GET /v1/pricing/{card_id}?period=30d. Only add filters when the user
-  // explicitly selected a parallel/refractor or we resolved a grade id.
+  // GET /v1/pricing/{card_id}?period=30d. Restrict to completed auction sales
+  // (the "bid" side) so we never surface active Buy-It-Now listings as comps.
   params.set("period", opts.period ?? "30d");
+  params.set("listing_type", "auction");
   if (opts.parallel_id) params.set("parallel_id", opts.parallel_id);
   if (opts.grade_id) params.set("grade_id", opts.grade_id);
   if (opts.limit) params.set("limit", String(opts.limit));
   const resp = await csFetch<PricingResponse>(
     `/v1/pricing/${card_id}?${params.toString()}`,
   );
+
 
   let records: PricingRecord[] = [];
   let gradeLabel: string | null = null;
@@ -562,7 +564,7 @@ export async function fetchPricing(
     records = resp.raw?.records ?? [];
   }
 
-  records = records.filter((r) => pricingRecordMatches(r, opts));
+  records = records.filter((r) => r.listing_type === "auction" && pricingRecordMatches(r, opts));
 
   return {
     auctionSales: records,
@@ -671,7 +673,10 @@ export async function searchPricingComps(
     const params = new URLSearchParams({ q, period, limit: String(limit) });
     const resp = await csFetch<PricingSearchResponse>(`/v1/pricing/search?${params.toString()}`);
     lastMeta = { query: resp.query, messages: resp.messages };
-    const matches = (resp.results ?? []).filter((r) => pricingRecordMatches(r, lookup));
+    const matches = (resp.results ?? []).filter(
+      (r) => r.listing_type === "auction" && pricingRecordMatches(r, lookup),
+    );
+
     if (matches.length > 0) {
       all.push(...matches);
       break;
