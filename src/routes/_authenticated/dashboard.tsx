@@ -636,6 +636,9 @@ function CardDetail({
           history: est.history,
         },
       });
+      if (!card.cardsight_card_id && est.resolved_cardsight_card_id) {
+        onUpdate(card.id, { cardsight_card_id: est.resolved_cardsight_card_id });
+      }
       qc.invalidateQueries({ queryKey: ["cards"] });
       if (est.note) toast.warning(est.note);
       const soldCount = est.sales.filter((s) => s.source.startsWith("Cardsight")).length;
