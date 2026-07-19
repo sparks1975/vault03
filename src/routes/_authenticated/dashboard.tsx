@@ -1065,6 +1065,8 @@ function AddCardDialog({
     purchase_price: "",
     notes: "",
     mlb_player_id: null as number | null,
+    cardsight_card_id: null as string | null,
+    cardsight_parallel_id: null as string | null,
   });
   const [playerResults, setPlayerResults] = useState<Awaited<ReturnType<typeof searchMlbPlayer>>>([]);
 
