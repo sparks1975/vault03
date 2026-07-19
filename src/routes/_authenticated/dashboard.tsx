@@ -203,6 +203,7 @@ function Dashboard() {
               cardsight_card_id: c.cardsight_card_id,
               cardsight_parallel_id: c.cardsight_parallel_id,
               cardsight_grade_id: c.cardsight_grade_id,
+              card_id: c.id,
             },
           });
           await replaceValFn({
