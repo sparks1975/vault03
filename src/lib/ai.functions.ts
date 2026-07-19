@@ -29,7 +29,6 @@ function extractJson<T>(text: string): T {
   if (start === -1) throw new Error("AI did not return JSON");
   const openCh = cleaned[start];
   const closeCh = openCh === "[" ? "]" : "}";
-  // Walk to find matching close, respecting strings.
   let depth = 0;
   let inStr = false;
   let esc = false;
@@ -69,18 +68,17 @@ type ScanResult = {
   grade: string | null;
   grader: string | null;
   confidence: "high" | "medium" | "low";
+  cardsight_card_id: string | null;
 };
 
-function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; contentType: string; ext: string } {
+function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; contentType: string } {
   const m = dataUrl.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
   if (!m) throw new Error("Invalid image data URL");
   const contentType = m[1];
-  const base64 = m[2];
-  const bin = atob(base64);
+  const bin = atob(m[2]);
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  const ext = contentType.split("/")[1]?.split("+")[0] || "jpg";
-  return { bytes, contentType, ext };
+  return { bytes, contentType };
 }
 
 async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
@@ -98,91 +96,42 @@ async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
           {
             type: "text",
             text:
-              "Identify this baseball card. Return JSON: {\"player_name\": string, \"team\": string|null, \"position\": string|null, \"year\": number|null, \"set_name\": string|null, \"card_number\": string|null, \"grade\": string|null, \"grader\": string|null, \"confidence\": \"high\"|\"medium\"|\"low\"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null.",
+              'Identify this baseball card. Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null.',
           },
           { type: "image_url", image_url: { url: imageUrl } },
         ],
       },
     ],
   });
-  return extractJson<ScanResult>(text);
+  const parsed = extractJson<Omit<ScanResult, "cardsight_card_id">>(text);
+  return { ...parsed, cardsight_card_id: null };
 }
 
-// ---------- Photo scan: Cardsight identify_card, AI fallback ----------
+// ---------- Photo scan: Cardsight REST identify, AI fallback ----------
 export const scanCardPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { imageDataUrl: string }) =>
     z.object({ imageDataUrl: z.string().startsWith("data:image/") }).parse(d),
   )
-  .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
+  .handler(async ({ data }) => {
+    const { bytes, contentType } = dataUrlToBytes(data.imageDataUrl);
 
-    // 1) Upload the cropped photo to storage so Cardsight can fetch a public URL.
-    let signedUrl: string | null = null;
+    // 1) Cardsight structured identify (returns canonical card_id + slab data).
     try {
-      const src = dataUrlToBytes(data.imageDataUrl);
+      const { identifyCardRest } = await import("./cardsight.server");
       const { compressBytes } = await import("./tinypng.server");
-      const { bytes, contentType } = await compressBytes(src.bytes, src.contentType);
-      const ext = contentType.split("/")[1]?.split("+")[0] || src.ext;
-      const path = `${userId}/scans/${crypto.randomUUID()}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("card-photos")
-        .upload(path, bytes, { contentType, upsert: false });
-      if (upErr) throw upErr;
-      const { data: signed, error: signErr } = await supabase.storage
-        .from("card-photos")
-        .createSignedUrl(path, 300);
-      if (signErr || !signed?.signedUrl) throw signErr ?? new Error("No signed URL");
-      signedUrl = signed.signedUrl;
-    } catch (err) {
-      console.error("Storage upload for identify_card failed:", err);
-    }
-
-    // 2) Ask Cardsight to identify the card from the URL.
-    if (signedUrl) {
-      try {
-        const { identifyCardFromImageUrl } = await import("./cardsight.server");
-        const { text, error } = await identifyCardFromImageUrl(signedUrl);
-        console.log("Cardsight identify_card text:", text?.slice(0, 500), "error:", error);
-        const looksUnidentified =
-          !text?.trim() ||
-          /unable to identify|could not identify|no match|not.*identif|no card detected|error/i.test(text);
-        if (!error && !looksUnidentified) {
-          // Convert Cardsight's human-readable response into our JSON schema.
-          const structured = await callAI({
-            model: MODEL,
-            messages: [
-              {
-                role: "system",
-                content:
-                  "You convert baseball card identification notes into strict JSON. Reply ONLY with a JSON object — no prose.",
-              },
-              {
-                role: "user",
-                content: `Cardsight identify_card response:\n\n${text}\n\nReturn JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null.`,
-              },
-            ],
-          });
-          try {
-            const parsed = extractJson<ScanResult>(structured);
-            if (parsed.player_name && parsed.player_name.trim()) {
-              return await enrichWithMlb(parsed);
-            }
-            console.warn("Cardsight structured result had no player_name, falling back to AI vision");
-          } catch (err) {
-            console.error("Failed to structure Cardsight identify_card text:", err);
-          }
-        } else if (error) {
-          console.error("Cardsight identify_card error:", error);
-        }
-      } catch (err) {
-        console.error("Cardsight identify_card call failed:", err);
+      const compressed = await compressBytes(bytes, contentType);
+      const ident = await identifyCardRest(compressed.bytes, compressed.contentType);
+      if (ident?.player_name) {
+        return enrichWithMlb(ident as ScanResult);
       }
+    } catch (err) {
+      console.error("Cardsight identify failed:", err);
     }
 
-    // 3) Fallback: direct AI vision on the original data URL.
+    // 2) Fallback: direct AI vision on the original data URL.
     const result = await scanViaAIVision(data.imageDataUrl);
-    return await enrichWithMlb(result);
+    return enrichWithMlb(result);
   });
 
 // If team/position are missing, look them up from the free MLB Stats API.
@@ -200,7 +149,6 @@ async function enrichWithMlb(result: ScanResult): Promise<ScanResult> {
       active?: boolean;
     }>;
     if (people.length === 0) return result;
-    // Prefer active player; fall back to first match.
     const pick = people.find((p) => p.active) ?? people[0];
     return {
       ...result,
@@ -212,12 +160,14 @@ async function enrichWithMlb(result: ScanResult): Promise<ScanResult> {
   }
 }
 
-
-// ---------- Value estimate + comparable sales (AI estimate) ----------
+// ---------- Value estimate + comparable sales ----------
+// Uses Cardsight's structured /v1/pricing endpoint when we have a canonical
+// card_id. Falls back to an AI estimate when comps are insufficient.
 export const estimateCardValue = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) =>
     z
       .object({
+        // Legacy descriptor fields (still used for the AI fallback).
         player_name: z.string().min(1),
         year: z.number().int().optional().nullable(),
         set_name: z.string().optional().nullable(),
@@ -226,10 +176,93 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         grader: z.string().optional().nullable(),
         is_autograph: z.boolean().optional().nullable(),
         serial_number: z.string().optional().nullable(),
+        // Canonical Cardsight identifiers (preferred).
+        cardsight_card_id: z.string().uuid().optional().nullable(),
+        cardsight_parallel_id: z.string().uuid().optional().nullable(),
+        cardsight_grade_id: z.string().uuid().optional().nullable(),
       })
       .parse(d),
   )
   .handler(async ({ data }) => {
+    let sales: Array<{
+      sold_at: string | null;
+      grade: string | null;
+      price: number;
+      source: string;
+      url: string | null;
+    }> = [];
+    let currentValue = 0;
+    let deltaPct = 0;
+    let compsNote: string | null = null;
+    let usedCardsight = false;
+    let resolvedGradeId: string | null = data.cardsight_grade_id ?? null;
+
+    if (data.cardsight_card_id) {
+      try {
+        const { fetchPricing, resolveGradeId, median, trimOutliersIQR } = await import(
+          "./cardsight.server"
+        );
+        if (!resolvedGradeId && data.grader && data.grade) {
+          resolvedGradeId = await resolveGradeId(data.grader, data.grade);
+        }
+        const slice = await fetchPricing(data.cardsight_card_id, {
+          parallel_id: data.cardsight_parallel_id ?? null,
+          grade_id: resolvedGradeId,
+          period: "6m",
+          limit: 200,
+        });
+
+        const auctions = slice.auctionSales
+          .filter((r) => Number.isFinite(r.price) && r.price > 0)
+          .sort((a, b) => {
+            const ta = a.date ? new Date(a.date).getTime() : 0;
+            const tb = b.date ? new Date(b.date).getTime() : 0;
+            return tb - ta;
+          });
+
+        if (auctions.length >= 3) {
+          const trimmed = trimOutliersIQR(auctions.map((r) => r.price));
+          currentValue = median(trimmed);
+
+          // 30-day vs prior-30-day delta on the same stream.
+          const now = Date.now();
+          const day = 24 * 60 * 60 * 1000;
+          const recent: number[] = [];
+          const prior: number[] = [];
+          for (const r of auctions) {
+            if (!r.date) continue;
+            const t = new Date(r.date).getTime();
+            if (!Number.isFinite(t)) continue;
+            const age = now - t;
+            if (age <= 30 * day) recent.push(r.price);
+            else if (age <= 60 * day) prior.push(r.price);
+          }
+          if (recent.length >= 2 && prior.length >= 2) {
+            const rMed = median(recent);
+            const pMed = median(prior);
+            if (pMed > 0) deltaPct = ((rMed - pMed) / pMed) * 100;
+          }
+
+          sales = auctions.slice(0, 25).map((r) => ({
+            sold_at: r.date,
+            grade: slice.gradeLabel,
+            price: r.price,
+            source: `Cardsight (${r.source})`,
+            url: r.url ?? null,
+          }));
+          usedCardsight = true;
+        } else {
+          compsNote = `Only ${auctions.length} recent sold comp${auctions.length === 1 ? "" : "s"} — using AI estimate.`;
+        }
+      } catch (err) {
+        console.error("Cardsight pricing failed:", err);
+        compsNote = err instanceof Error ? err.message : String(err);
+      }
+    } else {
+      compsNote = "Card not yet linked to Cardsight — using AI estimate.";
+    }
+
+    // AI narrative fallback + history spark data.
     const variantBits = [
       data.is_autograph ? "autograph" : null,
       data.serial_number ? `#/${data.serial_number.replace(/^.*\//, "")}` : null,
@@ -245,38 +278,6 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       .filter(Boolean)
       .join(" ");
 
-    // 1) Cardsight for real SOLD comps (search_pricing over MCP).
-    let sales: Array<{
-      sold_at: string | null;
-      grade: string | null;
-      price: number;
-      source: string;
-      url: string | null;
-    }> = [];
-    let compsAverage = 0;
-    let compsNote: string | null = null;
-    try {
-      const { fetchCardsightSoldComps } = await import("./cardsight.server");
-      const soldRes = await fetchCardsightSoldComps(data, { limit: 25, period: "6m" });
-      if (soldRes.comps.length > 0) {
-        sales = soldRes.comps.map((c) => ({
-          sold_at: c.soldAt,
-          grade: c.grade,
-          price: c.price,
-          source: `Cardsight (${c.source} sold)`,
-          url: c.url,
-        }));
-        const prices = sales.map((s) => s.price);
-        compsAverage = prices.reduce((a, b) => a + b, 0) / prices.length;
-      } else {
-        compsNote = soldRes.error ?? null;
-      }
-    } catch (err) {
-      console.error("Cardsight lookup failed:", err);
-      compsNote = err instanceof Error ? err.message : String(err);
-    }
-
-    // 2) AI for narrative value + history (and as value fallback if Cardsight is empty).
     const prompt = `Give a realistic current secondary-market value estimate (USD) for this baseball card: "${descriptor}". Also give a plausible 30-day percent change and 6 monthly historical value data points ending today. Return JSON ONLY:
 {
   "current_value": number,
@@ -304,11 +305,11 @@ If unable to value, return current_value: 0.`;
     }>(text);
 
     return {
-      current_value: compsAverage > 0 ? compsAverage : ai.current_value,
-      value_delta_pct: ai.value_delta_pct,
+      current_value: usedCardsight ? currentValue : ai.current_value,
+      value_delta_pct: usedCardsight ? deltaPct : ai.value_delta_pct,
       sales,
       history: ai.history,
-      source: compsAverage > 0 ? ("cardsight" as const) : ("ai" as const),
+      source: usedCardsight ? ("cardsight" as const) : ("ai" as const),
       note: compsNote,
     };
   });
