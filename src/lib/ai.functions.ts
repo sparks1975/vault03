@@ -310,6 +310,8 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             parallel_id: data.cardsight_parallel_id ?? null,
             grade_id: resolvedGradeId,
             player_name: data.player_name,
+            year: data.year,
+            card_number: data.card_number,
             grader: data.grader,
             grade: data.grade,
             is_autograph: data.is_autograph,
