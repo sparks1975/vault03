@@ -128,12 +128,140 @@ type SearchResult = {
   year?: string;
   setName?: string;
   releaseName?: string;
+  manufacturerName?: string;
 };
+
+type CatalogCard = {
+  releaseId: string;
+  setId: string;
+  id: string;
+  number?: string | null;
+  name: string;
+  description?: string | null;
+  setName?: string | null;
+  releaseName?: string | null;
+  releaseYear?: string | null;
+  variationOf?: string | null;
+  parallelCount?: number;
+  parallels?: Array<{ id: string; name: string; numberedTo?: number | null }>;
+};
+
+type CardLookup = {
+  player_name?: string | null;
+  year?: string | number | null;
+  set_name?: string | null;
+  card_number?: string | null;
+  descriptor?: string | null;
+};
+
+function normalizeText(value: string | number | null | undefined): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): number {
+  const haystack = normalizeText([
+    "releaseName" in candidate ? candidate.releaseName : null,
+    "setName" in candidate ? candidate.setName : null,
+    candidate.name,
+    "number" in candidate ? candidate.number : null,
+    "releaseYear" in candidate ? candidate.releaseYear : "year" in candidate ? candidate.year : null,
+  ].filter(Boolean).join(" "));
+  let score = "relevance" in candidate ? candidate.relevance : 0;
+  const player = normalizeText(lookup.player_name);
+  const setName = normalizeText(lookup.set_name);
+  const number = normalizeText(lookup.card_number).replace(/^#/, "");
+  const year = normalizeText(lookup.year);
+
+  if (player && haystack.includes(player)) score += 50;
+  if (setName && haystack.includes(setName)) score += 35;
+  if (year && haystack.includes(year)) score += 20;
+  if (number && "number" in candidate && normalizeText(candidate.number) === number) score += 25;
+  if ("variationOf" in candidate && candidate.variationOf) score -= 20;
+  return score;
+}
+
+function parseDescriptor(descriptor: string): CardLookup {
+  const trimmed = descriptor.trim().replace(/\s+/g, " ");
+  const year = trimmed.match(/\b(19|20)\d{2}\b/)?.[0] ?? null;
+  const cardNumber = trimmed.match(/#\s*([A-Za-z0-9.-]+)\b/)?.[1] ?? null;
+  return { descriptor: trimmed, year, card_number: cardNumber };
+}
+
+export async function findCatalogCard(lookup: CardLookup): Promise<CatalogCard | null> {
+  const descriptorLookup = lookup.descriptor ? parseDescriptor(lookup.descriptor) : {};
+  const merged: CardLookup = { ...descriptorLookup, ...lookup };
+  const player = merged.player_name?.trim();
+  const year = merged.year == null ? null : String(merged.year).trim();
+  const setName = merged.set_name?.trim();
+  const number = merged.card_number?.trim().replace(/^#\s*/, "");
+
+  const attempts: string[] = [];
+  const addCardsAttempt = (params: Record<string, string | null | undefined>) => {
+    const sp = new URLSearchParams({ take: "25" });
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) sp.set(key, value);
+    });
+    attempts.push(`/v1/catalog/cards?${sp.toString()}`);
+  };
+
+  // The structured cards endpoint handles exact number/year/release filters far
+  // better than free-text search, especially when a descriptor contains "#28".
+  addCardsAttempt({ name: player, number, year, releaseName: setName });
+  addCardsAttempt({ name: player, number, year, setName });
+  addCardsAttempt({ number, year, releaseName: setName });
+  addCardsAttempt({ name: player, year, releaseName: setName });
+
+  const seen = new Set<string>();
+  const candidates: CatalogCard[] = [];
+  for (const path of attempts) {
+    if (seen.has(path)) continue;
+    seen.add(path);
+    try {
+      const resp = await csFetch<{ cards: CatalogCard[] }>(path);
+      candidates.push(...(resp.cards ?? []));
+      if (candidates.length > 0) break;
+    } catch (err) {
+      console.error("Cardsight cards lookup failed:", err);
+    }
+  }
+
+  if (candidates.length > 0) {
+    return candidates.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+  }
+
+  const textQuery = [player, setName].filter(Boolean).join(" ") || merged.descriptor || "";
+  if (textQuery.trim().length >= 2) {
+    try {
+      const resp = await csFetch<{ results: SearchResult[] }>(
+        `/v1/catalog/search?type=card&take=25&q=${encodeURIComponent(textQuery.slice(0, 200))}`,
+      );
+      const card = resp.results
+        .filter((r) => r.type === "card")
+        .sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+      if (card) {
+        return await csFetch<CatalogCard>(`/v1/catalog/cards/${card.id}`);
+      }
+    } catch (err) {
+      console.error("Cardsight search lookup failed:", err);
+    }
+  }
+
+  return null;
+}
+
+export async function searchCatalogCardByFields(lookup: CardLookup): Promise<string | null> {
+  return (await findCatalogCard(lookup))?.id ?? null;
+}
 
 export async function searchCatalogCard(descriptor: string): Promise<string | null> {
   const q = descriptor.trim().replace(/\s+/g, " ");
   if (q.length < 2) return null;
   try {
+    const structured = await findCatalogCard({ descriptor: q });
+    if (structured?.id) return structured.id;
     const resp = await csFetch<{ results: SearchResult[] }>(
       `/v1/catalog/search?type=card&take=5&q=${encodeURIComponent(q.slice(0, 200))}`,
     );
@@ -148,7 +276,7 @@ export async function searchCatalogCard(descriptor: string): Promise<string | nu
 // ---------- Parallels for a card's release (scoped to the card's set) ----------
 export type ParallelOption = { id: string; name: string; setId: string };
 
-type DetailedCard = { id: string; releaseId: string; setId: string; parallelCount?: number };
+type DetailedCard = CatalogCard;
 type ParallelsResp = {
   parallels: Array<{ id: string; setId: string; name: string; isPartial?: boolean }>;
   total_count: number;
@@ -165,6 +293,29 @@ export async function listParallelsForCard(card_id: string): Promise<ParallelOpt
     card = await csFetch<DetailedCard>(`/v1/catalog/cards/${card_id}`);
     catalogCache.set(card_id, card);
   }
+
+  if (card.variationOf) {
+    const baseParallels = await listParallelsForCard(card.variationOf);
+    if (baseParallels.length > 0) {
+      parallelsCache.set(card_id, baseParallels);
+      return baseParallels;
+    }
+  }
+
+  // The card detail response already returns the exact parallels/refractors
+  // available for this card's own set. Prefer it over release-wide filtering.
+  if (Array.isArray(card.parallels) && card.parallels.length > 0) {
+    const scoped = card.parallels
+      .map((p) => ({
+        id: p.id,
+        name: p.numberedTo ? `${p.name} /${p.numberedTo}` : p.name,
+        setId: card.setId,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    parallelsCache.set(card_id, scoped);
+    return scoped;
+  }
+
   const all: ParallelOption[] = [];
   let skip = 0;
   const take = 100;

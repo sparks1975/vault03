@@ -793,7 +793,7 @@ function CardDetail({
             </div>
             <ParallelSelect
               cardId={(draft.cardsight_card_id ?? card.cardsight_card_id) ?? null}
-              descriptor={cardDescriptor({ ...card, ...draft })}
+              lookup={{ ...card, ...draft }}
               value={draft.cardsight_parallel_id ?? null}
               onChange={(id) => setDraft({ ...draft, cardsight_parallel_id: id })}
             />
@@ -1368,7 +1368,7 @@ function AddCardDialog({
 
             <ParallelSelect
               cardId={form.cardsight_card_id}
-              descriptor={cardDescriptor(form)}
+              lookup={form}
               value={form.cardsight_parallel_id}
               onChange={(id) => setForm({ ...form, cardsight_parallel_id: id })}
             />
@@ -1463,20 +1463,35 @@ function cardDescriptor(card: {
 
 function ParallelSelect({
   cardId,
-  descriptor,
+  lookup,
   value,
   onChange,
 }: {
   cardId: string | null;
-  descriptor: string;
+  lookup: {
+    player_name?: string | null;
+    year?: string | number | null;
+    set_name?: string | null;
+    card_number?: string | null;
+  };
   value: string | null;
   onChange: (id: string | null) => void;
 }) {
   const listFn = useServerFn(listCardsightParallels);
+  const descriptor = cardDescriptor(lookup);
   const canLookup = !!cardId || descriptor.trim().length > 2;
   const q = useQuery({
-    queryKey: ["cardsight-parallels", cardId, descriptor],
-    queryFn: () => listFn({ data: { card_id: cardId, descriptor } }),
+    queryKey: ["cardsight-parallels-v2", cardId, lookup.year, lookup.set_name, lookup.player_name, lookup.card_number],
+    queryFn: () => listFn({
+      data: {
+        card_id: cardId,
+        descriptor,
+        player_name: lookup.player_name ?? null,
+        year: lookup.year ?? null,
+        set_name: lookup.set_name ?? null,
+        card_number: lookup.card_number ?? null,
+      },
+    }),
     enabled: canLookup,
     staleTime: 60 * 60 * 1000,
   });
