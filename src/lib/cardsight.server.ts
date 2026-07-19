@@ -248,7 +248,7 @@ function pricingRecordMatches(
 const PARALLEL_COLOR_RE = /\b(atomic|black|blue|bronze|camo|clear cut|cracked ice|die[- ]?cut|foilfractor|gold|green|mojo|negative|orange|pink|platinum|prism|purple|rainbow|red|rose gold|sepia|shimmer|silver|superfractor|refractor|red hot|x-?fractor|yellow|aqua|teal|wave|nebula|scope|hyper|lava|dragon|tiger|zebra|snake|choice|holo|holographic|1st bowman|ssp|printing plate)\b/i;
 const SERIAL_RE = /(^|[^\w])(#?\s*\d+\s*\/\s*\d+|\/\s*\d{1,4})(?=$|[^\w])/i;
 const AUTO_RE = /\b(auto|autograph|autographs|signed|signature|signatures)\b/i;
-const GRADED_RE = /\b(psa|bgs|sgc|cgc)\b/i;
+// (graded regex intentionally inlined at call sites)
 
 // Reject titles that clearly indicate a different variation than the submitted
 // base card. Applies to both structured Cardsight pricing and pt130 comps.
