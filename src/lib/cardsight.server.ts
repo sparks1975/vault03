@@ -26,7 +26,7 @@ async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
     lastBody = await res.text().catch(() => "");
     if (res.status !== 429) break;
     const retryAfter = Number(res.headers.get("retry-after"));
-    await new Promise((resolve) => setTimeout(resolve, Number.isFinite(retryAfter) ? retryAfter * 1000 : 1200 + attempt * 800));
+    await new Promise((resolve) => setTimeout(resolve, retryAfter > 0 ? retryAfter * 1000 : 1200 + attempt * 800));
   }
   throw new Error(`Cardsight ${path} ${lastStatus}: ${lastBody.slice(0, 200)}`);
 }
