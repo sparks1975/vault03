@@ -1192,6 +1192,9 @@ function AddCardDialog({
             grader: created.grader,
             is_autograph: created.is_autograph,
             serial_number: created.serial_number,
+            cardsight_card_id: created.cardsight_card_id,
+            cardsight_parallel_id: created.cardsight_parallel_id,
+            cardsight_grade_id: created.cardsight_grade_id,
           },
         });
         await replaceValFn({
