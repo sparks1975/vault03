@@ -391,9 +391,12 @@ export async function resolveGradeId(
 }
 
 // ---------- Pricing ----------
+// Cardsight's /pricing endpoint returns realized sales; `listing_type`
+// just says whether the sale happened via auction or Buy-It-Now. Treating
+// only "auction" as sold makes modern releases (mostly BIN) look empty.
 export type PricingSlice = {
-  auctionSales: PricingRecord[];
-  askListings: PricingRecord[];
+  auctionSales: PricingRecord[]; // all sold comps (auction + fixed)
+  askListings: PricingRecord[];  // kept for API-shape compatibility (unused)
   gradeLabel: string | null;
 };
 
@@ -432,9 +435,7 @@ export async function fetchPricing(
     records = resp.raw?.records ?? [];
   }
 
-  const auctionSales = records.filter((r) => r.listing_type === "auction");
-  const askListings = records.filter((r) => r.listing_type === "fixed");
-  return { auctionSales, askListings, gradeLabel };
+  return { auctionSales: records, askListings: [], gradeLabel };
 }
 
 // ---------- Stats helpers used by the valuation pipeline ----------
