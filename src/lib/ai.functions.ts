@@ -259,6 +259,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         } else {
           compsNote = `Only ${auctions.length} recent sold comp${auctions.length === 1 ? "" : "s"} — using AI estimate.`;
         }
+        }
       } catch (err) {
         console.error("Cardsight pricing failed:", err);
         compsNote = err instanceof Error ? err.message : String(err);
