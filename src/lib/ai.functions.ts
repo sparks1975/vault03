@@ -254,13 +254,16 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         });
 
       if (auctions.length > 0) {
-        sales = auctions.slice(0, 25).map((r) => ({
-          sold_at: r.date ?? null,
-          grade: slice.gradeLabel,
-          price: r.price,
-          source: `Cardsight (${r.source})`,
-          url: r.url ?? null,
-        }));
+        sales = auctions.slice(0, 25).map((r) => {
+          const typeLabel = r.listing_type === "fixed" ? "BIN" : r.listing_type === "auction" ? "Auction" : null;
+          return {
+            sold_at: r.date ?? null,
+            grade: slice.gradeLabel,
+            price: r.price,
+            source: `Cardsight (${r.source}${typeLabel ? ` · ${typeLabel}` : ""})`,
+            url: r.url ?? null,
+          };
+        });
       }
 
       if (auctions.length >= 3) {
