@@ -4,11 +4,18 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 export const listCardsightParallels = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ card_id: z.string().uuid() }).parse(d))
+  .inputValidator((d: unknown) =>
+    z.object({
+      card_id: z.string().uuid().nullable().optional(),
+      descriptor: z.string().nullable().optional(),
+    }).parse(d),
+  )
   .handler(async ({ data }) => {
-    const { listParallelsForCard } = await import("./cardsight.server");
+    const { listParallelsForCard, searchCatalogCard } = await import("./cardsight.server");
     try {
-      return await listParallelsForCard(data.card_id);
+      const cardId = data.card_id ?? (data.descriptor ? await searchCatalogCard(data.descriptor) : null);
+      if (!cardId) return [];
+      return await listParallelsForCard(cardId);
     } catch (err) {
       console.error("listParallelsForCard failed:", err);
       return [];

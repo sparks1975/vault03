@@ -793,6 +793,7 @@ function CardDetail({
             </div>
             <ParallelSelect
               cardId={(draft.cardsight_card_id ?? card.cardsight_card_id) ?? null}
+              descriptor={cardDescriptor({ ...card, ...draft })}
               value={draft.cardsight_parallel_id ?? null}
               onChange={(id) => setDraft({ ...draft, cardsight_parallel_id: id })}
             />
@@ -1367,6 +1368,7 @@ function AddCardDialog({
 
             <ParallelSelect
               cardId={form.cardsight_card_id}
+              descriptor={cardDescriptor(form)}
               value={form.cardsight_parallel_id}
               onChange={(id) => setForm({ ...form, cardsight_parallel_id: id })}
             />
@@ -1448,23 +1450,36 @@ function Field({
   );
 }
 
+function cardDescriptor(card: {
+  player_name?: string | null;
+  year?: string | number | null;
+  set_name?: string | null;
+  card_number?: string | null;
+}) {
+  return [card.year, card.set_name, card.player_name, card.card_number ? `#${card.card_number}` : null]
+    .filter(Boolean)
+    .join(" ");
+}
+
 function ParallelSelect({
   cardId,
+  descriptor,
   value,
   onChange,
 }: {
   cardId: string | null;
+  descriptor: string;
   value: string | null;
   onChange: (id: string | null) => void;
 }) {
   const listFn = useServerFn(listCardsightParallels);
+  const canLookup = !!cardId || descriptor.trim().length > 2;
   const q = useQuery({
-    queryKey: ["cardsight-parallels", cardId],
-    queryFn: () => listFn({ data: { card_id: cardId! } }),
-    enabled: !!cardId,
+    queryKey: ["cardsight-parallels", cardId, descriptor],
+    queryFn: () => listFn({ data: { card_id: cardId, descriptor } }),
+    enabled: canLookup,
     staleTime: 60 * 60 * 1000,
   });
-  if (!cardId) return null;
   return (
     <label className="block">
       <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
@@ -1472,7 +1487,7 @@ function ParallelSelect({
       </span>
       <select
         value={value ?? ""}
-        disabled={q.isLoading}
+        disabled={!canLookup || q.isLoading}
         onChange={(e) => onChange(e.target.value || null)}
         className="mt-1 w-full h-10 px-3 border border-border rounded-sm text-sm bg-background focus:outline-none focus:border-accent"
       >
@@ -1484,11 +1499,16 @@ function ParallelSelect({
         ))}
       </select>
       {q.isLoading && (
-        <span className="text-[9px] font-mono text-muted-foreground">Loading parallels…</span>
+        <span className="text-[9px] font-mono text-muted-foreground">Loading scoped parallel/refractor options…</span>
+      )}
+      {!canLookup && (
+        <span className="text-[9px] font-mono text-muted-foreground">
+          Enter the year, set, player, and card number to load options.
+        </span>
       )}
       {!q.isLoading && (q.data?.length ?? 0) === 0 && (
         <span className="text-[9px] font-mono text-muted-foreground">
-          No parallels found for this set.
+          No scoped parallel/refractor options found for this set.
         </span>
       )}
     </label>
