@@ -1350,6 +1350,14 @@ function AddCardDialog({
               )}
             </div>
 
+            <ParallelSelect
+              cardId={form.cardsight_card_id}
+              value={form.cardsight_parallel_id}
+              onChange={(id) => setForm({ ...form, cardsight_parallel_id: id })}
+            />
+
+
+
             <div className="border border-border p-4">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Link MLB player (for live stats)</p>
