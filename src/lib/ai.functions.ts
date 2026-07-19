@@ -131,7 +131,21 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
 
     // 2) Fallback: direct AI vision on the original data URL.
     const result = await scanViaAIVision(data.imageDataUrl);
-    return enrichWithMlb(result);
+    const enriched = await enrichWithMlb(result);
+    // Try to link a Cardsight card id via free-text search so pricing + parallels work.
+    try {
+      const { searchCatalogCard } = await import("./cardsight.server");
+      const desc = [enriched.year, enriched.set_name, enriched.player_name, enriched.card_number ? `#${enriched.card_number}` : null]
+        .filter(Boolean)
+        .join(" ");
+      if (desc) {
+        const id = await searchCatalogCard(desc);
+        if (id) enriched.cardsight_card_id = id;
+      }
+    } catch (err) {
+      console.error("Cardsight search (post-scan) failed:", err);
+    }
+    return enriched;
   });
 
 // If team/position are missing, look them up from the free MLB Stats API.
