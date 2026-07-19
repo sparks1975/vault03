@@ -251,7 +251,19 @@ function Dashboard() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cards"] }),
   });
 
+  const revalueAllMut = useMutation({
+    mutationFn: () => revalueAllFn(),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["cards"] });
+      toast.success(`Re-valued ${res.processed} card${res.processed === 1 ? "" : "s"}${res.failed > 0 ? ` (${res.failed} failed)` : ""}`);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Re-value failed");
+    },
+  });
+
   function updateCard(cardId: string, patch: Partial<Card>) {
+
     updateMut.mutate({ id: cardId, patch });
   }
   function removeCard(cardId: string) {
