@@ -1108,6 +1108,8 @@ function AddCardDialog({
         card_number: result.card_number ?? f.card_number,
         grade: result.grade ?? f.grade,
         grader: result.grader ?? f.grader,
+        cardsight_card_id: result.cardsight_card_id ?? f.cardsight_card_id,
+        cardsight_parallel_id: null,
       }));
       toast.success(`Card identified (${result.confidence} confidence). Verify the details.`);
       setStep("form");
