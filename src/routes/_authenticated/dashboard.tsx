@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X, ChevronLeft } from "lucide-react";
+import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X, ChevronLeft, RefreshCw } from "lucide-react";
 
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
 import { listCardsightParallels } from "@/lib/cardsight.functions";
@@ -16,7 +16,9 @@ import {
   deleteCard,
   replaceValuation,
   uploadCardPhoto,
+  revalueAllCards,
 } from "@/lib/cards.functions";
+
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -159,7 +161,9 @@ function Dashboard() {
   const deleteFn = useServerFn(deleteCard);
   const estimateFn = useServerFn(estimateCardValue);
   const replaceValFn = useServerFn(replaceValuation);
+  const revalueAllFn = useServerFn(revalueAllCards);
   const qc = useQueryClient();
+
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -247,7 +251,19 @@ function Dashboard() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cards"] }),
   });
 
+  const revalueAllMut = useMutation({
+    mutationFn: () => revalueAllFn(),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["cards"] });
+      toast.success(`Re-valued ${res.processed} card${res.processed === 1 ? "" : "s"}${res.failed > 0 ? ` (${res.failed} failed)` : ""}`);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Re-value failed");
+    },
+  });
+
   function updateCard(cardId: string, patch: Partial<Card>) {
+
     updateMut.mutate({ id: cardId, patch });
   }
   function removeCard(cardId: string) {
@@ -328,6 +344,15 @@ function Dashboard() {
         </div>
         <div className="flex gap-2 md:gap-3 items-center shrink-0">
           <button
+            onClick={() => revalueAllMut.mutate()}
+            disabled={revalueAllMut.isPending || cardData.length === 0}
+            title="Re-value all cards"
+            className="px-3 md:px-4 py-2 border border-border text-foreground text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-secondary transition-colors inline-flex items-center gap-2 disabled:opacity-50"
+          >
+            {revalueAllMut.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+            <span className="hidden sm:inline">Re-value</span>
+          </button>
+          <button
             onClick={() => setAddOpen(true)}
             className="px-3 md:px-4 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-accent transition-colors inline-flex items-center gap-2"
           >
@@ -335,6 +360,7 @@ function Dashboard() {
           </button>
           <SignOutButton />
         </div>
+
       </nav>
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 pt-8 md:pt-12">
