@@ -236,6 +236,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           set_name: data.set_name,
           card_number: data.card_number,
           descriptor: descriptorForSearch,
+          is_autograph: data.is_autograph,
         });
       } catch (err) {
         console.error("Cardsight search failed:", err);
@@ -258,8 +259,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           const slice = await fetchPricing(resolvedCardId, {
             parallel_id: data.cardsight_parallel_id ?? null,
             grade_id: resolvedGradeId,
-            period: "6m",
-            limit: 200,
+            grader: data.grader,
+            grade: data.grade,
+            period: "30d",
           });
 
         const auctions = slice.auctionSales
@@ -269,6 +271,16 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             const tb = b.date ? new Date(b.date).getTime() : 0;
             return tb - ta;
           });
+
+        if (auctions.length > 0) {
+          sales = auctions.slice(0, 25).map((r) => ({
+            sold_at: r.date ?? null,
+            grade: slice.gradeLabel,
+            price: r.price,
+            source: `Cardsight (${r.source})`,
+            url: r.url ?? null,
+          }));
+        }
 
         if (auctions.length >= 3) {
           const trimmed = trimOutliersIQR(auctions.map((r) => r.price));
@@ -293,13 +305,6 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             if (pMed > 0) deltaPct = ((rMed - pMed) / pMed) * 100;
           }
 
-          sales = auctions.slice(0, 25).map((r) => ({
-            sold_at: r.date ?? null,
-            grade: slice.gradeLabel,
-            price: r.price,
-            source: `Cardsight (${r.source})`,
-            url: r.url ?? null,
-          }));
           usedCardsight = true;
         } else {
           compsNote = `Only ${auctions.length} recent sold comp${auctions.length === 1 ? "" : "s"} — using AI estimate.`;
