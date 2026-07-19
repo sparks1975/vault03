@@ -213,13 +213,18 @@ function Dashboard() {
               history: est.history,
             },
           });
+          if (!c.cardsight_card_id && est.resolved_cardsight_card_id) {
+            await updateFn({
+              data: { id: c.id, patch: { cardsight_card_id: est.resolved_cardsight_card_id } },
+            });
+          }
         } catch (err) {
           console.error("Auto-revalue failed for", c.player_name, err);
         }
       }
       qc.invalidateQueries({ queryKey: ["cards"] });
     })();
-  }, [cardsQ.isLoading, cardData, estimateFn, replaceValFn, qc]);
+  }, [cardsQ.isLoading, cardData, estimateFn, replaceValFn, updateFn, qc]);
 
 
   const updateMut = useMutation({
@@ -631,6 +636,9 @@ function CardDetail({
           history: est.history,
         },
       });
+      if (!card.cardsight_card_id && est.resolved_cardsight_card_id) {
+        onUpdate(card.id, { cardsight_card_id: est.resolved_cardsight_card_id });
+      }
       qc.invalidateQueries({ queryKey: ["cards"] });
       if (est.note) toast.warning(est.note);
       const soldCount = est.sales.filter((s) => s.source.startsWith("Cardsight")).length;

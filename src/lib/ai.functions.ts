@@ -131,7 +131,21 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
 
     // 2) Fallback: direct AI vision on the original data URL.
     const result = await scanViaAIVision(data.imageDataUrl);
-    return enrichWithMlb(result);
+    const enriched = await enrichWithMlb(result);
+    // Try to link a Cardsight card id via free-text search so pricing + parallels work.
+    try {
+      const { searchCatalogCard } = await import("./cardsight.server");
+      const desc = [enriched.year, enriched.set_name, enriched.player_name, enriched.card_number ? `#${enriched.card_number}` : null]
+        .filter(Boolean)
+        .join(" ");
+      if (desc) {
+        const id = await searchCatalogCard(desc);
+        if (id) enriched.cardsight_card_id = id;
+      }
+    } catch (err) {
+      console.error("Cardsight search (post-scan) failed:", err);
+    }
+    return enriched;
   });
 
 // If team/position are missing, look them up from the free MLB Stats API.
@@ -196,8 +210,27 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     let compsNote: string | null = null;
     let usedCardsight = false;
     let resolvedGradeId: string | null = data.cardsight_grade_id ?? null;
+    let resolvedCardId: string | null = data.cardsight_card_id ?? null;
 
-    if (data.cardsight_card_id) {
+    // If we don't yet have a cardsight card id, resolve one via catalog search.
+    if (!resolvedCardId) {
+      try {
+        const { searchCatalogCard } = await import("./cardsight.server");
+        const descriptorForSearch = [
+          data.year,
+          data.set_name,
+          data.player_name,
+          data.card_number ? `#${data.card_number}` : null,
+        ]
+          .filter(Boolean)
+          .join(" ");
+        resolvedCardId = await searchCatalogCard(descriptorForSearch);
+      } catch (err) {
+        console.error("Cardsight search failed:", err);
+      }
+    }
+
+    if (resolvedCardId) {
       try {
         const { fetchPricing, resolveGradeId, median, trimOutliersIQR } = await import(
           "./cardsight.server"
@@ -210,7 +243,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         if (data.grader && data.grade && !resolvedGradeId) {
           compsNote = `Couldn't match grade "${data.grader} ${data.grade}" in Cardsight — using AI estimate.`;
         } else {
-          const slice = await fetchPricing(data.cardsight_card_id, {
+          const slice = await fetchPricing(resolvedCardId, {
             parallel_id: data.cardsight_parallel_id ?? null,
             grade_id: resolvedGradeId,
             period: "6m",
@@ -265,7 +298,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         compsNote = err instanceof Error ? err.message : String(err);
       }
     } else {
-      compsNote = "Card not yet linked to Cardsight — using AI estimate.";
+      compsNote = "Couldn't match this card in Cardsight — using AI estimate.";
     }
 
     // AI narrative fallback + history spark data.
@@ -317,5 +350,7 @@ If unable to value, return current_value: 0.`;
       history: ai.history,
       source: usedCardsight ? ("cardsight" as const) : ("ai" as const),
       note: compsNote,
+      resolved_cardsight_card_id: resolvedCardId,
+      resolved_cardsight_grade_id: resolvedGradeId,
     };
   });
