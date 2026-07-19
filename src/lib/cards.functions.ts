@@ -1,6 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { estimateCardValue } from "./ai.functions";
+
 
 const SALE_TTL = 60 * 60; // 1 hour signed URL
 
