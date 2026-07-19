@@ -309,8 +309,11 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           const slice = await fetchPricing(resolvedCardId, {
             parallel_id: data.cardsight_parallel_id ?? null,
             grade_id: resolvedGradeId,
+            player_name: data.player_name,
             grader: data.grader,
             grade: data.grade,
+            is_autograph: data.is_autograph,
+            serial_number: data.serial_number,
             period: "30d",
           });
           await priceFromSlice(slice);
