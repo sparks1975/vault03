@@ -300,8 +300,9 @@ export const revalueAllCards = createServerFn({ method: "POST" })
           idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
         }
         if (Object.keys(idPatch).length > 0) {
-          await (supabase as never).from("cards").update(idPatch).eq("id", c.id);
+          await supabase.from("cards").update(idPatch as never).eq("id", c.id);
         }
+
 
         processed++;
       } catch (err) {
