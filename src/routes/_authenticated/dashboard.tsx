@@ -615,6 +615,9 @@ function CardDetail({
           grader: card.grader,
           is_autograph: card.is_autograph,
           serial_number: card.serial_number,
+          cardsight_card_id: card.cardsight_card_id,
+          cardsight_parallel_id: card.cardsight_parallel_id,
+          cardsight_grade_id: card.cardsight_grade_id,
         },
       });
       await replaceValFn({
