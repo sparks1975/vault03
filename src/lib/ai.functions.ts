@@ -88,7 +88,7 @@ async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
       {
         role: "system",
         content:
-          "You are a baseball card identification expert. Extract details from card photos. Reply ONLY with a JSON object matching the requested schema — no prose.",
+          "You are a sports card identification expert (baseball, football, basketball, hockey, soccer). Extract details from card photos. Reply ONLY with a JSON object matching the requested schema — no prose.",
       },
       {
         role: "user",
@@ -96,7 +96,7 @@ async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
           {
             type: "text",
             text:
-              'Identify this baseball card. Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null.',
+              'Identify this sports card. Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null.',
           },
           { type: "image_url", image_url: { url: imageUrl } },
         ],
@@ -464,26 +464,47 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           }
         }
 
-        // Grade/auto filter on titles so we don't mix graded and raw comps.
-        const gradedRe = /\b(psa|bgs|sgc|cgc)\b/i;
-        const autoRe = /\b(auto(graph)?|signed|signature)\b/i;
+        // Full variation filter so pt130 comps aren't polluted by parallels,
+        // refractors, /XX numbered variants, autos, or a completely different
+        // player/year/card-number that happens to show up in search results.
+        const { isVariantTitle, titleMatchesCard } = await import("./cardsight.server");
         const isGradedCard = Boolean(data.grader && data.grade);
         const graderLower = (data.grader ?? "").toLowerCase();
         const gradeLower = String(data.grade ?? "").toLowerCase();
+        const hasSelectedParallel = Boolean(data.cardsight_parallel_id);
 
         const pt130Sales = (cached ?? [])
           .filter((c) => {
             if (!c.sold_at) return false;
             const t = new Date(c.sold_at as string).getTime();
             if (!Number.isFinite(t) || nowMs - t > sixMonthsMs) return false;
-            const title = String(c.title ?? "").toLowerCase();
+            const rawTitle = String(c.title ?? "");
+            const titleLower = rawTitle.toLowerCase();
             if (isGradedCard) {
-              if (!title.includes(graderLower)) return false;
-              if (!title.includes(gradeLower)) return false;
+              if (!titleLower.includes(graderLower)) return false;
+              if (!titleLower.includes(gradeLower)) return false;
             } else {
-              if (gradedRe.test(title)) return false;
+              if (/\b(psa|bgs|sgc|cgc)\b/i.test(rawTitle)) return false;
             }
-            if (!data.is_autograph && autoRe.test(title)) return false;
+            // Player / year / card number must all match when we have them.
+            if (!titleMatchesCard(rawTitle, {
+              player_name: data.player_name,
+              year: data.year,
+              card_number: data.card_number,
+            })) return false;
+            // Reject parallels, refractors, /XX serials, or autos when the
+            // submitted card isn't that variant.
+            if (isVariantTitle(rawTitle, {
+              hasSelectedParallel,
+              is_autograph: data.is_autograph,
+              serial_number: data.serial_number,
+            })) return false;
+            // If the user marked a serial number, require it in the title.
+            if (data.serial_number) {
+              const denom = String(data.serial_number).match(/\/\s*(\d+)/)?.[1];
+              const needle = denom ? `/${denom}` : String(data.serial_number).toLowerCase();
+              if (!titleLower.includes(needle)) return false;
+            }
             const price = Number(c.price);
             return Number.isFinite(price) && price > 0;
           })
