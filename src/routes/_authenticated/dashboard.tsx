@@ -684,11 +684,11 @@ function CardDetail({
       }
       qc.invalidateQueries({ queryKey: ["cards"] });
       if (est.note) toast.warning(est.note);
-      const soldCount = est.sales.filter((s) => s.source.startsWith("Cardsight")).length;
+      const soldCount = est.sales.filter((s) => s.source.includes("eBay sold")).length;
       toast.success(
         soldCount > 0
-          ? `Valuation refreshed — ${soldCount} sold comps from Cardsight`
-          : "Valuation refreshed — AI estimate (no Cardsight comps yet)",
+          ? `Valuation refreshed — ${soldCount} sold comp${soldCount === 1 ? "" : "s"}`
+          : "Valuation refreshed — AI estimate (no sold comps yet)",
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed");
