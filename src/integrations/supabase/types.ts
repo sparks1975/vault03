@@ -93,6 +93,9 @@ export type Database = {
       cards: {
         Row: {
           card_number: string | null
+          cardsight_card_id: string | null
+          cardsight_grade_id: string | null
+          cardsight_parallel_id: string | null
           created_at: string
           current_value: number | null
           grade: string | null
@@ -119,6 +122,9 @@ export type Database = {
         }
         Insert: {
           card_number?: string | null
+          cardsight_card_id?: string | null
+          cardsight_grade_id?: string | null
+          cardsight_parallel_id?: string | null
           created_at?: string
           current_value?: number | null
           grade?: string | null
@@ -145,6 +151,9 @@ export type Database = {
         }
         Update: {
           card_number?: string | null
+          cardsight_card_id?: string | null
+          cardsight_grade_id?: string | null
+          cardsight_parallel_id?: string | null
           created_at?: string
           current_value?: number | null
           grade?: string | null

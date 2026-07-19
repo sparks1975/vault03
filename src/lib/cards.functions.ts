@@ -21,6 +21,9 @@ const cardInputSchema = z.object({
   notes: z.string().nullable().optional(),
   photo_path: z.string().nullable().optional(),
   mlb_player_id: z.number().int().nullable().optional(),
+  cardsight_card_id: z.string().uuid().nullable().optional(),
+  cardsight_parallel_id: z.string().uuid().nullable().optional(),
+  cardsight_grade_id: z.string().uuid().nullable().optional(),
 });
 
 function dataUrlToBytes(dataUrl: string) {
@@ -133,6 +136,9 @@ const allowed = [
       "current_value",
       "value_delta_pct",
       "last_valued_at",
+      "cardsight_card_id",
+      "cardsight_parallel_id",
+      "cardsight_grade_id",
     ];
     const clean: Record<string, unknown> = {};
     for (const k of allowed) if (k in data.patch) clean[k] = data.patch[k];

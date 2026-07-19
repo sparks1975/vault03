@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X, ChevronLeft } from "lucide-react";
 
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
+import { listCardsightParallels } from "@/lib/cardsight.functions";
 import { CardCropDialog } from "@/components/CardCropDialog";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
 import {
@@ -120,6 +121,9 @@ type Card = {
   photo_url: string | null;
   mlb_player_id: number | null;
   last_valued_at: string | null;
+  cardsight_card_id: string | null;
+  cardsight_parallel_id: string | null;
+  cardsight_grade_id: string | null;
   created_at: string;
   sales: Sale[];
   history: HistoryPoint[];
@@ -195,6 +199,9 @@ function Dashboard() {
               grader: c.grader,
               is_autograph: c.is_autograph,
               serial_number: c.serial_number,
+              cardsight_card_id: c.cardsight_card_id,
+              cardsight_parallel_id: c.cardsight_parallel_id,
+              cardsight_grade_id: c.cardsight_grade_id,
             },
           });
           await replaceValFn({
@@ -562,6 +569,8 @@ function CardDetail({
       purchase_price: card.purchase_price,
       notes: card.notes,
       mlb_player_id: card.mlb_player_id,
+      cardsight_card_id: card.cardsight_card_id,
+      cardsight_parallel_id: card.cardsight_parallel_id,
     });
     setPlayerResults([]);
     setEditing(true);
@@ -608,6 +617,9 @@ function CardDetail({
           grader: card.grader,
           is_autograph: card.is_autograph,
           serial_number: card.serial_number,
+          cardsight_card_id: card.cardsight_card_id,
+          cardsight_parallel_id: card.cardsight_parallel_id,
+          cardsight_grade_id: card.cardsight_grade_id,
         },
       });
       await replaceValFn({
@@ -771,6 +783,11 @@ function CardDetail({
                 />
               )}
             </div>
+            <ParallelSelect
+              cardId={(draft.cardsight_card_id ?? card.cardsight_card_id) ?? null}
+              value={draft.cardsight_parallel_id ?? null}
+              onChange={(id) => setDraft({ ...draft, cardsight_parallel_id: id })}
+            />
           <label className="block">
 
 
@@ -1055,6 +1072,8 @@ function AddCardDialog({
     purchase_price: "",
     notes: "",
     mlb_player_id: null as number | null,
+    cardsight_card_id: null as string | null,
+    cardsight_parallel_id: null as string | null,
   });
   const [playerResults, setPlayerResults] = useState<Awaited<ReturnType<typeof searchMlbPlayer>>>([]);
 
@@ -1096,6 +1115,8 @@ function AddCardDialog({
         card_number: result.card_number ?? f.card_number,
         grade: result.grade ?? f.grade,
         grader: result.grader ?? f.grader,
+        cardsight_card_id: result.cardsight_card_id ?? f.cardsight_card_id,
+        cardsight_parallel_id: null,
       }));
       toast.success(`Card identified (${result.confidence} confidence). Verify the details.`);
       setStep("form");
@@ -1164,6 +1185,8 @@ function AddCardDialog({
           notes: form.notes || null,
           photo_path: photoPath,
           mlb_player_id: form.mlb_player_id,
+          cardsight_card_id: form.cardsight_card_id,
+          cardsight_parallel_id: form.cardsight_parallel_id,
         },
       });
 
@@ -1182,6 +1205,9 @@ function AddCardDialog({
             grader: created.grader,
             is_autograph: created.is_autograph,
             serial_number: created.serial_number,
+            cardsight_card_id: created.cardsight_card_id,
+            cardsight_parallel_id: created.cardsight_parallel_id,
+            cardsight_grade_id: created.cardsight_grade_id,
           },
         });
         await replaceValFn({
@@ -1331,6 +1357,14 @@ function AddCardDialog({
               )}
             </div>
 
+            <ParallelSelect
+              cardId={form.cardsight_card_id}
+              value={form.cardsight_parallel_id}
+              onChange={(id) => setForm({ ...form, cardsight_parallel_id: id })}
+            />
+
+
+
             <div className="border border-border p-4">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Link MLB player (for live stats)</p>
@@ -1405,3 +1439,51 @@ function Field({
     </label>
   );
 }
+
+function ParallelSelect({
+  cardId,
+  value,
+  onChange,
+}: {
+  cardId: string | null;
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const listFn = useServerFn(listCardsightParallels);
+  const q = useQuery({
+    queryKey: ["cardsight-parallels", cardId],
+    queryFn: () => listFn({ data: { card_id: cardId! } }),
+    enabled: !!cardId,
+    staleTime: 60 * 60 * 1000,
+  });
+  if (!cardId) return null;
+  return (
+    <label className="block">
+      <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+        Parallel / Refractor
+      </span>
+      <select
+        value={value ?? ""}
+        disabled={q.isLoading}
+        onChange={(e) => onChange(e.target.value || null)}
+        className="mt-1 w-full h-10 px-3 border border-border rounded-sm text-sm bg-background focus:outline-none focus:border-accent"
+      >
+        <option value="">Base card</option>
+        {(q.data ?? []).map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      {q.isLoading && (
+        <span className="text-[9px] font-mono text-muted-foreground">Loading parallels…</span>
+      )}
+      {!q.isLoading && (q.data?.length ?? 0) === 0 && (
+        <span className="text-[9px] font-mono text-muted-foreground">
+          No parallels found for this set.
+        </span>
+      )}
+    </label>
+  );
+}
+
