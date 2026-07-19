@@ -284,7 +284,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         compsNote = err instanceof Error ? err.message : String(err);
       }
     } else {
-      compsNote = "Card not yet linked to Cardsight — using AI estimate.";
+      compsNote = "Couldn't match this card in Cardsight — using AI estimate.";
     }
 
     // AI narrative fallback + history spark data.
