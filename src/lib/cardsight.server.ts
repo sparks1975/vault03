@@ -256,6 +256,7 @@ function pricingRecordMatchesStructured(
   // re-check player/year/card number against marketplace titles. OCR/catalog
   // text can be wrong (for example All Aces numbers), and title matching was
   // discarding valid comps for the identified card.
+  const hasSelectedParallel = Boolean(lookup.parallel_id);
   if (lookup.parallel_id) {
     if (record.parallel_id && record.parallel_id !== lookup.parallel_id) return false;
   } else if (record.parallel_id || record.parallel_name) {
@@ -272,10 +273,10 @@ function pricingRecordMatchesStructured(
 
   // Base cards should not absorb obvious serial-numbered or color parallel
   // comps if Cardsight didn't attach a parallel_id to a marketplace record.
-  if (/\b(black|blue|gold|green|orange|pink|platinum|purple|red|rose gold|foilfractor|refractor|superfractor)\b/i.test(rawTitle)) {
+  if (!hasSelectedParallel && /\b(black|blue|gold|green|orange|pink|platinum|purple|red|rose gold|foilfractor|refractor|superfractor)\b/i.test(rawTitle)) {
     return false;
   }
-  if (/(^|[^\w])(\d+\s*\/\s*\d+|\/\s*\d{1,4})(?=$|[^\w])/i.test(rawTitle)) {
+  if (!hasSelectedParallel && /(^|[^\w])(\d+\s*\/\s*\d+|\/\s*\d{1,4})(?=$|[^\w])/i.test(rawTitle)) {
     return false;
   }
 
