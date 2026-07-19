@@ -1252,6 +1252,7 @@ function AddCardDialog({
             cardsight_card_id: created.cardsight_card_id,
             cardsight_parallel_id: created.cardsight_parallel_id,
             cardsight_grade_id: created.cardsight_grade_id,
+            card_id: created.id,
           },
         });
         await replaceValFn({
