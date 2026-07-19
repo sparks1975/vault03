@@ -1016,7 +1016,7 @@ function CardDetail({
           )}
 
           <p className="mt-4 text-[9px] font-mono text-muted-foreground uppercase tracking-widest">
-            Values reflect recent sold comps from Cardsight when available.
+            Values reflect recent sold comps from eBay when available.
           </p>
         </div>
       </div>
