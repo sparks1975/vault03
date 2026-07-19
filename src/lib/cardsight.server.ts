@@ -181,6 +181,7 @@ function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): n
 
   if (player && haystack.includes(player)) score += 50;
   if (setName && haystack.includes(setName)) score += 35;
+  else if (expandSetSearchTerms(lookup.set_name).some((term) => haystack.includes(normalizeText(term)))) score += 35;
   if (year && haystack.includes(year)) score += 20;
   if (number && "number" in candidate && normalizeText(candidate.number) === number) score += 25;
   if (!lookup.is_autograph && /\b(auto|autograph|autographs|signature|signatures)\b/.test(haystack)) score -= 60;
