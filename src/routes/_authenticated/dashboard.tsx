@@ -257,16 +257,62 @@ function Dashboard() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cards"] }),
   });
 
-  const revalueAllMut = useMutation({
-    mutationFn: () => revalueAllFn(),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ["cards"] });
-      toast.success(`Re-valued ${res.processed} card${res.processed === 1 ? "" : "s"}${res.failed > 0 ? ` (${res.failed} failed)` : ""}`);
-    },
-    onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Re-value failed");
-    },
-  });
+  async function runRevalueAll() {
+    if (revalueProgress.isRunning || cardData.length === 0) return;
+    setRevalueProgress({ isRunning: true, processed: 0, failed: 0, total: cardData.length, currentName: null });
+    let processed = 0;
+    let failed = 0;
+    for (const c of cardData) {
+      setRevalueProgress((prev) => ({ ...prev, currentName: c.player_name }));
+      try {
+        const est = await estimateFn({
+          data: {
+            player_name: c.player_name,
+            year: c.year,
+            set_name: c.set_name,
+            card_number: c.card_number,
+            grade: c.grade,
+            grader: c.grader,
+            is_autograph: c.is_autograph,
+            serial_number: c.serial_number,
+            cardsight_card_id: c.cardsight_card_id,
+            cardsight_parallel_id: c.cardsight_parallel_id,
+            cardsight_grade_id: c.cardsight_grade_id,
+            card_id: c.id,
+          },
+        });
+        await replaceValFn({
+          data: {
+            card_id: c.id,
+            current_value: est.current_value,
+            value_delta_pct: est.value_delta_pct,
+            sales: est.sales,
+            history: est.history,
+          },
+        });
+        const idPatch: Partial<Card> = {};
+        if (!c.cardsight_card_id && est.resolved_cardsight_card_id) {
+          idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
+        }
+        if (!c.cardsight_grade_id && est.resolved_cardsight_grade_id) {
+          idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
+        }
+        if (Object.keys(idPatch).length > 0) {
+          await updateFn({
+            data: { id: c.id, patch: idPatch },
+          });
+        }
+        processed++;
+      } catch (err) {
+        console.error("Revalue failed for", c.player_name, err);
+        failed++;
+      }
+      setRevalueProgress((prev) => ({ ...prev, processed, failed }));
+    }
+    await qc.invalidateQueries({ queryKey: ["cards"] });
+    toast.success(`Re-valued ${processed} card${processed === 1 ? "" : "s"}${failed > 0 ? ` (${failed} failed)` : ""}`);
+    setRevalueProgress({ isRunning: false, processed: 0, failed: 0, total: 0, currentName: null });
+  }
 
   function updateCard(cardId: string, patch: Partial<Card>) {
 
