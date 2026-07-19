@@ -396,12 +396,12 @@ function Dashboard() {
         </div>
         <div className="flex gap-2 md:gap-3 items-center shrink-0">
           <button
-            onClick={() => revalueAllMut.mutate()}
-            disabled={revalueAllMut.isPending || cardData.length === 0}
+            onClick={() => runRevalueAll()}
+            disabled={revalueProgress.isRunning || cardData.length === 0}
             title="Re-value all cards"
             className="px-3 md:px-4 py-2 border border-border text-foreground text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-secondary transition-colors inline-flex items-center gap-2 disabled:opacity-50"
           >
-            {revalueAllMut.isPending ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+            {revalueProgress.isRunning ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
             <span className="hidden sm:inline">Re-value</span>
           </button>
           <button
