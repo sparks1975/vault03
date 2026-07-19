@@ -316,7 +316,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             grade: data.grade,
             is_autograph: data.is_autograph,
             serial_number: data.serial_number,
-            period: "30d",
+            period: "6m",
           });
           await priceFromSlice(slice);
         }
@@ -340,7 +340,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             grader: data.grader,
             grade: data.grade,
           },
-          { period: "30d", limit: 100 },
+          { period: "6m", limit: 100 },
         );
         await priceFromSlice(searchSlice);
         if (!usedCardsight && !compsNote) {
