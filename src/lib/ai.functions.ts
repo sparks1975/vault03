@@ -134,12 +134,18 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
     const enriched = await enrichWithMlb(result);
     // Try to link a Cardsight card id via free-text search so pricing + parallels work.
     try {
-      const { searchCatalogCard } = await import("./cardsight.server");
+      const { searchCatalogCardByFields } = await import("./cardsight.server");
       const desc = [enriched.year, enriched.set_name, enriched.player_name, enriched.card_number ? `#${enriched.card_number}` : null]
         .filter(Boolean)
         .join(" ");
       if (desc) {
-        const id = await searchCatalogCard(desc);
+        const id = await searchCatalogCardByFields({
+          player_name: enriched.player_name,
+          year: enriched.year,
+          set_name: enriched.set_name,
+          card_number: enriched.card_number,
+          descriptor: desc,
+        });
         if (id) enriched.cardsight_card_id = id;
       }
     } catch (err) {
@@ -215,7 +221,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     // If we don't yet have a cardsight card id, resolve one via catalog search.
     if (!resolvedCardId) {
       try {
-        const { searchCatalogCard } = await import("./cardsight.server");
+        const { searchCatalogCardByFields } = await import("./cardsight.server");
         const descriptorForSearch = [
           data.year,
           data.set_name,
@@ -224,7 +230,13 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         ]
           .filter(Boolean)
           .join(" ");
-        resolvedCardId = await searchCatalogCard(descriptorForSearch);
+        resolvedCardId = await searchCatalogCardByFields({
+          player_name: data.player_name,
+          year: data.year,
+          set_name: data.set_name,
+          card_number: data.card_number,
+          descriptor: descriptorForSearch,
+        });
       } catch (err) {
         console.error("Cardsight search failed:", err);
       }
