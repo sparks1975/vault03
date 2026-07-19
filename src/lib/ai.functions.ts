@@ -489,7 +489,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               sold_at: c.sold_at as string,
               grade: null as string | null,
               price: Number(c.price),
-              source: `130point${typeLabel ? ` · ${typeLabel}` : ""}`,
+              source: `eBay sold${typeLabel ? ` · ${typeLabel}` : ""}`,
               url: (c.url as string | null) ?? null,
             };
           });
