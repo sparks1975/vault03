@@ -170,6 +170,54 @@ export const deleteCard = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+async function applyValuation(
+  supabase: Awaited<ReturnType<typeof import("@supabase/supabase-js").createClient>>,
+  userId: string,
+  cardId: string,
+  valuation: {
+    current_value: number;
+    value_delta_pct: number;
+    sales: Array<{ sold_at: string | null; grade: string | null; price: number; source: string; url: string | null }>;
+    history: Array<{ recorded_at: string; value: number }>;
+  },
+) {
+  await supabase.from("card_sales").delete().eq("card_id", cardId);
+  await supabase.from("card_value_history").delete().eq("card_id", cardId);
+  if (valuation.sales.length) {
+    const { error } = await supabase.from("card_sales").insert(
+      valuation.sales.map((s) => ({
+        card_id: cardId,
+        user_id: userId,
+        sold_at: s.sold_at ? s.sold_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
+        grade: s.grade,
+        price: s.price,
+        source: s.source,
+        url: s.url,
+      })),
+    );
+    if (error) throw error;
+  }
+  if (valuation.history.length) {
+    const { error } = await supabase.from("card_value_history").insert(
+      valuation.history.map((h) => ({
+        card_id: cardId,
+        user_id: userId,
+        recorded_at: h.recorded_at,
+        value: h.value,
+      })),
+    );
+    if (error) throw error;
+  }
+  await supabase
+    .from("cards")
+    .update({
+      current_value: valuation.current_value,
+      value_delta_pct: valuation.value_delta_pct,
+      last_valued_at: new Date().toISOString(),
+    })
+    .eq("id", cardId);
+}
+
 export const replaceValuation = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
@@ -193,43 +241,70 @@ export const replaceValuation = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    await supabase.from("card_sales").delete().eq("card_id", data.card_id);
-    await supabase.from("card_value_history").delete().eq("card_id", data.card_id);
-    if (data.sales.length) {
-      const { error } = await supabase.from("card_sales").insert(
-        data.sales.map((s) => ({
-          card_id: data.card_id,
-          user_id: userId,
-          sold_at: s.sold_at ? s.sold_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
-          grade: s.grade,
-          price: s.price,
-          source: s.source,
-          url: s.url,
-        })),
-      );
-      if (error) throw error;
-    }
-    if (data.history.length) {
-      const { error } = await supabase.from("card_value_history").insert(
-        data.history.map((h) => ({
-          card_id: data.card_id,
-          user_id: userId,
-          recorded_at: h.recorded_at,
-          value: h.value,
-        })),
-      );
-      if (error) throw error;
-    }
-    await supabase
-      .from("cards")
-      .update({
-        current_value: data.current_value,
-        value_delta_pct: data.value_delta_pct,
-        last_valued_at: new Date().toISOString(),
-      })
-      .eq("id", data.card_id);
+    await applyValuation(supabase as never, userId, data.card_id, {
+      current_value: data.current_value,
+      value_delta_pct: data.value_delta_pct,
+      sales: data.sales,
+      history: data.history,
+    });
     return { ok: true };
   });
+
+export const revalueAllCards = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const { data: cards, error } = await supabase
+      .from("cards")
+      .select("id, player_name, year, set_name, card_number, grade, grader, is_autograph, serial_number, cardsight_card_id, cardsight_parallel_id, cardsight_grade_id, last_valued_at")
+      .eq("user_id", userId);
+    if (error) throw error;
+
+    let processed = 0;
+    let failed = 0;
+    for (const c of cards ?? []) {
+      try {
+        const est = await estimateCardValue({
+          data: {
+            player_name: c.player_name,
+            year: c.year,
+            set_name: c.set_name,
+            card_number: c.card_number,
+            grade: c.grade,
+            grader: c.grader,
+            is_autograph: c.is_autograph,
+            serial_number: c.serial_number,
+            cardsight_card_id: c.cardsight_card_id,
+            cardsight_parallel_id: c.cardsight_parallel_id,
+            cardsight_grade_id: c.cardsight_grade_id,
+            card_id: c.id,
+          },
+        });
+        await applyValuation(supabase as never, userId, c.id, {
+          current_value: est.current_value,
+          value_delta_pct: est.value_delta_pct,
+          sales: est.sales,
+          history: est.history,
+        });
+        const idPatch: Record<string, unknown> = {};
+        if (!c.cardsight_card_id && est.resolved_cardsight_card_id) {
+          idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
+        }
+        if (!c.cardsight_grade_id && est.resolved_cardsight_grade_id) {
+          idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
+        }
+        if (Object.keys(idPatch).length > 0) {
+          await supabase.from("cards").update(idPatch).eq("id", c.id);
+        }
+        processed++;
+      } catch (err) {
+        console.error("Revalue failed for", c.player_name, err);
+        failed++;
+      }
+    }
+    return { processed, failed, total: cards?.length ?? 0 };
+  });
+
 
 // ---------- Compress existing stored images via TinyPNG ----------
 export const compressExistingPhotos = createServerFn({ method: "POST" })
