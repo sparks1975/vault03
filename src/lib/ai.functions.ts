@@ -244,7 +244,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           }
 
           sales = auctions.slice(0, 25).map((r) => ({
-            sold_at: r.date,
+            sold_at: r.date ?? null,
             grade: slice.gradeLabel,
             price: r.price,
             source: `Cardsight (${r.source})`,
