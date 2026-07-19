@@ -193,6 +193,10 @@ function compact(value: string | number | null | undefined): string {
   return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function serialSearchTerm(serialNumber: string | null | undefined): string | null {
   const raw = compact(serialNumber);
   if (!raw) return null;
@@ -205,6 +209,7 @@ function pricingRecordMatches(
   lookup: {
     player_name?: string | null;
     year?: string | number | null;
+    set_name?: string | null;
     card_number?: string | null;
     is_autograph?: boolean | null;
     serial_number?: string | null;
@@ -220,9 +225,10 @@ function pricingRecordMatches(
   if (playerTokens.length > 0 && !playerTokens.every((t) => title.includes(t))) return false;
   const year = compact(lookup.year);
   if (year && !rawTitle.includes(year)) return false;
+  if (!setTitleMatches(rawTitle, lookup.set_name)) return false;
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
   if (number) {
-    const numberPattern = new RegExp(`(^|[^a-z0-9])#?${number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z0-9])`, "i");
+    const numberPattern = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
     if (!numberPattern.test(rawTitle)) return false;
   }
 
@@ -268,7 +274,9 @@ export function titleMatchesCard(
   lookup: {
     player_name?: string | null;
     year?: string | number | null;
+    set_name?: string | null;
     card_number?: string | null;
+    requireCardNumber?: boolean;
   },
 ): boolean {
   if (!title) return true; // no title = can't disqualify
@@ -278,12 +286,26 @@ export function titleMatchesCard(
     if (tokens.length > 0 && !tokens.every((x) => t.includes(x))) return false;
   }
   if (lookup.year && !String(title).includes(String(lookup.year))) return false;
+  if (!setTitleMatches(title, lookup.set_name)) return false;
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
-  if (number) {
-    const numRe = new RegExp(`(^|[^a-z0-9])#?${number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z0-9])`, "i");
+  if (number && lookup.requireCardNumber !== false) {
+    const numRe = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
     if (!numRe.test(title)) return false;
   }
   return true;
+}
+
+function setTitleMatches(title: string, setName: string | null | undefined): boolean {
+  const terms = expandSetSearchTerms(setName)
+    .map((term) => normalizeText(term))
+    .filter(Boolean);
+  if (terms.length === 0) return true;
+  const titleNorm = normalizeText(title);
+  const stop = new Set(["base", "card", "cards", "insert", "set", "series"]);
+  return terms.some((term) => {
+    const tokens = term.split(" ").filter((t) => t.length > 1 && !stop.has(t));
+    return tokens.length === 0 || tokens.every((t) => titleNorm.includes(t));
+  });
 }
 
 function pricingRecordMatchesStructured(
@@ -294,6 +316,7 @@ function pricingRecordMatchesStructured(
     serial_number?: string | null;
     player_name?: string | null;
     year?: string | number | null;
+    set_name?: string | null;
     card_number?: string | null;
   },
 ): boolean {
