@@ -645,6 +645,7 @@ export async function fetchPricing(
     grade_id?: string | null;
     player_name?: string | null;
     year?: string | number | null;
+    set_name?: string | null;
     card_number?: string | null;
     grader?: string | null;
     grade?: string | null;
