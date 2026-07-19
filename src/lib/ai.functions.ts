@@ -229,7 +229,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         if (data.grader && data.grade && !resolvedGradeId) {
           compsNote = `Couldn't match grade "${data.grader} ${data.grade}" in Cardsight — using AI estimate.`;
         } else {
-          const slice = await fetchPricing(data.cardsight_card_id, {
+          const slice = await fetchPricing(resolvedCardId, {
             parallel_id: data.cardsight_parallel_id ?? null,
             grade_id: resolvedGradeId,
             period: "6m",
