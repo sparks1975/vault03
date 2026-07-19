@@ -186,6 +186,8 @@ function pricingRecordMatches(
   record: PricingRecord,
   lookup: {
     player_name?: string | null;
+    year?: string | number | null;
+    card_number?: string | null;
     is_autograph?: boolean | null;
     serial_number?: string | null;
     grader?: string | null;
@@ -198,6 +200,13 @@ function pricingRecordMatches(
     .split(" ")
     .filter((t) => t.length > 1);
   if (playerTokens.length > 0 && !playerTokens.every((t) => title.includes(t))) return false;
+  const year = compact(lookup.year);
+  if (year && !rawTitle.includes(year)) return false;
+  const number = compact(lookup.card_number).replace(/^#\s*/, "");
+  if (number) {
+    const numberPattern = new RegExp(`(^|[^a-z0-9])#?${number.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-z0-9])`, "i");
+    if (!numberPattern.test(rawTitle)) return false;
+  }
 
   const isAutoTitle = /\b(auto|autograph|autographs|signed|signature)\b/i.test(rawTitle);
   if (lookup.is_autograph && !isAutoTitle) return false;
@@ -507,6 +516,8 @@ export async function fetchPricing(
     parallel_id?: string | null;
     grade_id?: string | null;
     player_name?: string | null;
+    year?: string | number | null;
+    card_number?: string | null;
     grader?: string | null;
     grade?: string | null;
     is_autograph?: boolean | null;
