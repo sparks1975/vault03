@@ -404,6 +404,136 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       }
     }
 
+    // -------- Merge cached 130point sold comps into the valuation pool --------
+    // Runs whenever the caller provided a card_id so we can load the per-card
+    // cache and (if stale) refresh it from 130point via Firecrawl.
+    if (data.card_id) {
+      const cardId = data.card_id;
+      const userId = context.userId;
+      const supabase = context.supabase;
+      const nowMs = Date.now();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const sixMonthsMs = 180 * dayMs;
+
+      const loadCache = async () => {
+        const { data: rows, error } = await supabase
+          .from("pt130_comps")
+          .select("sold_at, price, title, url, listing_type, scraped_at")
+          .eq("card_id", cardId)
+          .order("scraped_at", { ascending: false });
+        if (error) throw error;
+        return rows ?? [];
+      };
+
+      try {
+        let cached = await loadCache();
+        const latestScrape = cached[0]?.scraped_at
+          ? new Date(cached[0].scraped_at as string).getTime()
+          : 0;
+        const stale = !latestScrape || nowMs - latestScrape > dayMs;
+        if (stale) {
+          try {
+            const { buildPt130Descriptor, refreshPt130ForCard } = await import(
+              "./pt130.server"
+            );
+            const descriptor = buildPt130Descriptor({
+              year: data.year,
+              set_name: data.set_name,
+              player_name: data.player_name,
+              card_number: data.card_number,
+              is_autograph: data.is_autograph,
+              grader: data.grader,
+              grade: data.grade,
+            });
+            if (descriptor) {
+              await refreshPt130ForCard(supabase as never, {
+                card_id: cardId,
+                user_id: userId,
+                descriptor,
+              });
+              cached = await loadCache();
+            }
+          } catch (err) {
+            console.error("pt130 live refresh failed:", err);
+          }
+        }
+
+        // Grade/auto filter on titles so we don't mix graded and raw comps.
+        const gradedRe = /\b(psa|bgs|sgc|cgc)\b/i;
+        const autoRe = /\b(auto(graph)?|signed|signature)\b/i;
+        const isGradedCard = Boolean(data.grader && data.grade);
+        const graderLower = (data.grader ?? "").toLowerCase();
+        const gradeLower = String(data.grade ?? "").toLowerCase();
+
+        const pt130Sales = (cached ?? [])
+          .filter((c) => {
+            if (!c.sold_at) return false;
+            const t = new Date(c.sold_at as string).getTime();
+            if (!Number.isFinite(t) || nowMs - t > sixMonthsMs) return false;
+            const title = String(c.title ?? "").toLowerCase();
+            if (isGradedCard) {
+              if (!title.includes(graderLower)) return false;
+              if (!title.includes(gradeLower)) return false;
+            } else {
+              if (gradedRe.test(title)) return false;
+            }
+            if (!data.is_autograph && autoRe.test(title)) return false;
+            const price = Number(c.price);
+            return Number.isFinite(price) && price > 0;
+          })
+          .map((c) => {
+            const lt = (c.listing_type as string | null) ?? null;
+            const typeLabel =
+              lt === "fixed" ? "BIN" : lt === "auction" ? "Auction" : lt === "best_offer" ? "Best Offer" : null;
+            return {
+              sold_at: c.sold_at as string,
+              grade: null as string | null,
+              price: Number(c.price),
+              source: `130point${typeLabel ? ` · ${typeLabel}` : ""}`,
+              url: (c.url as string | null) ?? null,
+            };
+          });
+
+        if (pt130Sales.length > 0) {
+          // Combined pool: existing sales (cardsight) + pt130.
+          const combined = [...sales, ...pt130Sales].sort((a, b) => {
+            const ta = a.sold_at ? new Date(a.sold_at).getTime() : 0;
+            const tb = b.sold_at ? new Date(b.sold_at).getTime() : 0;
+            return tb - ta;
+          });
+
+          if (combined.length >= 3) {
+            const { median, trimOutliersIQR } = await import("./cardsight.server");
+            const trimmed = trimOutliersIQR(combined.map((r) => r.price));
+            currentValue = median(trimmed);
+            // 30-day vs prior-30 delta on the combined stream.
+            const recent: number[] = [];
+            const prior: number[] = [];
+            for (const r of combined) {
+              if (!r.sold_at) continue;
+              const t = new Date(r.sold_at).getTime();
+              if (!Number.isFinite(t)) continue;
+              const age = nowMs - t;
+              if (age <= 30 * dayMs) recent.push(r.price);
+              else if (age <= 60 * dayMs) prior.push(r.price);
+            }
+            if (recent.length >= 2 && prior.length >= 2) {
+              const rMed = median(recent);
+              const pMed = median(prior);
+              if (pMed > 0) deltaPct = ((rMed - pMed) / pMed) * 100;
+            }
+            sales = combined.slice(0, 25);
+            usedCardsight = true;
+            compsNote = null;
+          }
+        }
+      } catch (err) {
+        console.error("pt130 merge failed:", err);
+      }
+    }
+
+
+
     const fallbackHistory = (baseValue: number) => {
       const base = Number.isFinite(baseValue) && baseValue > 0 ? baseValue : 0;
       const now = new Date();
