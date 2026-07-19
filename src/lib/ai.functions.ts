@@ -196,8 +196,27 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     let compsNote: string | null = null;
     let usedCardsight = false;
     let resolvedGradeId: string | null = data.cardsight_grade_id ?? null;
+    let resolvedCardId: string | null = data.cardsight_card_id ?? null;
 
-    if (data.cardsight_card_id) {
+    // If we don't yet have a cardsight card id, resolve one via catalog search.
+    if (!resolvedCardId) {
+      try {
+        const { searchCatalogCard } = await import("./cardsight.server");
+        const descriptorForSearch = [
+          data.year,
+          data.set_name,
+          data.player_name,
+          data.card_number ? `#${data.card_number}` : null,
+        ]
+          .filter(Boolean)
+          .join(" ");
+        resolvedCardId = await searchCatalogCard(descriptorForSearch);
+      } catch (err) {
+        console.error("Cardsight search failed:", err);
+      }
+    }
+
+    if (resolvedCardId) {
       try {
         const { fetchPricing, resolveGradeId, median, trimOutliersIQR } = await import(
           "./cardsight.server"
