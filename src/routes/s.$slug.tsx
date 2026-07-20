@@ -12,6 +12,8 @@ export const Route = createFileRoute("/s/$slug")({
     const count = loaderData?.card_count ?? 0;
     const title = `${name}'s Card Collection — Vault.03`;
     const description = `Browse ${count} card${count === 1 ? "" : "s"} from ${name}'s collection on Vault.03.`;
+    const ogImage = "https://vault03.app/og-image.png";
+    const url = `https://vault03.app/s/${params.slug}`;
     return {
       meta: [
         { title },
@@ -19,10 +21,17 @@ export const Route = createFileRoute("/s/$slug")({
         { property: "og:title", content: title },
         { property: "og:description", content: description },
         { property: "og:type", content: "website" },
+        { property: "og:url", content: url },
+        { property: "og:image", content: ogImage },
+        { property: "og:image:width", content: "1200" },
+        { property: "og:image:height", content: "630" },
         { name: "twitter:card", content: "summary_large_image" },
+        { name: "twitter:image", content: ogImage },
       ],
+      links: [{ rel: "canonical", href: url }],
     };
   },
+
   errorComponent: ({ error }) => (
     <div className="min-h-screen flex items-center justify-center p-8 text-center">
       <div>
