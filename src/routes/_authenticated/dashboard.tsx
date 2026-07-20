@@ -760,10 +760,10 @@ function CardDetail({
         },
       });
       const idPatch: Partial<Card> = {};
-      if (!card.cardsight_card_id && est.resolved_cardsight_card_id) {
+      if (est.resolved_cardsight_card_id && est.resolved_cardsight_card_id !== card.cardsight_card_id) {
         idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
       }
-      if (!card.cardsight_grade_id && est.resolved_cardsight_grade_id) {
+      if (est.resolved_cardsight_grade_id && est.resolved_cardsight_grade_id !== card.cardsight_grade_id) {
         idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
       }
       if (Object.keys(idPatch).length > 0) {
