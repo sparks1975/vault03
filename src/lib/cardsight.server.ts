@@ -180,6 +180,7 @@ type CardLookup = {
   card_number?: string | null;
   descriptor?: string | null;
   is_autograph?: boolean | null;
+  is_first_bowman?: boolean | null;
 };
 
 function normalizeText(value: string | number | null | undefined): string {
@@ -204,6 +205,29 @@ function serialSearchTerm(serialNumber: string | null | undefined): string | nul
   return denom ? `/${denom}` : raw;
 }
 
+function normalizeCardNumber(value: string | number | null | undefined): string {
+  return compact(value)
+    .replace(/^#\s*/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+export function extractMarketplaceCardNumbers(title: string): string[] {
+  const values = new Set<string>();
+  const patterns = [
+    /#\s*([A-Za-z0-9][A-Za-z0-9.-]{0,14})\b/g,
+    /\b([A-Z]{1,5}-[A-Z0-9]{1,8})\b/g,
+  ];
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(title)) !== null) {
+      const normalized = normalizeCardNumber(match[1]);
+      if (normalized && !/^\d{4}$/.test(normalized)) values.add(normalized);
+    }
+  }
+  return [...values];
+}
+
 function pricingRecordMatches(
   record: PricingRecord,
   lookup: {
@@ -215,9 +239,11 @@ function pricingRecordMatches(
     serial_number?: string | null;
     grader?: string | null;
     grade?: string | null;
+    is_first_bowman?: boolean | null;
   },
 ): boolean {
   const rawTitle = record.title ?? "";
+  if (!rawTitle.trim()) return false;
   const title = normalizeText(rawTitle);
   const playerTokens = normalizeText(lookup.player_name)
     .split(" ")
@@ -228,8 +254,14 @@ function pricingRecordMatches(
   if (!setTitleMatches(rawTitle, lookup.set_name)) return false;
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
   if (number) {
-    const numberPattern = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
-    if (!numberPattern.test(rawTitle)) return false;
+    const explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
+    const wanted = normalizeCardNumber(number);
+    if (explicitNumbers.length > 0) {
+      if (!explicitNumbers.includes(wanted)) return false;
+    } else {
+      const numberPattern = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
+      if (!numberPattern.test(rawTitle)) return false;
+    }
   }
 
   const isAutoTitle = /\b(auto|autograph|autographs|signed|signature)\b/i.test(rawTitle);
@@ -251,7 +283,8 @@ function pricingRecordMatches(
 // Shared parallel/variant regexes used by both the structured and pt130 paths.
 // Any word or phrase here in a marketplace title indicates the record is NOT a
 // plain base card — reject when the caller hasn't opted into that parallel.
-const PARALLEL_COLOR_RE = /\b(atomic|black|blue|bronze|camo|clear cut|cracked ice|die[- ]?cut|foilfractor|gold|green|mojo|negative|orange|pink|platinum|prism|purple|rainbow|red|rose gold|sepia|shimmer|silver|superfractor|refractor|red hot|x-?fractor|yellow|aqua|teal|wave|nebula|scope|hyper|lava|dragon|tiger|zebra|snake|choice|holo|holographic|1st bowman|ssp|printing plate)\b/i;
+const PARALLEL_COLOR_RE = /\b(atomic|black|blue|bronze|camo|clear cut|cracked ice|die[- ]?cut|foilfractor|gold|green|mojo|negative|orange|pink|platinum|prism|purple|rainbow|red|rose gold|sepia|shimmer|silver|superfractor|refractor|red hot|x-?fractor|yellow|aqua|teal|wave|nebula|scope|hyper|lava|dragon|tiger|zebra|snake|choice|holo|holographic|ssp|printing plate)\b/i;
+const FIRST_BOWMAN_RE = /\b(1st\s+bowman|first\s+bowman)\b/i;
 const SERIAL_RE = /(^|[^\w])(#?\s*\d+\s*\/\s*\d+|\/\s*\d{1,4})(?=$|[^\w])/i;
 const AUTO_RE = /\b(auto|autograph|autographs|signed|signature|signatures)\b/i;
 // (graded regex intentionally inlined at call sites)
@@ -260,10 +293,11 @@ const AUTO_RE = /\b(auto|autograph|autographs|signed|signature|signatures)\b/i;
 // base card. Applies to both structured Cardsight pricing and pt130 comps.
 export function isVariantTitle(
   title: string,
-  opts: { hasSelectedParallel?: boolean; is_autograph?: boolean | null; serial_number?: string | null } = {},
+  opts: { hasSelectedParallel?: boolean; is_autograph?: boolean | null; serial_number?: string | null; is_first_bowman?: boolean | null } = {},
 ): boolean {
   if (!title) return false;
   if (!opts.hasSelectedParallel && PARALLEL_COLOR_RE.test(title)) return true;
+  if (!opts.is_first_bowman && FIRST_BOWMAN_RE.test(title)) return true;
   if (!opts.hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(title)) return true;
   if (!opts.is_autograph && AUTO_RE.test(title)) return true;
   return false;
@@ -279,7 +313,7 @@ export function titleMatchesCard(
     requireCardNumber?: boolean;
   },
 ): boolean {
-  if (!title) return true; // no title = can't disqualify
+  if (!title.trim()) return false;
   if (lookup.player_name) {
     const t = normalizeText(title);
     const tokens = normalizeText(lookup.player_name).split(" ").filter((x) => x.length > 1);
@@ -289,8 +323,14 @@ export function titleMatchesCard(
   if (!setTitleMatches(title, lookup.set_name)) return false;
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
   if (number && lookup.requireCardNumber !== false) {
-    const numRe = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
-    if (!numRe.test(title)) return false;
+    const explicitNumbers = extractMarketplaceCardNumbers(title);
+    const wanted = normalizeCardNumber(number);
+    if (explicitNumbers.length > 0) {
+      if (!explicitNumbers.includes(wanted)) return false;
+    } else {
+      const numRe = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
+      if (!numRe.test(title)) return false;
+    }
   }
   return true;
 }
@@ -318,6 +358,7 @@ function pricingRecordMatchesStructured(
     year?: string | number | null;
     set_name?: string | null;
     card_number?: string | null;
+    is_first_bowman?: boolean | null;
   },
 ): boolean {
   if (!Number.isFinite(record.price) || record.price <= 0) return false;
@@ -345,7 +386,7 @@ function pricingRecordMatchesStructured(
   const serial = serialSearchTerm(lookup.serial_number);
   if (serial) return rawTitle.toLowerCase().includes(serial.toLowerCase());
 
-  if (isVariantTitle(rawTitle, { hasSelectedParallel, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number })) {
+  if (isVariantTitle(rawTitle, { hasSelectedParallel, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number, is_first_bowman: lookup.is_first_bowman })) {
     return false;
   }
 
