@@ -370,16 +370,6 @@ export function titleMatchesCard(
      *  doesn't match. Titles with no explicit card number pass. */
     softCardNumber?: boolean;
   },
-
-export function titleMatchesCard(
-  title: string,
-  lookup: {
-    player_name?: string | null;
-    year?: string | number | null;
-    set_name?: string | null;
-    card_number?: string | null;
-    requireCardNumber?: boolean;
-  },
 ): boolean {
   if (!title.trim()) return false;
   if (lookup.player_name) {
@@ -395,6 +385,9 @@ export function titleMatchesCard(
     const wanted = normalizeCardNumber(number);
     if (explicitNumbers.length > 0) {
       if (!explicitNumbers.includes(wanted)) return false;
+    } else if (lookup.softCardNumber) {
+      // Soft mode: no explicit #XX in title — trust player+year+set match.
+      return true;
     } else {
       const numRe = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
       if (!numRe.test(title)) return false;
@@ -402,6 +395,7 @@ export function titleMatchesCard(
   }
   return true;
 }
+
 
 function setTitleMatches(title: string, setName: string | null | undefined): boolean {
   const terms = expandSetSearchTerms(setName)
