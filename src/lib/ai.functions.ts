@@ -558,7 +558,35 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             return Number.isFinite(price) && price > 0;
           };
 
-        const filteredCache = (cached ?? []).filter(rowPassesPt130Filter);
+        let filteredCache = (cached ?? []).filter(rowPassesPt130Filter);
+        if (!stale && cached.length > 0 && filteredCache.length === 0) {
+          try {
+            const { buildPt130Descriptor, refreshPt130ForCard } = await import(
+              "./pt130.server"
+            );
+            const descriptor = buildPt130Descriptor({
+              year: valuationLookup.year,
+              set_name: valuationLookup.set_name,
+              player_name: valuationLookup.player_name,
+              card_number: valuationLookup.card_number,
+              is_autograph: valuationLookup.is_autograph,
+              selected_parallel_name: selectedParallelName,
+              grader: data.grader,
+              grade: data.grade,
+            });
+            if (descriptor) {
+              await refreshPt130ForCard(supabase as never, {
+                card_id: cardId,
+                user_id: userId,
+                descriptor,
+              });
+              cached = await loadCache();
+              filteredCache = (cached ?? []).filter(rowPassesPt130Filter);
+            }
+          } catch (err) {
+            console.error("pt130 descriptor refresh failed:", err);
+          }
+        }
 
         const pt130Sales = filteredCache
           .map((c) => {
