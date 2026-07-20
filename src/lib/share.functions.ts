@@ -146,7 +146,7 @@ export const getPublicCollection = createServerFn({ method: "GET" })
 
     const { data: cardsRaw, error: cErr } = await supabaseAdmin
       .from("cards")
-      .select(SAFE_CARD_COLUMNS + ", sales:card_sales(sold_at, grade, price, source, url)")
+      .select(SAFE_CARD_COLUMNS)
       .eq("user_id", profile.id)
       .order("current_value", { ascending: false, nullsFirst: false });
     if (cErr) throw cErr;
