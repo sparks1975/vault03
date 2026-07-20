@@ -83,7 +83,7 @@ export const updateShareSettings = createServerFn({ method: "POST" })
       patch.share_slug = clean;
     }
 
-    const { error } = await supabase.from("profiles").update(patch).eq("id", userId);
+    const { error } = await supabase.from("profiles").update(patch as never).eq("id", userId);
     if (error) throw error;
 
     const { data: fresh } = await supabase
