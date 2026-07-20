@@ -139,14 +139,14 @@ export function ShareDialog() {
                   <button
                     onClick={handleToggle}
                     disabled={saving}
-                    className={`relative w-12 h-6 rounded-full transition-colors ${
+                    className={`relative inline-flex h-6 w-12 shrink-0 items-center rounded-full transition-colors ${
                       isPublic ? "bg-accent" : "bg-secondary border border-border"
                     } disabled:opacity-60`}
                     aria-pressed={isPublic}
                   >
                     <span
-                      className={`absolute top-0.5 size-5 rounded-full bg-background border border-border transition-transform ${
-                        isPublic ? "translate-x-6" : "translate-x-0.5"
+                      className={`absolute left-0.5 top-0.5 size-5 rounded-full bg-background border border-border transition-transform ${
+                        isPublic ? "translate-x-6" : "translate-x-0"
                       }`}
                     />
                   </button>
