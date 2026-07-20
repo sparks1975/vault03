@@ -1,0 +1,184 @@
+import { createFileRoute, notFound } from "@tanstack/react-router";
+import { getPublicCollection } from "@/lib/share.functions";
+
+export const Route = createFileRoute("/s/$slug")({
+  loader: async ({ params }) => {
+    const result = await getPublicCollection({ data: { slug: params.slug } });
+    if (result.notFound) throw notFound();
+    return result;
+  },
+  head: ({ loaderData, params }) => {
+    const name = loaderData?.owner?.display_name || params.slug;
+    const count = loaderData?.card_count ?? 0;
+    const title = `${name}'s Card Collection — Vault.03`;
+    const description = `Browse ${count} card${count === 1 ? "" : "s"} from ${name}'s collection on Vault.03.`;
+    return {
+      meta: [
+        { title },
+        { name: "description", content: description },
+        { property: "og:title", content: title },
+        { property: "og:description", content: description },
+        { property: "og:type", content: "website" },
+        { name: "twitter:card", content: "summary_large_image" },
+      ],
+    };
+  },
+  errorComponent: ({ error }) => (
+    <div className="min-h-screen flex items-center justify-center p-8 text-center">
+      <div>
+        <p className="text-sm text-muted-foreground uppercase tracking-widest mb-2">Error</p>
+        <p className="text-lg">{error.message}</p>
+      </div>
+    </div>
+  ),
+  notFoundComponent: () => (
+    <div className="min-h-screen flex items-center justify-center p-8 text-center">
+      <div>
+        <p className="text-sm text-muted-foreground uppercase tracking-widest mb-2">Not found</p>
+        <p className="text-lg">This collection doesn't exist or is private.</p>
+      </div>
+    </div>
+  ),
+  component: SharedCollection,
+});
+
+const fmtMoney = (n: number | null | undefined) =>
+  typeof n === "number" ? `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—";
+
+const fmtDate = (s: string | null) => {
+  if (!s) return "";
+  const d = new Date(s);
+  if (isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+};
+
+function SharedCollection() {
+  const data = Route.useLoaderData();
+
+  return (
+    <div className="min-h-screen bg-background text-foreground pb-20 overflow-x-hidden">
+      <nav className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border px-4 md:px-6 h-16 flex items-center justify-between gap-3">
+        <span className="font-extrabold tracking-tighter text-lg md:text-xl italic">VAULT.03</span>
+        <span className="text-xs uppercase tracking-widest text-muted-foreground">Shared Collection</span>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-4 md:px-6 pt-8 md:pt-12">
+        <header className="grid grid-cols-1 md:grid-cols-3 gap-px bg-border border border-border">
+          <div className="bg-background p-5">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Collector</p>
+            <p className="text-xl font-bold leading-tight">{data.owner.display_name || data.owner.share_slug}</p>
+          </div>
+          <div className="bg-background p-5">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Cards</p>
+            <p className="text-xl font-bold leading-tight">{data.card_count}</p>
+          </div>
+          <div className="bg-background p-5">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-1">Total Value</p>
+            <p className="text-xl font-bold leading-tight">{fmtMoney(data.total_value)}</p>
+          </div>
+        </header>
+
+        {data.cards.length === 0 ? (
+          <p className="text-center text-muted-foreground py-16">No cards yet.</p>
+        ) : (
+          <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {data.cards.map((c) => (
+              <article key={c.id} className="border border-border bg-background p-4 flex gap-4">
+                {c.photo_url ? (
+                  <img
+                    src={c.photo_url}
+                    alt={c.player_name}
+                    loading="lazy"
+                    className="w-20 h-28 object-cover shrink-0"
+                  />
+                ) : (
+                  <div className="w-20 h-28 bg-secondary shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground truncate">
+                    {c.year} {c.set_name}
+                  </p>
+                  <h3 className="font-bold leading-tight truncate">{c.player_name}</h3>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {[c.team, c.position].filter(Boolean).join(" · ")}
+                  </p>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {c.card_number && (
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 border border-border">
+                        #{c.card_number}
+                      </span>
+                    )}
+                    {c.parallel && (
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 border border-border">
+                        {c.parallel}
+                      </span>
+                    )}
+                    {c.grade && (
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 border border-border">
+                        {c.grader ? `${c.grader} ` : ""}{c.grade}
+                      </span>
+                    )}
+                    {c.is_autograph && (
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 bg-accent text-accent-foreground">Auto</span>
+                    )}
+                    {c.is_rookie && (
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 bg-green-600 text-white">RC</span>
+                    )}
+                    {c.is_first_bowman && (
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 bg-blue-600 text-white">1st Bowman</span>
+                    )}
+                    {c.serial_number && (
+                      <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 border border-border">
+                        /{c.serial_number}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-3 flex items-baseline justify-between">
+                    <p className="text-lg font-bold">{fmtMoney(c.current_value)}</p>
+                    {typeof c.value_delta_pct === "number" && (
+                      <p className={`text-xs font-medium ${c.value_delta_pct >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {c.value_delta_pct >= 0 ? "+" : ""}{c.value_delta_pct.toFixed(1)}%
+                      </p>
+                    )}
+                  </div>
+                  {c.sales && c.sales.length > 0 && (
+                    <details className="mt-2">
+                      <summary className="text-[11px] uppercase tracking-widest text-muted-foreground cursor-pointer">
+                        Recent Comps ({c.sales.length})
+                      </summary>
+                      <ul className="mt-2 space-y-1 text-xs">
+                        {c.sales.slice(0, 8).map((s, i) => (
+                          <li key={i} className="flex justify-between gap-2">
+                            <span className="text-muted-foreground truncate">
+                              {fmtDate(s.sold_at)}{s.grade ? ` · ${s.grade}` : ""}
+                            </span>
+                            {s.url ? (
+                              <a
+                                href={s.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="font-medium hover:text-accent whitespace-nowrap"
+                              >
+                                {fmtMoney(s.price)}
+                              </a>
+                            ) : (
+                              <span className="font-medium whitespace-nowrap">{fmtMoney(s.price)}</span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+
+        <footer className="mt-16 pt-8 border-t border-border text-center text-xs uppercase tracking-widest text-muted-foreground">
+          Powered by <span className="font-bold italic text-foreground">Vault.03</span>
+        </footer>
+      </main>
+    </div>
+  );
+}
