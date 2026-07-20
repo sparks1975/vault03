@@ -82,7 +82,7 @@ function SharedCollection() {
           <p className="text-center text-muted-foreground py-16">No cards yet.</p>
         ) : (
           <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.cards.map((c) => (
+            {data.cards.map((c: any) => (
               <article key={c.id} className="border border-border bg-background p-4 flex gap-4">
                 {c.photo_url ? (
                   <img
