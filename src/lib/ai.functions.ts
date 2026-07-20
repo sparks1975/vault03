@@ -221,6 +221,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     let usedCardsight = false;
     let resolvedGradeId: string | null = data.cardsight_grade_id ?? null;
     let resolvedCardId: string | null = data.cardsight_card_id ?? null;
+    let selectedParallelName: string | null = null;
     let valuationLookup = {
       player_name: data.player_name,
       year: data.year,
@@ -266,8 +267,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     // using them to filter title comps creates false "no sales" results.
     if (resolvedCardId) {
       try {
-        const { getCatalogValuationLookup } = await import("./cardsight.server");
+        const { getCatalogValuationLookup, getParallelNameForCard } = await import("./cardsight.server");
         const catalogLookup = await getCatalogValuationLookup(resolvedCardId);
+        selectedParallelName = await getParallelNameForCard(resolvedCardId, data.cardsight_parallel_id);
         if (catalogLookup) {
           valuationLookup = {
             player_name: catalogLookup.player_name ?? valuationLookup.player_name,
@@ -361,6 +363,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             is_autograph: valuationLookup.is_autograph,
             is_first_bowman: valuationLookup.is_first_bowman,
             serial_number: data.serial_number,
+            selected_parallel_name: selectedParallelName,
             period: "6m",
           });
           await priceFromSlice(slice);
@@ -408,6 +411,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             is_autograph: valuationLookup.is_autograph,
             is_first_bowman: valuationLookup.is_first_bowman,
             serial_number: data.serial_number,
+            selected_parallel_name: selectedParallelName,
             period: "6m",
           });
           await priceFromSlice(retrySlice);
@@ -430,6 +434,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             is_autograph: valuationLookup.is_autograph,
             is_first_bowman: valuationLookup.is_first_bowman,
             serial_number: data.serial_number,
+            selected_parallel_name: selectedParallelName,
             grader: data.grader,
             grade: data.grade,
           },
@@ -531,6 +536,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             })) return false;
             if (isVariantTitle(rawTitle, {
               hasSelectedParallel,
+              selectedParallelName,
               is_autograph: valuationLookup.is_autograph,
               serial_number: data.serial_number,
               is_first_bowman: valuationLookup.is_first_bowman,
