@@ -19,6 +19,7 @@ import {
 } from "@/lib/cards.functions";
 
 import { supabase } from "@/integrations/supabase/client";
+import { ShareDialog } from "@/components/ShareDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
