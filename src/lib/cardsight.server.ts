@@ -222,6 +222,19 @@ function selectedParallelTitleMatches(title: string, parallelName: string | null
     : Boolean(denom);
 }
 
+function hasUnselectedParallelModifier(title: string, selectedParallelName: string | null | undefined): boolean {
+  const titleNorm = normalizeText(title);
+  const selectedNorm = normalizeText(selectedParallelName);
+  const modifiers = [
+    "atomic", "black", "blue", "bronze", "camo", "clear cut", "cracked ice", "die cut", "foilfractor",
+    "gold", "green", "mojo", "negative", "orange", "pink", "platinum", "purple", "rainbow", "red",
+    "rose gold", "sepia", "shimmer", "silver", "superfractor", "red hot", "x fractor", "yellow", "aqua",
+    "teal", "wave", "nebula", "scope", "hyper", "lava", "dragon", "tiger", "zebra", "snake",
+    "choice", "holo", "holographic", "ssp", "printing plate",
+  ];
+  return modifiers.some((modifier) => titleNorm.includes(modifier) && !selectedNorm.includes(modifier));
+}
+
 function normalizeCardNumber(value: string | number | null | undefined): string {
   return compact(value)
     .replace(/^#\s*/, "")
@@ -322,7 +335,12 @@ export function isVariantTitle(
 ): boolean {
   if (!title) return false;
   const hasSelectedParallel = Boolean(opts.hasSelectedParallel || opts.selectedParallelName);
-  if (opts.selectedParallelName && !selectedParallelTitleMatches(title, opts.selectedParallelName)) return true;
+  if (opts.selectedParallelName) {
+    if (!selectedParallelTitleMatches(title, opts.selectedParallelName)) return true;
+    const selectedHasSerial = /\/\s*\d+/.test(opts.selectedParallelName);
+    if (!selectedHasSerial && !opts.serial_number && SERIAL_RE.test(title)) return true;
+    if (hasUnselectedParallelModifier(title, opts.selectedParallelName)) return true;
+  }
   if (!hasSelectedParallel && PARALLEL_COLOR_RE.test(title)) return true;
   if (!opts.is_first_bowman && FIRST_BOWMAN_RE.test(title)) return true;
   if (!hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(title)) return true;
