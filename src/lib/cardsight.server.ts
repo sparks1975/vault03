@@ -350,11 +350,26 @@ export function isVariantTitle(
     if (hasUnselectedParallelModifier(title, opts.selectedParallelName)) return true;
   }
   if (!hasSelectedParallel && PARALLEL_COLOR_RE.test(title)) return true;
+  if (!hasSelectedParallel && REFRACTOR_FAMILY_RE.test(title)) return true;
+  if (!hasSelectedParallel && WAVE_FAMILY_RE.test(title)) return true;
   if (!opts.is_first_bowman && FIRST_BOWMAN_RE.test(title)) return true;
   if (!hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(title)) return true;
   if (!opts.is_autograph && AUTO_RE.test(title)) return true;
   return false;
 }
+
+export function titleMatchesCard(
+  title: string,
+  lookup: {
+    player_name?: string | null;
+    year?: string | number | null;
+    set_name?: string | null;
+    card_number?: string | null;
+    requireCardNumber?: boolean;
+    /** If true, only reject when the title has an explicit `#XX` token that
+     *  doesn't match. Titles with no explicit card number pass. */
+    softCardNumber?: boolean;
+  },
 
 export function titleMatchesCard(
   title: string,
