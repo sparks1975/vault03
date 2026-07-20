@@ -245,7 +245,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       normalizeLookupText(value)
         .split(" ")
         .filter((t) => t.length > 1 && !["the", "card", "cards", "base", "set", "series", "autograph", "autographs"].includes(t));
-    const identityMatchesSubmitted = (candidate: typeof valuationLookup) => {
+    const identityMatchesSubmitted = (candidate: Partial<typeof valuationLookup>) => {
       const submittedPlayer = usefulTokens(submittedLookup.player_name);
       const candidatePlayer = normalizeLookupText(candidate.player_name);
       if (submittedPlayer.length > 0 && !submittedPlayer.every((t) => candidatePlayer.includes(t))) return false;
@@ -322,7 +322,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       } catch (err) {
         console.error("Cardsight valuation lookup failed:", err);
       }
-      if (data.cardsight_parallel_id) {
+      if (resolvedCardId && data.cardsight_parallel_id) {
         try {
           const { getParallelNameForCard } = await import("./cardsight.server");
           selectedParallelName = await getParallelNameForCard(resolvedCardId, data.cardsight_parallel_id);
