@@ -99,7 +99,7 @@ export function ShareDialog() {
 
             <h2 className="text-lg font-bold mb-1">Share your collection</h2>
             <p className="text-xs text-muted-foreground mb-6">
-              Anyone with the link can view your cards, values, and comps. Purchase price stays private.
+              Anyone with the link can view your cards and values. Purchase price stays private.
             </p>
 
             {loading ? (

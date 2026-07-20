@@ -2,14 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-type PublicSale = {
-  sold_at: string | null;
-  grade: string | null;
-  price: number;
-  source: string | null;
-  url: string | null;
-};
-
 type PublicCard = {
   id: string;
   player_name: string;
@@ -30,7 +22,6 @@ type PublicCard = {
   last_valued_at: string | null;
   photo_url: string | null;
   created_at: string;
-  sales: PublicSale[];
 };
 
 const SIGNED_URL_TTL = 60 * 60;
@@ -146,7 +137,7 @@ export const getPublicCollection = createServerFn({ method: "GET" })
 
     const { data: cardsRaw, error: cErr } = await supabaseAdmin
       .from("cards")
-      .select(SAFE_CARD_COLUMNS + ", sales:card_sales(sold_at, grade, price, source, url)")
+      .select(SAFE_CARD_COLUMNS)
       .eq("user_id", profile.id)
       .order("current_value", { ascending: false, nullsFirst: false });
     if (cErr) throw cErr;

@@ -45,12 +45,6 @@ export const Route = createFileRoute("/s/$slug")({
 const fmtMoney = (n: number | null | undefined) =>
   typeof n === "number" ? `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—";
 
-const fmtDate = (s: string | null) => {
-  if (!s) return "";
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-};
 
 function SharedCollection() {
   const data = Route.useLoaderData();
@@ -133,42 +127,7 @@ function SharedCollection() {
                       </span>
                     )}
                   </div>
-                  <div className="mt-3 flex items-baseline justify-between">
-                    <p className="text-lg font-bold">{fmtMoney(c.current_value)}</p>
-                    {typeof c.value_delta_pct === "number" && (
-                      <p className={`text-xs font-medium ${c.value_delta_pct >= 0 ? "text-green-600" : "text-red-600"}`}>
-                        {c.value_delta_pct >= 0 ? "+" : ""}{c.value_delta_pct.toFixed(1)}%
-                      </p>
-                    )}
-                  </div>
-                  {c.sales && c.sales.length > 0 && (
-                    <details className="mt-2">
-                      <summary className="text-[11px] uppercase tracking-widest text-muted-foreground cursor-pointer">
-                        Recent Comps ({c.sales.length})
-                      </summary>
-                      <ul className="mt-2 space-y-1 text-xs">
-                        {c.sales.slice(0, 8).map((s: any, i: number) => (
-                          <li key={i} className="flex justify-between gap-2">
-                            <span className="text-muted-foreground truncate">
-                              {fmtDate(s.sold_at)}{s.grade ? ` · ${s.grade}` : ""}
-                            </span>
-                            {s.url ? (
-                              <a
-                                href={s.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="font-medium hover:text-accent whitespace-nowrap"
-                              >
-                                {fmtMoney(s.price)}
-                              </a>
-                            ) : (
-                              <span className="font-medium whitespace-nowrap">{fmtMoney(s.price)}</span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
+                  <p className="mt-3 text-lg font-bold">{fmtMoney(c.current_value)}</p>
                 </div>
               </article>
             ))}
