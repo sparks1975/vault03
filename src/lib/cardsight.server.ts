@@ -321,10 +321,11 @@ export function isVariantTitle(
   opts: { hasSelectedParallel?: boolean; selectedParallelName?: string | null; is_autograph?: boolean | null; serial_number?: string | null; is_first_bowman?: boolean | null } = {},
 ): boolean {
   if (!title) return false;
-  if (opts.selectedParallelName) return !selectedParallelTitleMatches(title, opts.selectedParallelName);
-  if (!opts.hasSelectedParallel && PARALLEL_COLOR_RE.test(title)) return true;
+  const hasSelectedParallel = Boolean(opts.hasSelectedParallel || opts.selectedParallelName);
+  if (opts.selectedParallelName && !selectedParallelTitleMatches(title, opts.selectedParallelName)) return true;
+  if (!hasSelectedParallel && PARALLEL_COLOR_RE.test(title)) return true;
   if (!opts.is_first_bowman && FIRST_BOWMAN_RE.test(title)) return true;
-  if (!opts.hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(title)) return true;
+  if (!hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(title)) return true;
   if (!opts.is_autograph && AUTO_RE.test(title)) return true;
   return false;
 }
@@ -411,7 +412,7 @@ function pricingRecordMatchesStructured(
   if (!lookup.is_autograph && isAutoTitle) return false;
 
   const serial = serialSearchTerm(lookup.serial_number);
-  if (serial) return rawTitle.toLowerCase().includes(serial.toLowerCase());
+  if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) return false;
 
   if (isVariantTitle(rawTitle, { hasSelectedParallel, selectedParallelName: lookup.selected_parallel_name, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number, is_first_bowman: lookup.is_first_bowman })) {
     return false;
