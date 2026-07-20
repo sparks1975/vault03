@@ -113,15 +113,16 @@ export const getPublicCollection = createServerFn({ method: "GET" })
       return { notFound: true as const };
     }
 
-    const { data: cards, error: cErr } = await supabaseAdmin
+    const { data: cardsRaw, error: cErr } = await supabaseAdmin
       .from("cards")
       .select(SAFE_CARD_COLUMNS + ", sales:card_sales(sold_at, grade, price, source, url)")
       .eq("user_id", profile.id)
       .order("current_value", { ascending: false, nullsFirst: false });
     if (cErr) throw cErr;
+    const cards = (cardsRaw ?? []) as unknown as Array<Record<string, unknown>>;
 
     const withSigned = await Promise.all(
-      (cards ?? []).map(async (c: Record<string, unknown>) => {
+      cards.map(async (c) => {
         const path = c.photo_url as string | null;
         let photo_url: string | null = null;
         if (path && !path.startsWith("http") && !path.startsWith("data:")) {
@@ -137,7 +138,7 @@ export const getPublicCollection = createServerFn({ method: "GET" })
     );
 
     const totalValue = withSigned.reduce(
-      (sum, c) => sum + (typeof c.current_value === "number" ? c.current_value : 0),
+      (sum, c) => sum + (typeof c.current_value === "number" ? (c.current_value as number) : 0),
       0,
     );
 
