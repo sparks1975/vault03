@@ -227,10 +227,13 @@ function Dashboard() {
             },
           });
           const idPatch: Partial<Card> = {};
-          if (!c.cardsight_card_id && est.resolved_cardsight_card_id) {
+          // Persist the resolved id whenever the server produced one AND it
+          // differs from what we sent — this clears/corrects stale IDs from
+          // an earlier mismatched match.
+          if (est.resolved_cardsight_card_id && est.resolved_cardsight_card_id !== c.cardsight_card_id) {
             idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
           }
-          if (!c.cardsight_grade_id && est.resolved_cardsight_grade_id) {
+          if (est.resolved_cardsight_grade_id && est.resolved_cardsight_grade_id !== c.cardsight_grade_id) {
             idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
           }
           if (Object.keys(idPatch).length > 0) {
@@ -293,10 +296,10 @@ function Dashboard() {
           },
         });
         const idPatch: Partial<Card> = {};
-        if (!c.cardsight_card_id && est.resolved_cardsight_card_id) {
+        if (est.resolved_cardsight_card_id && est.resolved_cardsight_card_id !== c.cardsight_card_id) {
           idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
         }
-        if (!c.cardsight_grade_id && est.resolved_cardsight_grade_id) {
+        if (est.resolved_cardsight_grade_id && est.resolved_cardsight_grade_id !== c.cardsight_grade_id) {
           idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
         }
         if (Object.keys(idPatch).length > 0) {
@@ -757,10 +760,10 @@ function CardDetail({
         },
       });
       const idPatch: Partial<Card> = {};
-      if (!card.cardsight_card_id && est.resolved_cardsight_card_id) {
+      if (est.resolved_cardsight_card_id && est.resolved_cardsight_card_id !== card.cardsight_card_id) {
         idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
       }
-      if (!card.cardsight_grade_id && est.resolved_cardsight_grade_id) {
+      if (est.resolved_cardsight_grade_id && est.resolved_cardsight_grade_id !== card.cardsight_grade_id) {
         idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
       }
       if (Object.keys(idPatch).length > 0) {

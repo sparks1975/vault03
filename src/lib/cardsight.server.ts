@@ -321,7 +321,15 @@ function pricingRecordMatches(
 // Shared parallel/variant regexes used by both the structured and pt130 paths.
 // Any word or phrase here in a marketplace title indicates the record is NOT a
 // plain base card — reject when the caller hasn't opted into that parallel.
-const PARALLEL_COLOR_RE = /\b(atomic|black|blue|bronze|camo|clear cut|cracked ice|die[- ]?cut|foilfractor|gold|green|mojo|negative|orange|pink|platinum|prism|purple|rainbow|red|rose gold|sepia|shimmer|silver|superfractor|refractor|red hot|x-?fractor|yellow|aqua|teal|wave|nebula|scope|hyper|lava|dragon|tiger|zebra|snake|choice|holo|holographic|ssp|printing plate)\b/i;
+// Explicit parallel keyword list (kept for legacy hits). The regexes below
+// catch open-ended families ("<anything> refractor", "<color> wave", numbered
+// parallels, printing plates, 1/1s, image variations) so we don't have to
+// enumerate every new parallel Topps/Panini/Bowman invents.
+const PARALLEL_COLOR_RE = /\b(atomic|black|blue|bronze|camo|clear cut|cracked ice|die[- ]?cut|foilfractor|gold|green|mojo|negative|orange|pink|platinum|prism|prizm|purple|rainbow|red|rose gold|sepia|shimmer|silver|superfractor|refractor|red hot|x-?fractor|yellow|aqua|teal|wave|nebula|scope|hyper|lava|dragon|tiger|zebra|snake|choice|holo|holographic|ssp|sp|printing plate|lunar|seismic|cosmic|galactic|sapphire|ruby|emerald|onyx|ice|velocity|genesis|disco|kaleidoscope|stained glass|independence|father'?s day|mother'?s day|memorial day|independence day|fireworks|checkerboard|magenta|clear|acetate|shortprint|short print|variation|image variation|photo variation|sp variation|ssp variation|1\s*of\s*1|1\/1)\b/i;
+// Catches any "<word> fractor" / "<word> refractor" not covered above.
+const REFRACTOR_FAMILY_RE = /\b[a-z]*fractor\b/i;
+// "Wave" family: prizmatic, mojo wave, blue wave, etc.
+const WAVE_FAMILY_RE = /\b[a-z]+\s+wave\b/i;
 const FIRST_BOWMAN_RE = /\b(1st\s+bowman|first\s+bowman)\b/i;
 const SERIAL_RE = /(^|[^\w])(#?\s*\d+\s*\/\s*\d+|\/\s*\d{1,4})(?=$|[^\w])/i;
 const AUTO_RE = /\b(auto|autograph|autographs|signed|signature|signatures)\b/i;
@@ -342,6 +350,8 @@ export function isVariantTitle(
     if (hasUnselectedParallelModifier(title, opts.selectedParallelName)) return true;
   }
   if (!hasSelectedParallel && PARALLEL_COLOR_RE.test(title)) return true;
+  if (!hasSelectedParallel && REFRACTOR_FAMILY_RE.test(title)) return true;
+  if (!hasSelectedParallel && WAVE_FAMILY_RE.test(title)) return true;
   if (!opts.is_first_bowman && FIRST_BOWMAN_RE.test(title)) return true;
   if (!hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(title)) return true;
   if (!opts.is_autograph && AUTO_RE.test(title)) return true;
@@ -356,6 +366,9 @@ export function titleMatchesCard(
     set_name?: string | null;
     card_number?: string | null;
     requireCardNumber?: boolean;
+    /** If true, only reject when the title has an explicit `#XX` token that
+     *  doesn't match. Titles with no explicit card number pass. */
+    softCardNumber?: boolean;
   },
 ): boolean {
   if (!title.trim()) return false;
@@ -372,6 +385,9 @@ export function titleMatchesCard(
     const wanted = normalizeCardNumber(number);
     if (explicitNumbers.length > 0) {
       if (!explicitNumbers.includes(wanted)) return false;
+    } else if (lookup.softCardNumber) {
+      // Soft mode: no explicit #XX in title — trust player+year+set match.
+      return true;
     } else {
       const numRe = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
       if (!numRe.test(title)) return false;
@@ -379,6 +395,7 @@ export function titleMatchesCard(
   }
   return true;
 }
+
 
 function setTitleMatches(title: string, setName: string | null | undefined): boolean {
   const terms = expandSetSearchTerms(setName)

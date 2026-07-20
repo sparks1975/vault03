@@ -580,7 +580,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               year: valuationLookup.year,
               set_name: valuationLookup.set_name,
               card_number: valuationLookup.card_number,
-              requireCardNumber: true,
+              softCardNumber: true,
             })) return false;
             if (isVariantTitle(rawTitle, {
               hasSelectedParallel,
