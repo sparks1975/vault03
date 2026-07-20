@@ -659,6 +659,12 @@ export async function listParallelsForCard(card_id: string): Promise<ParallelOpt
   return all;
 }
 
+export async function getParallelNameForCard(card_id: string, parallel_id: string | null | undefined): Promise<string | null> {
+  if (!parallel_id) return null;
+  const option = (await listParallelsForCard(card_id)).find((p) => p.id === parallel_id);
+  return option?.name ?? null;
+}
+
 // ---------- Grade resolution: (grader, grade) → cardsight grade_id ----------
 type Company = { id: string; name: string };
 type GradingType = { id: string; name: string };
