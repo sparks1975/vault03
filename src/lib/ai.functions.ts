@@ -274,9 +274,8 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     // using them to filter title comps creates false "no sales" results.
     if (resolvedCardId) {
       try {
-        const { getCatalogValuationLookup, getParallelNameForCard } = await import("./cardsight.server");
+        const { getCatalogValuationLookup } = await import("./cardsight.server");
         const catalogLookup = await getCatalogValuationLookup(resolvedCardId);
-        selectedParallelName = await getParallelNameForCard(resolvedCardId, data.cardsight_parallel_id);
         if (catalogLookup) {
           valuationLookup = {
             player_name: catalogLookup.player_name ?? valuationLookup.player_name,
@@ -289,6 +288,14 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         }
       } catch (err) {
         console.error("Cardsight valuation lookup failed:", err);
+      }
+      if (data.cardsight_parallel_id) {
+        try {
+          const { getParallelNameForCard } = await import("./cardsight.server");
+          selectedParallelName = await getParallelNameForCard(resolvedCardId, data.cardsight_parallel_id);
+        } catch (err) {
+          console.error("Cardsight parallel lookup failed:", err);
+        }
       }
     }
 
