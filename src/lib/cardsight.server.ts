@@ -277,6 +277,12 @@ function pricingRecordMatches(
     if (g && !title.includes(g)) return false;
   }
 
+  if (isVariantTitle(rawTitle, {
+    is_autograph: lookup.is_autograph,
+    serial_number: lookup.serial_number,
+    is_first_bowman: lookup.is_first_bowman,
+  })) return false;
+
   return Number.isFinite(record.price) && record.price > 0;
 }
 
@@ -551,6 +557,24 @@ export async function searchCatalogCard(descriptor: string): Promise<string | nu
   }
 }
 
+export async function getCatalogValuationLookup(card_id: string): Promise<CardLookup | null> {
+  try {
+    const card = await csFetch<CatalogCard>(`/v1/catalog/cards/${card_id}`);
+    return {
+      player_name: card.name ?? null,
+      year: card.releaseYear ? Number(card.releaseYear) || card.releaseYear : null,
+      set_name: [card.releaseName, card.setName].filter(Boolean).join(" ") || null,
+      card_number: card.number ?? null,
+      is_autograph: /\b(auto|autograph|autographs|signature|signatures)\b/i.test(
+        [card.releaseName, card.setName, card.name, card.description].filter(Boolean).join(" "),
+      ),
+    };
+  } catch (err) {
+    console.error("Cardsight catalog detail failed:", err);
+    return null;
+  }
+}
+
 // ---------- Parallels for a card's release (scoped to the card's set) ----------
 export type ParallelOption = { id: string; name: string; setId: string };
 
@@ -691,6 +715,7 @@ export async function fetchPricing(
     grader?: string | null;
     grade?: string | null;
     is_autograph?: boolean | null;
+    is_first_bowman?: boolean | null;
     serial_number?: string | null;
     period?: string;
     limit?: number;
