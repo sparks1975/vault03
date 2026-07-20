@@ -205,6 +205,23 @@ function serialSearchTerm(serialNumber: string | null | undefined): string | nul
   return denom ? `/${denom}` : raw;
 }
 
+function selectedParallelTitleMatches(title: string, parallelName: string | null | undefined): boolean {
+  const rawName = compact(parallelName);
+  if (!rawName) return false;
+  const rawTitle = compact(title);
+  const denom = rawName.match(/\/\s*(\d+)/)?.[1] ?? null;
+  if (denom && !new RegExp(`/\\s*${escapeRegex(denom)}($|[^0-9])`, "i").test(rawTitle)) return false;
+
+  const normalizedName = normalizeText(rawName.replace(/\/\s*\d+/g, " "));
+  const allTokens = normalizedName.split(" ").filter((t) => t.length > 1);
+  const generic = new Set(["parallel", "chrome", "prizm", "foil", "card", "cards"]);
+  const specificTokens = allTokens.filter((t) => !generic.has(t));
+  const titleNorm = normalizeText(rawTitle);
+  return specificTokens.length > 0
+    ? specificTokens.every((t) => titleNorm.includes(t))
+    : Boolean(denom);
+}
+
 function normalizeCardNumber(value: string | number | null | undefined): string {
   return compact(value)
     .replace(/^#\s*/, "")
@@ -240,6 +257,7 @@ function pricingRecordMatches(
     grader?: string | null;
     grade?: string | null;
     is_first_bowman?: boolean | null;
+    selected_parallel_name?: string | null;
   },
 ): boolean {
   const rawTitle = record.title ?? "";
@@ -281,6 +299,7 @@ function pricingRecordMatches(
     is_autograph: lookup.is_autograph,
     serial_number: lookup.serial_number,
     is_first_bowman: lookup.is_first_bowman,
+    selectedParallelName: lookup.selected_parallel_name,
   })) return false;
 
   return Number.isFinite(record.price) && record.price > 0;
@@ -299,9 +318,10 @@ const AUTO_RE = /\b(auto|autograph|autographs|signed|signature|signatures)\b/i;
 // base card. Applies to both structured Cardsight pricing and pt130 comps.
 export function isVariantTitle(
   title: string,
-  opts: { hasSelectedParallel?: boolean; is_autograph?: boolean | null; serial_number?: string | null; is_first_bowman?: boolean | null } = {},
+  opts: { hasSelectedParallel?: boolean; selectedParallelName?: string | null; is_autograph?: boolean | null; serial_number?: string | null; is_first_bowman?: boolean | null } = {},
 ): boolean {
   if (!title) return false;
+  if (opts.selectedParallelName) return !selectedParallelTitleMatches(title, opts.selectedParallelName);
   if (!opts.hasSelectedParallel && PARALLEL_COLOR_RE.test(title)) return true;
   if (!opts.is_first_bowman && FIRST_BOWMAN_RE.test(title)) return true;
   if (!opts.hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(title)) return true;
@@ -365,6 +385,7 @@ function pricingRecordMatchesStructured(
     set_name?: string | null;
     card_number?: string | null;
     is_first_bowman?: boolean | null;
+    selected_parallel_name?: string | null;
   },
 ): boolean {
   if (!Number.isFinite(record.price) || record.price <= 0) return false;
@@ -392,7 +413,7 @@ function pricingRecordMatchesStructured(
   const serial = serialSearchTerm(lookup.serial_number);
   if (serial) return rawTitle.toLowerCase().includes(serial.toLowerCase());
 
-  if (isVariantTitle(rawTitle, { hasSelectedParallel, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number, is_first_bowman: lookup.is_first_bowman })) {
+  if (isVariantTitle(rawTitle, { hasSelectedParallel, selectedParallelName: lookup.selected_parallel_name, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number, is_first_bowman: lookup.is_first_bowman })) {
     return false;
   }
 
@@ -717,6 +738,7 @@ export async function fetchPricing(
     is_autograph?: boolean | null;
     is_first_bowman?: boolean | null;
     serial_number?: string | null;
+    selected_parallel_name?: string | null;
     period?: string;
     limit?: number;
   } = {},
@@ -780,6 +802,7 @@ type PricingSearchLookup = CardLookup & {
   serial_number?: string | null;
   grader?: string | null;
   grade?: string | null;
+  selected_parallel_name?: string | null;
 };
 
 function setBrand(setName: string | null | undefined): string | null {
@@ -812,8 +835,9 @@ function uniquePricingQueries(lookup: PricingSearchLookup): string[] {
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
   const auto = lookup.is_autograph ? "auto" : null;
   const serial = serialSearchTerm(lookup.serial_number);
+  const parallel = compact(lookup.selected_parallel_name).replace(/\/\s*\d+/g, " ").trim() || null;
   const grade = compact([lookup.grader, lookup.grade].filter(Boolean).join(" ")) || null;
-  const variants = [auto, serial, grade].filter(Boolean) as string[];
+  const variants = [auto, parallel, serial, grade].filter(Boolean) as string[];
   const strictCandidates = [
     [year, set, player, number, ...variants],
     [player, year, set, number, ...variants],
