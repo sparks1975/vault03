@@ -72,8 +72,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Vault.03 — Baseball Card Portfolio" },
       { name: "twitter:description", content: "Catalogue your baseball cards, track live market values, comparable sales, and current player statistics in one collector-grade portfolio." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/3464f237-6a9f-450b-84c3-eadd7a17479a/id-preview-5e3868fb--06175a94-f581-45db-a1b7-1b13e4a953d7.lovable.app-1784213342325.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/3464f237-6a9f-450b-84c3-eadd7a17479a/id-preview-5e3868fb--06175a94-f581-45db-a1b7-1b13e4a953d7.lovable.app-1784213342325.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
