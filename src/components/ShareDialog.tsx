@@ -21,7 +21,10 @@ export function ShareDialog() {
     setLoading(true);
     getFn()
       .then((s) => {
-        setIsPublic(s.is_public);
+        // Default sharing to ON the first time the dialog is opened.
+        // If a slug already exists, respect the saved preference.
+        const firstTime = !s.share_slug && !s.is_public;
+        setIsPublic(firstTime ? true : s.is_public);
         setSlug(s.share_slug ?? "");
       })
       .catch((e) => toast.error(e.message))
