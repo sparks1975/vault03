@@ -147,7 +147,7 @@ function SharedCollection() {
                         Recent Comps ({c.sales.length})
                       </summary>
                       <ul className="mt-2 space-y-1 text-xs">
-                        {c.sales.slice(0, 8).map((s, i) => (
+                        {c.sales.slice(0, 8).map((s: any, i: number) => (
                           <li key={i} className="flex justify-between gap-2">
                             <span className="text-muted-foreground truncate">
                               {fmtDate(s.sold_at)}{s.grade ? ` · ${s.grade}` : ""}
