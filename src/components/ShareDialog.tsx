@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Share2, Copy, Check, Loader2, X } from "lucide-react";
@@ -79,7 +80,7 @@ export function ShareDialog() {
         <span className="hidden sm:inline">Share</span>
       </button>
 
-      {open && (
+      {open && typeof document !== "undefined" && createPortal(
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={() => setOpen(false)}
@@ -172,7 +173,8 @@ export function ShareDialog() {
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
