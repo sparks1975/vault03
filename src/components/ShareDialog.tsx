@@ -174,7 +174,8 @@ export function ShareDialog() {
               </>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
