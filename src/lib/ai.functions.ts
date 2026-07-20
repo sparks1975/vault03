@@ -475,14 +475,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         const gradeLower = String(data.grade ?? "").toLowerCase();
         const hasSelectedParallel = Boolean(data.cardsight_parallel_id);
 
-        const extractTitleCardNumber = (title: string): string | null => {
-          const withHash = title.match(/#\s*([A-Za-z]{1,6}[- ]?\d{1,5}[A-Za-z0-9-]*)\b/i)?.[1];
-          const withoutHash = title.match(/(?:^|[^a-z0-9])([A-Z]{1,6}[- ]\d{1,5}[A-Z0-9-]*)\b/i)?.[1];
-          const n = (withHash ?? withoutHash ?? "").replace(/\s+/g, "").toUpperCase();
-          return n || null;
-        };
-
-        const rowPassesPt130Filter = (c: (typeof cached)[number], requireCardNumber: boolean) => {
+        const rowPassesPt130Filter = (c: (typeof cached)[number]) => {
             if (!c.sold_at) return false;
             const t = new Date(c.sold_at as string).getTime();
             if (!Number.isFinite(t) || nowMs - t > sixMonthsMs) return false;
@@ -494,22 +487,18 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             } else {
               if (/\b(psa|bgs|sgc|cgc)\b/i.test(rawTitle)) return false;
             }
-            // Player / year / card number must all match when we have them.
             if (!titleMatchesCard(rawTitle, {
               player_name: data.player_name,
               year: data.year,
               set_name: data.set_name,
               card_number: data.card_number,
-              requireCardNumber,
+              requireCardNumber: true,
             })) return false;
-            // Reject parallels, refractors, /XX serials, or autos when the
-            // submitted card isn't that variant.
             if (isVariantTitle(rawTitle, {
               hasSelectedParallel,
               is_autograph: data.is_autograph,
               serial_number: data.serial_number,
             })) return false;
-            // If the user marked a serial number, require it in the title.
             if (data.serial_number) {
               const denom = String(data.serial_number).match(/\/\s*(\d+)/)?.[1];
               const needle = denom ? `/${denom}` : String(data.serial_number).toLowerCase();
@@ -519,24 +508,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             return Number.isFinite(price) && price > 0;
           };
 
-        let filteredCache = (cached ?? []).filter((c) => rowPassesPt130Filter(c, true));
-
-        // If the saved/catalog card number is wrong, strict filtering can reject
-        // every valid sold comp (Kodai Senga All Aces is a real example: saved as
-        // AA-19, sold listings are AA-46). Relax only the card-number check, keep
-        // player/year/set/variant checks, and use the dominant marketplace card
-        // number so we don't mix multiple cards from the same set.
-        if (filteredCache.length < 3 && data.card_number && data.player_name && data.year && data.set_name) {
-          const relaxed = (cached ?? []).filter((c) => rowPassesPt130Filter(c, false));
-          const groups = new Map<string, typeof relaxed>();
-          for (const row of relaxed) {
-            const key = extractTitleCardNumber(String(row.title ?? ""));
-            if (!key) continue;
-            groups.set(key, [...(groups.get(key) ?? []), row]);
-          }
-          const dominant = [...groups.values()].sort((a, b) => b.length - a.length)[0] ?? [];
-          if (dominant.length >= 3) filteredCache = dominant;
-        }
+        const filteredCache = (cached ?? []).filter(rowPassesPt130Filter);
 
         const pt130Sales = filteredCache
           .map((c) => {
