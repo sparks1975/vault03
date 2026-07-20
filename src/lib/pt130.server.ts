@@ -70,15 +70,20 @@ export function buildPt130Descriptor(fields: {
   player_name?: string | null;
   card_number?: string | null;
   is_autograph?: boolean | null;
+  selected_parallel_name?: string | null;
   grader?: string | null;
   grade?: string | null;
 }): string {
+  const parallel = fields.selected_parallel_name
+    ? fields.selected_parallel_name.replace(/\/\s*\d+/g, " ").replace(/\s+/g, " ").trim()
+    : null;
   const parts = [
     fields.year ? String(fields.year) : null,
     fields.set_name,
     fields.player_name,
     fields.card_number ? `#${String(fields.card_number).replace(/^#/, "")}` : null,
     fields.is_autograph ? "auto" : null,
+    parallel,
     fields.grader && fields.grade ? `${fields.grader} ${fields.grade}` : fields.grade ?? null,
   ].filter(Boolean) as string[];
   return parts.join(" ").replace(/\s+/g, " ").trim();

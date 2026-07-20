@@ -180,6 +180,7 @@ type CardLookup = {
   card_number?: string | null;
   descriptor?: string | null;
   is_autograph?: boolean | null;
+  is_first_bowman?: boolean | null;
 };
 
 function normalizeText(value: string | number | null | undefined): string {
@@ -204,6 +205,59 @@ function serialSearchTerm(serialNumber: string | null | undefined): string | nul
   return denom ? `/${denom}` : raw;
 }
 
+function selectedParallelTitleMatches(title: string, parallelName: string | null | undefined): boolean {
+  const rawName = compact(parallelName);
+  if (!rawName) return false;
+  const rawTitle = compact(title);
+  const denom = rawName.match(/\/\s*(\d+)/)?.[1] ?? null;
+  if (denom && !new RegExp(`/\\s*${escapeRegex(denom)}($|[^0-9])`, "i").test(rawTitle)) return false;
+
+  const normalizedName = normalizeText(rawName.replace(/\/\s*\d+/g, " "));
+  const allTokens = normalizedName.split(" ").filter((t) => t.length > 1);
+  const generic = new Set(["parallel", "chrome", "prizm", "foil", "card", "cards"]);
+  const specificTokens = allTokens.filter((t) => !generic.has(t));
+  const titleNorm = normalizeText(rawTitle);
+  return specificTokens.length > 0
+    ? specificTokens.every((t) => titleNorm.includes(t))
+    : Boolean(denom);
+}
+
+function hasUnselectedParallelModifier(title: string, selectedParallelName: string | null | undefined): boolean {
+  const titleNorm = normalizeText(title);
+  const selectedNorm = normalizeText(selectedParallelName);
+  const modifiers = [
+    "atomic", "black", "blue", "bronze", "camo", "clear cut", "cracked ice", "die cut", "foilfractor",
+    "gold", "green", "mojo", "negative", "orange", "pink", "platinum", "purple", "rainbow", "red",
+    "rose gold", "sepia", "shimmer", "silver", "superfractor", "red hot", "x fractor", "yellow", "aqua",
+    "teal", "wave", "nebula", "scope", "hyper", "lava", "dragon", "tiger", "zebra", "snake",
+    "choice", "holo", "holographic", "ssp", "printing plate",
+  ];
+  return modifiers.some((modifier) => titleNorm.includes(modifier) && !selectedNorm.includes(modifier));
+}
+
+function normalizeCardNumber(value: string | number | null | undefined): string {
+  return compact(value)
+    .replace(/^#\s*/, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+export function extractMarketplaceCardNumbers(title: string): string[] {
+  const values = new Set<string>();
+  const patterns = [
+    /#\s*([A-Za-z0-9][A-Za-z0-9.-]{0,14})\b/g,
+    /\b([A-Z]{1,5}-[A-Z0-9]{1,8})\b/g,
+  ];
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(title)) !== null) {
+      const normalized = normalizeCardNumber(match[1]);
+      if (normalized && !/^\d{4}$/.test(normalized)) values.add(normalized);
+    }
+  }
+  return [...values];
+}
+
 function pricingRecordMatches(
   record: PricingRecord,
   lookup: {
@@ -215,9 +269,12 @@ function pricingRecordMatches(
     serial_number?: string | null;
     grader?: string | null;
     grade?: string | null;
+    is_first_bowman?: boolean | null;
+    selected_parallel_name?: string | null;
   },
 ): boolean {
   const rawTitle = record.title ?? "";
+  if (!rawTitle.trim()) return false;
   const title = normalizeText(rawTitle);
   const playerTokens = normalizeText(lookup.player_name)
     .split(" ")
@@ -228,8 +285,14 @@ function pricingRecordMatches(
   if (!setTitleMatches(rawTitle, lookup.set_name)) return false;
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
   if (number) {
-    const numberPattern = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
-    if (!numberPattern.test(rawTitle)) return false;
+    const explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
+    const wanted = normalizeCardNumber(number);
+    if (explicitNumbers.length > 0) {
+      if (!explicitNumbers.includes(wanted)) return false;
+    } else {
+      const numberPattern = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
+      if (!numberPattern.test(rawTitle)) return false;
+    }
   }
 
   const isAutoTitle = /\b(auto|autograph|autographs|signed|signature)\b/i.test(rawTitle);
@@ -245,13 +308,21 @@ function pricingRecordMatches(
     if (g && !title.includes(g)) return false;
   }
 
+  if (isVariantTitle(rawTitle, {
+    is_autograph: lookup.is_autograph,
+    serial_number: lookup.serial_number,
+    is_first_bowman: lookup.is_first_bowman,
+    selectedParallelName: lookup.selected_parallel_name,
+  })) return false;
+
   return Number.isFinite(record.price) && record.price > 0;
 }
 
 // Shared parallel/variant regexes used by both the structured and pt130 paths.
 // Any word or phrase here in a marketplace title indicates the record is NOT a
 // plain base card — reject when the caller hasn't opted into that parallel.
-const PARALLEL_COLOR_RE = /\b(atomic|black|blue|bronze|camo|clear cut|cracked ice|die[- ]?cut|foilfractor|gold|green|mojo|negative|orange|pink|platinum|prism|purple|rainbow|red|rose gold|sepia|shimmer|silver|superfractor|refractor|red hot|x-?fractor|yellow|aqua|teal|wave|nebula|scope|hyper|lava|dragon|tiger|zebra|snake|choice|holo|holographic|1st bowman|ssp|printing plate)\b/i;
+const PARALLEL_COLOR_RE = /\b(atomic|black|blue|bronze|camo|clear cut|cracked ice|die[- ]?cut|foilfractor|gold|green|mojo|negative|orange|pink|platinum|prism|purple|rainbow|red|rose gold|sepia|shimmer|silver|superfractor|refractor|red hot|x-?fractor|yellow|aqua|teal|wave|nebula|scope|hyper|lava|dragon|tiger|zebra|snake|choice|holo|holographic|ssp|printing plate)\b/i;
+const FIRST_BOWMAN_RE = /\b(1st\s+bowman|first\s+bowman)\b/i;
 const SERIAL_RE = /(^|[^\w])(#?\s*\d+\s*\/\s*\d+|\/\s*\d{1,4})(?=$|[^\w])/i;
 const AUTO_RE = /\b(auto|autograph|autographs|signed|signature|signatures)\b/i;
 // (graded regex intentionally inlined at call sites)
@@ -260,11 +331,19 @@ const AUTO_RE = /\b(auto|autograph|autographs|signed|signature|signatures)\b/i;
 // base card. Applies to both structured Cardsight pricing and pt130 comps.
 export function isVariantTitle(
   title: string,
-  opts: { hasSelectedParallel?: boolean; is_autograph?: boolean | null; serial_number?: string | null } = {},
+  opts: { hasSelectedParallel?: boolean; selectedParallelName?: string | null; is_autograph?: boolean | null; serial_number?: string | null; is_first_bowman?: boolean | null } = {},
 ): boolean {
   if (!title) return false;
-  if (!opts.hasSelectedParallel && PARALLEL_COLOR_RE.test(title)) return true;
-  if (!opts.hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(title)) return true;
+  const hasSelectedParallel = Boolean(opts.hasSelectedParallel || opts.selectedParallelName);
+  if (opts.selectedParallelName) {
+    if (!selectedParallelTitleMatches(title, opts.selectedParallelName)) return true;
+    const selectedHasSerial = /\/\s*\d+/.test(opts.selectedParallelName);
+    if (!selectedHasSerial && !opts.serial_number && SERIAL_RE.test(title)) return true;
+    if (hasUnselectedParallelModifier(title, opts.selectedParallelName)) return true;
+  }
+  if (!hasSelectedParallel && PARALLEL_COLOR_RE.test(title)) return true;
+  if (!opts.is_first_bowman && FIRST_BOWMAN_RE.test(title)) return true;
+  if (!hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(title)) return true;
   if (!opts.is_autograph && AUTO_RE.test(title)) return true;
   return false;
 }
@@ -279,7 +358,7 @@ export function titleMatchesCard(
     requireCardNumber?: boolean;
   },
 ): boolean {
-  if (!title) return true; // no title = can't disqualify
+  if (!title.trim()) return false;
   if (lookup.player_name) {
     const t = normalizeText(title);
     const tokens = normalizeText(lookup.player_name).split(" ").filter((x) => x.length > 1);
@@ -289,8 +368,14 @@ export function titleMatchesCard(
   if (!setTitleMatches(title, lookup.set_name)) return false;
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
   if (number && lookup.requireCardNumber !== false) {
-    const numRe = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
-    if (!numRe.test(title)) return false;
+    const explicitNumbers = extractMarketplaceCardNumbers(title);
+    const wanted = normalizeCardNumber(number);
+    if (explicitNumbers.length > 0) {
+      if (!explicitNumbers.includes(wanted)) return false;
+    } else {
+      const numRe = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
+      if (!numRe.test(title)) return false;
+    }
   }
   return true;
 }
@@ -318,6 +403,8 @@ function pricingRecordMatchesStructured(
     year?: string | number | null;
     set_name?: string | null;
     card_number?: string | null;
+    is_first_bowman?: boolean | null;
+    selected_parallel_name?: string | null;
   },
 ): boolean {
   if (!Number.isFinite(record.price) || record.price <= 0) return false;
@@ -343,9 +430,9 @@ function pricingRecordMatchesStructured(
   if (!lookup.is_autograph && isAutoTitle) return false;
 
   const serial = serialSearchTerm(lookup.serial_number);
-  if (serial) return rawTitle.toLowerCase().includes(serial.toLowerCase());
+  if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) return false;
 
-  if (isVariantTitle(rawTitle, { hasSelectedParallel, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number })) {
+  if (isVariantTitle(rawTitle, { hasSelectedParallel, selectedParallelName: lookup.selected_parallel_name, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number, is_first_bowman: lookup.is_first_bowman })) {
     return false;
   }
 
@@ -510,6 +597,24 @@ export async function searchCatalogCard(descriptor: string): Promise<string | nu
   }
 }
 
+export async function getCatalogValuationLookup(card_id: string): Promise<CardLookup | null> {
+  try {
+    const card = await csFetch<CatalogCard>(`/v1/catalog/cards/${card_id}`);
+    return {
+      player_name: card.name ?? null,
+      year: card.releaseYear ? Number(card.releaseYear) || card.releaseYear : null,
+      set_name: [card.releaseName, card.setName].filter(Boolean).join(" ") || null,
+      card_number: card.number ?? null,
+      is_autograph: /\b(auto|autograph|autographs|signature|signatures)\b/i.test(
+        [card.releaseName, card.setName, card.name, card.description].filter(Boolean).join(" "),
+      ),
+    };
+  } catch (err) {
+    console.error("Cardsight catalog detail failed:", err);
+    return null;
+  }
+}
+
 // ---------- Parallels for a card's release (scoped to the card's set) ----------
 export type ParallelOption = { id: string; name: string; setId: string };
 
@@ -571,6 +676,12 @@ export async function listParallelsForCard(card_id: string): Promise<ParallelOpt
   all.sort((a, b) => a.name.localeCompare(b.name));
   parallelsCache.set(card_id, all);
   return all;
+}
+
+export async function getParallelNameForCard(card_id: string, parallel_id: string | null | undefined): Promise<string | null> {
+  if (!parallel_id) return null;
+  const option = (await listParallelsForCard(card_id)).find((p) => p.id === parallel_id);
+  return option?.name ?? null;
 }
 
 // ---------- Grade resolution: (grader, grade) → cardsight grade_id ----------
@@ -650,7 +761,9 @@ export async function fetchPricing(
     grader?: string | null;
     grade?: string | null;
     is_autograph?: boolean | null;
+    is_first_bowman?: boolean | null;
     serial_number?: string | null;
+    selected_parallel_name?: string | null;
     period?: string;
     limit?: number;
   } = {},
@@ -714,6 +827,7 @@ type PricingSearchLookup = CardLookup & {
   serial_number?: string | null;
   grader?: string | null;
   grade?: string | null;
+  selected_parallel_name?: string | null;
 };
 
 function setBrand(setName: string | null | undefined): string | null {
@@ -746,8 +860,9 @@ function uniquePricingQueries(lookup: PricingSearchLookup): string[] {
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
   const auto = lookup.is_autograph ? "auto" : null;
   const serial = serialSearchTerm(lookup.serial_number);
+  const parallel = compact(lookup.selected_parallel_name).replace(/\/\s*\d+/g, " ").trim() || null;
   const grade = compact([lookup.grader, lookup.grade].filter(Boolean).join(" ")) || null;
-  const variants = [auto, serial, grade].filter(Boolean) as string[];
+  const variants = [auto, parallel, serial, grade].filter(Boolean) as string[];
   const strictCandidates = [
     [year, set, player, number, ...variants],
     [player, year, set, number, ...variants],

@@ -196,6 +196,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         grade: z.string().optional().nullable(),
         grader: z.string().optional().nullable(),
         is_autograph: z.boolean().optional().nullable(),
+        is_first_bowman: z.boolean().optional().nullable(),
         serial_number: z.string().optional().nullable(),
         // Canonical Cardsight identifiers (preferred).
         cardsight_card_id: z.string().uuid().optional().nullable(),
@@ -220,6 +221,42 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     let usedCardsight = false;
     let resolvedGradeId: string | null = data.cardsight_grade_id ?? null;
     let resolvedCardId: string | null = data.cardsight_card_id ?? null;
+    let selectedParallelName: string | null = null;
+    let valuationLookup: {
+      player_name: string | null;
+      year: string | number | null | undefined;
+      set_name: string | null | undefined;
+      card_number: string | null | undefined;
+      is_autograph: boolean | null | undefined;
+      is_first_bowman: boolean | null | undefined;
+    } = {
+      player_name: data.player_name,
+      year: data.year,
+      set_name: data.set_name,
+      card_number: data.card_number,
+      is_autograph: data.is_autograph,
+      is_first_bowman: data.is_first_bowman,
+    };
+    const submittedLookup = { ...valuationLookup };
+
+    const normalizeLookupText = (value: string | number | null | undefined) =>
+      String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const usefulTokens = (value: string | number | null | undefined) =>
+      normalizeLookupText(value)
+        .split(" ")
+        .filter((t) => t.length > 1 && !["the", "card", "cards", "base", "set", "series", "autograph", "autographs"].includes(t));
+    const identityMatchesSubmitted = (candidate: Partial<typeof valuationLookup>) => {
+      const submittedPlayer = usefulTokens(submittedLookup.player_name);
+      const candidatePlayer = normalizeLookupText(candidate.player_name);
+      if (submittedPlayer.length > 0 && !submittedPlayer.every((t) => candidatePlayer.includes(t))) return false;
+      const submittedSetTokens = usefulTokens(submittedLookup.set_name);
+      const candidateSet = normalizeLookupText(candidate.set_name);
+      if (submittedSetTokens.length >= 2) {
+        const overlap = submittedSetTokens.filter((t) => candidateSet.includes(t)).length;
+        if (overlap < Math.min(2, submittedSetTokens.length)) return false;
+      }
+      return true;
+    };
 
     // If we don't yet have a cardsight card id, resolve one via catalog search.
     if (!resolvedCardId) {
@@ -251,6 +288,49 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       if (lower.includes("130") || lower.includes("ebay")) return "eBay sold";
       return raw || "eBay sold";
     };
+
+    // When we have a canonical catalog ID, use the catalog's own year/set/card
+    // number for matching. Editable/AI-extracted fields can be stale or wrong;
+    // using them to filter title comps creates false "no sales" results.
+    if (resolvedCardId) {
+      try {
+        const { getCatalogValuationLookup } = await import("./cardsight.server");
+        const catalogLookup = await getCatalogValuationLookup(resolvedCardId);
+        if (catalogLookup && identityMatchesSubmitted(catalogLookup)) {
+          valuationLookup = {
+            player_name: catalogLookup.player_name ?? valuationLookup.player_name,
+            year: catalogLookup.year == null ? valuationLookup.year : Number(catalogLookup.year) || valuationLookup.year,
+            set_name: catalogLookup.set_name ?? valuationLookup.set_name,
+            card_number: catalogLookup.card_number ?? valuationLookup.card_number,
+            is_autograph: data.is_autograph === true ? true : catalogLookup.is_autograph ?? valuationLookup.is_autograph,
+            is_first_bowman: data.is_first_bowman,
+          };
+        } else if (catalogLookup) {
+          const { searchCatalogCardByFields } = await import("./cardsight.server");
+          const descriptorForCorrection = [
+            submittedLookup.year,
+            submittedLookup.set_name,
+            submittedLookup.player_name,
+            submittedLookup.card_number ? `#${submittedLookup.card_number}` : null,
+          ].filter(Boolean).join(" ");
+          const correctedId = await searchCatalogCardByFields({
+            ...submittedLookup,
+            descriptor: descriptorForCorrection,
+          });
+          resolvedCardId = correctedId && correctedId !== resolvedCardId ? correctedId : null;
+        }
+      } catch (err) {
+        console.error("Cardsight valuation lookup failed:", err);
+      }
+      if (resolvedCardId && data.cardsight_parallel_id) {
+        try {
+          const { getParallelNameForCard } = await import("./cardsight.server");
+          selectedParallelName = await getParallelNameForCard(resolvedCardId, data.cardsight_parallel_id);
+        } catch (err) {
+          console.error("Cardsight parallel lookup failed:", err);
+        }
+      }
+    }
 
     const priceFromSlice = async (slice: Awaited<ReturnType<typeof import("./cardsight.server").fetchPricing>>) => {
       const { median, trimOutliersIQR } = await import("./cardsight.server");
@@ -321,14 +401,16 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           const slice = await fetchPricing(resolvedCardId, {
             parallel_id: data.cardsight_parallel_id ?? null,
             grade_id: resolvedGradeId,
-            player_name: data.player_name,
-            year: data.year,
-            set_name: data.set_name,
-            card_number: data.card_number,
+            player_name: valuationLookup.player_name,
+            year: valuationLookup.year,
+            set_name: valuationLookup.set_name,
+            card_number: valuationLookup.card_number,
             grader: data.grader,
             grade: data.grade,
-            is_autograph: data.is_autograph,
+            is_autograph: valuationLookup.is_autograph,
+            is_first_bowman: valuationLookup.is_first_bowman,
             serial_number: data.serial_number,
+            selected_parallel_name: selectedParallelName,
             period: "6m",
           });
           await priceFromSlice(slice);
@@ -347,33 +429,36 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       try {
         const { fetchPricing, searchCatalogCardByFields } = await import("./cardsight.server");
         const descriptorForRetry = [
-          data.year,
-          data.set_name,
-          data.player_name,
-          data.card_number ? `#${data.card_number}` : null,
+          valuationLookup.year,
+          valuationLookup.set_name,
+          valuationLookup.player_name,
+          valuationLookup.card_number ? `#${valuationLookup.card_number}` : null,
         ]
           .filter(Boolean)
           .join(" ");
         const retryCardId = await searchCatalogCardByFields({
-          player_name: data.player_name,
-          year: data.year,
-          set_name: data.set_name,
-          card_number: data.card_number,
+          player_name: valuationLookup.player_name,
+          year: valuationLookup.year,
+          set_name: valuationLookup.set_name,
+          card_number: valuationLookup.card_number,
           descriptor: descriptorForRetry,
-          is_autograph: data.is_autograph,
+          is_autograph: valuationLookup.is_autograph,
+          is_first_bowman: valuationLookup.is_first_bowman,
         });
         if (retryCardId && retryCardId !== resolvedCardId) {
           const retrySlice = await fetchPricing(retryCardId, {
             parallel_id: data.cardsight_parallel_id ?? null,
             grade_id: resolvedGradeId,
-            player_name: data.player_name,
-            year: data.year,
-            set_name: data.set_name,
-            card_number: data.card_number,
+            player_name: valuationLookup.player_name,
+            year: valuationLookup.year,
+            set_name: valuationLookup.set_name,
+            card_number: valuationLookup.card_number,
             grader: data.grader,
             grade: data.grade,
-            is_autograph: data.is_autograph,
+            is_autograph: valuationLookup.is_autograph,
+            is_first_bowman: valuationLookup.is_first_bowman,
             serial_number: data.serial_number,
+            selected_parallel_name: selectedParallelName,
             period: "6m",
           });
           await priceFromSlice(retrySlice);
@@ -389,12 +474,14 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         const { searchPricingComps } = await import("./cardsight.server");
         const searchSlice = await searchPricingComps(
           {
-            player_name: data.player_name,
-            year: data.year,
-            set_name: data.set_name,
-            card_number: data.card_number,
-            is_autograph: data.is_autograph,
+            player_name: valuationLookup.player_name,
+            year: valuationLookup.year,
+            set_name: valuationLookup.set_name,
+            card_number: valuationLookup.card_number,
+            is_autograph: valuationLookup.is_autograph,
+            is_first_bowman: valuationLookup.is_first_bowman,
             serial_number: data.serial_number,
+            selected_parallel_name: selectedParallelName,
             grader: data.grader,
             grade: data.grade,
           },
@@ -445,11 +532,12 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               "./pt130.server"
             );
             const descriptor = buildPt130Descriptor({
-              year: data.year,
-              set_name: data.set_name,
-              player_name: data.player_name,
-              card_number: data.card_number,
-              is_autograph: data.is_autograph,
+              year: valuationLookup.year,
+              set_name: valuationLookup.set_name,
+              player_name: valuationLookup.player_name,
+              card_number: valuationLookup.card_number,
+              is_autograph: valuationLookup.is_autograph,
+              selected_parallel_name: selectedParallelName,
               grader: data.grader,
               grade: data.grade,
             });
@@ -488,16 +576,18 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               if (/\b(psa|bgs|sgc|cgc)\b/i.test(rawTitle)) return false;
             }
             if (!titleMatchesCard(rawTitle, {
-              player_name: data.player_name,
-              year: data.year,
-              set_name: data.set_name,
-              card_number: data.card_number,
+              player_name: valuationLookup.player_name,
+              year: valuationLookup.year,
+              set_name: valuationLookup.set_name,
+              card_number: valuationLookup.card_number,
               requireCardNumber: true,
             })) return false;
             if (isVariantTitle(rawTitle, {
               hasSelectedParallel,
-              is_autograph: data.is_autograph,
+              selectedParallelName,
+              is_autograph: valuationLookup.is_autograph,
               serial_number: data.serial_number,
+              is_first_bowman: valuationLookup.is_first_bowman,
             })) return false;
             if (data.serial_number) {
               const denom = String(data.serial_number).match(/\/\s*(\d+)/)?.[1];
@@ -508,7 +598,35 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             return Number.isFinite(price) && price > 0;
           };
 
-        const filteredCache = (cached ?? []).filter(rowPassesPt130Filter);
+        let filteredCache = (cached ?? []).filter(rowPassesPt130Filter);
+        if (!stale && cached.length > 0 && filteredCache.length === 0) {
+          try {
+            const { buildPt130Descriptor, refreshPt130ForCard } = await import(
+              "./pt130.server"
+            );
+            const descriptor = buildPt130Descriptor({
+              year: valuationLookup.year,
+              set_name: valuationLookup.set_name,
+              player_name: valuationLookup.player_name,
+              card_number: valuationLookup.card_number,
+              is_autograph: valuationLookup.is_autograph,
+              selected_parallel_name: selectedParallelName,
+              grader: data.grader,
+              grade: data.grade,
+            });
+            if (descriptor) {
+              await refreshPt130ForCard(supabase as never, {
+                card_id: cardId,
+                user_id: userId,
+                descriptor,
+              });
+              cached = await loadCache();
+              filteredCache = (cached ?? []).filter(rowPassesPt130Filter);
+            }
+          } catch (err) {
+            console.error("pt130 descriptor refresh failed:", err);
+          }
+        }
 
         const pt130Sales = filteredCache
           .map((c) => {

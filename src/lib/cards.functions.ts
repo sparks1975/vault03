@@ -262,7 +262,7 @@ export const revalueAllCards = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const { data: cards, error } = await supabase
       .from("cards")
-      .select("id, player_name, year, set_name, card_number, grade, grader, is_autograph, serial_number, cardsight_card_id, cardsight_parallel_id, cardsight_grade_id, last_valued_at")
+      .select("id, player_name, year, set_name, card_number, grade, grader, is_autograph, is_first_bowman, serial_number, cardsight_card_id, cardsight_parallel_id, cardsight_grade_id, last_valued_at")
       .eq("user_id", userId);
     if (error) throw error;
 
@@ -279,6 +279,7 @@ export const revalueAllCards = createServerFn({ method: "POST" })
             grade: c.grade,
             grader: c.grader,
             is_autograph: c.is_autograph,
+            is_first_bowman: c.is_first_bowman,
             serial_number: c.serial_number,
             cardsight_card_id: c.cardsight_card_id,
             cardsight_parallel_id: c.cardsight_parallel_id,
