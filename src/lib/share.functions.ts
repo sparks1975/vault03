@@ -169,7 +169,7 @@ export const getPublicCollection = createServerFn({ method: "GET" })
     );
 
     const totalValue = withSigned.reduce(
-      (sum, c) => sum + (typeof c.current_value === "number" ? (c.current_value as number) : 0),
+      (sum, c) => sum + (typeof c.current_value === "number" ? c.current_value : 0),
       0,
     );
 
