@@ -237,6 +237,26 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       is_autograph: data.is_autograph,
       is_first_bowman: data.is_first_bowman,
     };
+    const submittedLookup = { ...valuationLookup };
+
+    const normalizeLookupText = (value: string | number | null | undefined) =>
+      String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const usefulTokens = (value: string | number | null | undefined) =>
+      normalizeLookupText(value)
+        .split(" ")
+        .filter((t) => t.length > 1 && !["the", "card", "cards", "base", "set", "series", "autograph", "autographs"].includes(t));
+    const identityMatchesSubmitted = (candidate: typeof valuationLookup) => {
+      const submittedPlayer = usefulTokens(submittedLookup.player_name);
+      const candidatePlayer = normalizeLookupText(candidate.player_name);
+      if (submittedPlayer.length > 0 && !submittedPlayer.every((t) => candidatePlayer.includes(t))) return false;
+      const submittedSetTokens = usefulTokens(submittedLookup.set_name);
+      const candidateSet = normalizeLookupText(candidate.set_name);
+      if (submittedSetTokens.length >= 2) {
+        const overlap = submittedSetTokens.filter((t) => candidateSet.includes(t)).length;
+        if (overlap < Math.min(2, submittedSetTokens.length)) return false;
+      }
+      return true;
+    };
 
     // If we don't yet have a cardsight card id, resolve one via catalog search.
     if (!resolvedCardId) {
@@ -276,7 +296,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       try {
         const { getCatalogValuationLookup } = await import("./cardsight.server");
         const catalogLookup = await getCatalogValuationLookup(resolvedCardId);
-        if (catalogLookup) {
+        if (catalogLookup && identityMatchesSubmitted(catalogLookup)) {
           valuationLookup = {
             player_name: catalogLookup.player_name ?? valuationLookup.player_name,
             year: catalogLookup.year == null ? valuationLookup.year : Number(catalogLookup.year) || valuationLookup.year,
@@ -285,6 +305,19 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             is_autograph: data.is_autograph === true ? true : catalogLookup.is_autograph ?? valuationLookup.is_autograph,
             is_first_bowman: data.is_first_bowman,
           };
+        } else if (catalogLookup) {
+          const { searchCatalogCardByFields } = await import("./cardsight.server");
+          const descriptorForCorrection = [
+            submittedLookup.year,
+            submittedLookup.set_name,
+            submittedLookup.player_name,
+            submittedLookup.card_number ? `#${submittedLookup.card_number}` : null,
+          ].filter(Boolean).join(" ");
+          const correctedId = await searchCatalogCardByFields({
+            ...submittedLookup,
+            descriptor: descriptorForCorrection,
+          });
+          resolvedCardId = correctedId && correctedId !== resolvedCardId ? correctedId : null;
         }
       } catch (err) {
         console.error("Cardsight valuation lookup failed:", err);
