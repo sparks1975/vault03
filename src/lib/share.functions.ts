@@ -2,6 +2,37 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+type PublicSale = {
+  sold_at: string | null;
+  grade: string | null;
+  price: number;
+  source: string | null;
+  url: string | null;
+};
+
+type PublicCard = {
+  id: string;
+  player_name: string;
+  team: string | null;
+  position: string | null;
+  year: number | null;
+  set_name: string | null;
+  card_number: string | null;
+  parallel: string | null;
+  serial_number: string | null;
+  grade: string | null;
+  grader: string | null;
+  is_autograph: boolean;
+  is_rookie: boolean;
+  is_first_bowman: boolean;
+  current_value: number | null;
+  value_delta_pct: number | null;
+  last_valued_at: string | null;
+  photo_url: string | null;
+  created_at: string;
+  sales: PublicSale[];
+};
+
 const SIGNED_URL_TTL = 60 * 60;
 
 const SAFE_CARD_COLUMNS = [
