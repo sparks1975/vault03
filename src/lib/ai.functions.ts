@@ -497,6 +497,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               player_name: valuationLookup.player_name,
               card_number: valuationLookup.card_number,
               is_autograph: valuationLookup.is_autograph,
+              selected_parallel_name: selectedParallelName,
               grader: data.grader,
               grade: data.grade,
             });
