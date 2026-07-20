@@ -121,7 +121,7 @@ export const getPublicCollection = createServerFn({ method: "GET" })
     if (cErr) throw cErr;
     const cards = (cardsRaw ?? []) as unknown as Array<Record<string, unknown>>;
 
-    const withSigned = await Promise.all(
+    const withSigned: Array<Record<string, unknown>> = await Promise.all(
       cards.map(async (c) => {
         const path = c.photo_url as string | null;
         let photo_url: string | null = null;
