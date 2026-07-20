@@ -222,7 +222,14 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     let resolvedGradeId: string | null = data.cardsight_grade_id ?? null;
     let resolvedCardId: string | null = data.cardsight_card_id ?? null;
     let selectedParallelName: string | null = null;
-    let valuationLookup = {
+    let valuationLookup: {
+      player_name: string | null;
+      year: string | number | null | undefined;
+      set_name: string | null | undefined;
+      card_number: string | null | undefined;
+      is_autograph: boolean | null | undefined;
+      is_first_bowman: boolean | null | undefined;
+    } = {
       player_name: data.player_name,
       year: data.year,
       set_name: data.set_name,
