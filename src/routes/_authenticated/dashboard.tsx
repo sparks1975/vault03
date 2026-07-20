@@ -19,6 +19,7 @@ import {
 } from "@/lib/cards.functions";
 
 import { supabase } from "@/integrations/supabase/client";
+import { ShareDialog } from "@/components/ShareDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -409,6 +410,7 @@ function Dashboard() {
             {revalueProgress.isRunning ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
             <span className="hidden sm:inline">Re-value</span>
           </button>
+          <ShareDialog />
           <button
             onClick={() => setAddOpen(true)}
             className="px-3 md:px-4 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-accent transition-colors inline-flex items-center gap-2"
