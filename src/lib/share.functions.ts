@@ -2,14 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-type PublicSale = {
-  sold_at: string | null;
-  grade: string | null;
-  price: number;
-  source: string | null;
-  url: string | null;
-};
-
 type PublicCard = {
   id: string;
   player_name: string;
@@ -30,7 +22,6 @@ type PublicCard = {
   last_valued_at: string | null;
   photo_url: string | null;
   created_at: string;
-  sales: PublicSale[];
 };
 
 const SIGNED_URL_TTL = 60 * 60;

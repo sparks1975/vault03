@@ -45,12 +45,6 @@ export const Route = createFileRoute("/s/$slug")({
 const fmtMoney = (n: number | null | undefined) =>
   typeof n === "number" ? `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : "—";
 
-const fmtDate = (s: string | null) => {
-  if (!s) return "";
-  const d = new Date(s);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-};
 
 function SharedCollection() {
   const data = Route.useLoaderData();
