@@ -150,11 +150,11 @@ export const getPublicCollection = createServerFn({ method: "GET" })
       .eq("user_id", profile.id)
       .order("current_value", { ascending: false, nullsFirst: false });
     if (cErr) throw cErr;
-    const cards = (cardsRaw ?? []) as unknown as Array<Record<string, unknown>>;
+    const cards = (cardsRaw ?? []) as unknown as PublicCard[];
 
-    const withSigned: Array<Record<string, unknown>> = await Promise.all(
+    const withSigned: PublicCard[] = await Promise.all(
       cards.map(async (c) => {
-        const path = c.photo_url as string | null;
+        const path = c.photo_url;
         let photo_url: string | null = null;
         if (path && !path.startsWith("http") && !path.startsWith("data:")) {
           const { data: signed } = await supabaseAdmin.storage
