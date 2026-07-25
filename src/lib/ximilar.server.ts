@@ -1,16 +1,22 @@
-// Ximilar API client for sports card identification + price stats.
+// Ximilar API client for sports card identification + pricing.
 // Docs: https://docs.ximilar.com/services/card_id/
 //
 // We use the "collectibles/v2/sport_id" endpoint which both identifies the
-// card and (when `price_stats: true`) returns aggregated market pricing.
-// Ximilar returns per-slab statistics (overall / graded / ungraded) — no
-// individual sale records — so we surface the aggregates as synthetic
-// "sale" entries in the UI.
+// card and returns market pricing/listing data when requested.
 
 const XIMILAR_URL = "https://api.ximilar.com/collectibles/v2/sport_id";
 
+export class XimilarAuthError extends Error {
+  constructor(message = "Ximilar could not authenticate. Check the saved API token and account credits.") {
+    super(message);
+    this.name = "XimilarAuthError";
+  }
+}
+
 type PriceStat = {
   stats_type?: string | null; // "overall" | "graded" | "ungraded" | "PSA 10" ...
+  interval?: string | null;
+  start_date?: string | null;
   median?: number | null;
   mean?: number | null;
   trimmed_mean?: number | null;
@@ -21,7 +27,23 @@ type PriceStat = {
   latest_date?: string | null;
   oldest_date?: string | null;
   count?: number | null;
+  volume?: number | null;
   link_ebay?: string | null;
+  value?: Omit<PriceStat, "stats_type" | "interval" | "start_date" | "value"> | null;
+};
+
+type PricingListing = {
+  item_id?: string | null;
+  item_link?: string | null;
+  name?: string | null;
+  price?: number | string | null;
+  currency?: string | null;
+  source?: string | null;
+  date_of_creation?: string | null;
+  date_of_sale?: string | null;
+  grade_company?: string | null;
+  grade?: string | number | null;
+  grade_value?: string | number | null;
 };
 
 type XimilarBestMatch = {
@@ -38,6 +60,7 @@ type XimilarBestMatch = {
   card_number?: string | number | null;
   number?: string | number | null;
   price_stats?: PriceStat[] | null;
+  pricing?: { list?: PricingListing[] | null } | null;
   links?: { ebay?: string | null } | null;
 };
 
@@ -47,31 +70,80 @@ type XimilarRecord = {
     best_match?: XimilarBestMatch | null;
     alternatives?: XimilarBestMatch[] | null;
   } | null;
+  _objects?: XimilarObject[] | null;
+  pricing?: { list?: PricingListing[] | null } | null;
+};
+
+type XimilarObject = {
+  _identification?: {
+    best_match?: XimilarBestMatch | null;
+    alternatives?: XimilarBestMatch[] | null;
+  } | null;
+  pricing?: { list?: PricingListing[] | null } | null;
 };
 
 type XimilarResponse = {
   records?: XimilarRecord[];
+  pricing?: { list?: PricingListing[] | null } | boolean | null;
   status?: { code?: number; text?: string };
 };
 
-async function callXimilar(record: Record<string, unknown>, priceStats: boolean): Promise<XimilarBestMatch | null> {
-  const token = process.env.XIMILAR_API_TOKEN;
+type XimilarResult = {
+  match: XimilarBestMatch | null;
+  listings: PricingListing[];
+};
+
+async function callXimilar(
+  record: Record<string, unknown>,
+  opts: { priceStats: boolean; pricing: boolean },
+): Promise<XimilarResult> {
+  const token = normalizeToken(process.env.XIMILAR_API_TOKEN);
   if (!token) throw new Error("XIMILAR_API_TOKEN is not configured");
+  const body: Record<string, unknown> = { records: [record], analyze_all: true };
+  if (opts.priceStats) body.price_stats = true;
+  if (opts.pricing) body.pricing = true;
   const res = await fetch(XIMILAR_URL, {
     method: "POST",
     headers: {
       Authorization: `Token ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ records: [record], price_stats: priceStats, analyze_all: true }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const t = await res.text();
+    if (res.status === 401 || /authorization|invalid token|credit limits/i.test(t)) {
+      throw new XimilarAuthError();
+    }
     throw new Error(`Ximilar request failed [${res.status}]: ${t}`);
   }
   const j = (await res.json()) as XimilarResponse;
+  if (j.status?.code === 401 || /authorization|invalid token|credit limits/i.test(j.status?.text ?? "")) {
+    throw new XimilarAuthError();
+  }
   const rec = j.records?.[0];
-  return rec?._identification?.best_match ?? null;
+  const objectMatches = (rec?._objects ?? [])
+    .map((obj) => obj._identification?.best_match ?? null)
+    .filter((match): match is XimilarBestMatch => match !== null);
+  const match = rec?._identification?.best_match ?? objectMatches[0] ?? null;
+  return {
+    match,
+    listings: [
+      ...(rec?.pricing?.list ?? []),
+      ...(rec?._identification?.best_match?.pricing?.list ?? []),
+      ...((rec?._objects ?? []).flatMap((obj) => [
+        ...(obj.pricing?.list ?? []),
+        ...(obj._identification?.best_match?.pricing?.list ?? []),
+      ])),
+      ...(typeof j.pricing === "object" ? j.pricing?.list ?? [] : []),
+    ].filter(Boolean),
+  };
+}
+
+function normalizeToken(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return trimmed.replace(/^(token|bearer)\s+/i, "").trim();
 }
 
 export type XimilarIdentification = {
@@ -112,7 +184,7 @@ export async function identifyCardXimilar(
   _contentType: string,
 ): Promise<XimilarIdentification | null> {
   const b64 = bytesToBase64(bytes);
-  const match = await callXimilar({ _base64: b64 }, false);
+  const { match } = await callXimilar({ _base64: b64 }, { priceStats: false, pricing: false });
   if (!match) return null;
   const rawName = pickString(match.player_name, match.subject, match.full_name, match.name);
   return {
@@ -168,8 +240,8 @@ export async function pricingFromXimilarByUrl(
   imageUrl: string,
   opts: { grader?: string | null; grade?: string | null },
 ): Promise<XimilarPricing | null> {
-  const match = await callXimilar({ _url: imageUrl }, true);
-  return buildPricing(match, opts);
+  const result = await callXimilar({ _url: imageUrl }, { priceStats: true, pricing: true });
+  return buildPricing(result, opts);
 }
 
 export async function pricingFromXimilarByBytes(
@@ -178,16 +250,20 @@ export async function pricingFromXimilarByBytes(
   opts: { grader?: string | null; grade?: string | null },
 ): Promise<XimilarPricing | null> {
   const b64 = bytesToBase64(bytes);
-  const match = await callXimilar({ _base64: b64 }, true);
-  return buildPricing(match, opts);
+  const result = await callXimilar({ _base64: b64 }, { priceStats: true, pricing: true });
+  return buildPricing(result, opts);
 }
 
 function buildPricing(
-  match: XimilarBestMatch | null,
+  result: XimilarResult,
   opts: { grader?: string | null; grade?: string | null },
 ): XimilarPricing | null {
+  const { match } = result;
+  const listingPricing = buildPricingFromListings(result.listings, opts);
+  if (listingPricing) return listingPricing;
+
   if (!match) return null;
-  const stats = (match.price_stats ?? []).filter(Boolean);
+  const stats = (match.price_stats ?? []).filter(Boolean).map(normalizePriceStat);
   if (stats.length === 0) return null;
   const chosen = pickStatForGrade(stats, opts.grader ?? null, opts.grade ?? null);
   if (!chosen) return null;
@@ -220,7 +296,25 @@ function buildPricing(
       sold_at: chosen.latest_date ?? nowIso,
       grade: gradeLabel,
       price: Number(chosen.median),
-      source: `eBay sold · Median${chosen.count ? ` (${chosen.count})` : ""}`,
+      source: `eBay sold · Median${chosen.count ?? chosen.volume ? ` (${chosen.count ?? chosen.volume})` : ""}`,
+      url: ebayUrl,
+    });
+  }
+  if (chosen.trimmed_mean != null && Number.isFinite(Number(chosen.trimmed_mean))) {
+    sales.push({
+      sold_at: chosen.latest_date ?? nowIso,
+      grade: gradeLabel,
+      price: Number(chosen.trimmed_mean),
+      source: `eBay sold · Trimmed avg${chosen.count ?? chosen.volume ? ` (${chosen.count ?? chosen.volume})` : ""}`,
+      url: ebayUrl,
+    });
+  }
+  if (sales.length === 0 && chosen.mean != null && Number.isFinite(Number(chosen.mean))) {
+    sales.push({
+      sold_at: chosen.latest_date ?? nowIso,
+      grade: gradeLabel,
+      price: Number(chosen.mean),
+      source: `eBay sold · Average${chosen.count ?? chosen.volume ? ` (${chosen.count ?? chosen.volume})` : ""}`,
       url: ebayUrl,
     });
   }
@@ -268,4 +362,95 @@ function buildPricing(
     sales,
     history,
   };
+}
+
+function normalizePriceStat(stat: PriceStat): PriceStat {
+  if (!stat.value) return stat;
+  return {
+    ...stat.value,
+    stats_type: stat.stats_type,
+    interval: stat.interval,
+    start_date: stat.start_date,
+    count: stat.count ?? stat.value.count ?? stat.value.volume ?? null,
+    volume: stat.volume ?? stat.value.volume ?? null,
+    link_ebay: stat.link_ebay ?? stat.value.link_ebay ?? null,
+  };
+}
+
+function buildPricingFromListings(
+  listings: PricingListing[],
+  opts: { grader?: string | null; grade?: string | null },
+): XimilarPricing | null {
+  const usable = listings
+    .map((listing): XimilarPricing["sales"][number] | null => {
+      if (!listing.date_of_sale) return null;
+      const price = parsePrice(listing.price);
+      const currency = String(listing.currency ?? "USD").toUpperCase();
+      if (!Number.isFinite(price) || price <= 0 || currency !== "USD") return null;
+      const soldAt = listing.date_of_sale;
+      const gradeCompany = pickString(listing.grade_company, opts.grader ?? null);
+      const gradeValue = pickString(listing.grade_value, listing.grade, opts.grade ?? null);
+      const gradeLabel = gradeCompany && gradeValue ? `${gradeCompany} ${gradeValue}` : pickString(gradeCompany, gradeValue);
+      return {
+        sold_at: soldAt,
+        grade: gradeLabel,
+        price,
+        source: "eBay sold",
+        url: listing.item_link ?? null,
+      };
+    })
+    .filter((sale): sale is XimilarPricing["sales"][number] => sale !== null)
+    .sort((a, b) => new Date(b.sold_at ?? 0).getTime() - new Date(a.sold_at ?? 0).getTime())
+    .slice(0, 12);
+
+  if (usable.length === 0) return null;
+
+  const prices = trimOutliers(usable.map((sale) => sale.price));
+  const value = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+  const chronological = [...usable]
+    .filter((sale) => sale.sold_at)
+    .sort((a, b) => new Date(a.sold_at as string).getTime() - new Date(b.sold_at as string).getTime());
+  const oldest = chronological[0]?.price ?? value;
+  const latest = chronological[chronological.length - 1]?.price ?? value;
+  const deltaPct = oldest > 0 ? ((latest - oldest) / oldest) * 100 : 0;
+  const historySource = chronological.length >= 2 ? chronological : usable;
+  const history = historySource.slice(-6).map((sale) => ({
+    recorded_at: sale.sold_at ?? new Date().toISOString(),
+    value: Number(sale.price.toFixed(2)),
+  }));
+
+  return {
+    current_value: Number(value.toFixed(2)),
+    value_delta_pct: Number(deltaPct.toFixed(2)),
+    sales: usable,
+    history,
+  };
+}
+
+function trimOutliers(values: number[]): number[] {
+  if (values.length < 4) return values;
+  const sorted = [...values].sort((a, b) => a - b);
+  const q1 = percentile(sorted, 0.25);
+  const q3 = percentile(sorted, 0.75);
+  const iqr = q3 - q1;
+  const low = q1 - iqr * 1.5;
+  const high = q3 + iqr * 1.5;
+  const trimmed = sorted.filter((value) => value >= low && value <= high);
+  return trimmed.length > 0 ? trimmed : sorted;
+}
+
+function parsePrice(value: number | string | null | undefined): number {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return Number.NaN;
+  return Number(value.replace(/[^0-9.]/g, ""));
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo] ?? 0;
+  const weight = idx - lo;
+  return (sorted[lo] ?? 0) * (1 - weight) + (sorted[hi] ?? 0) * weight;
 }
