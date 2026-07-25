@@ -114,6 +114,7 @@ export type Database = {
           purchase_price: number | null
           serial_number: string | null
           set_name: string | null
+          sort_order: number | null
           team: string | null
           updated_at: string
           user_id: string
@@ -143,6 +144,7 @@ export type Database = {
           purchase_price?: number | null
           serial_number?: string | null
           set_name?: string | null
+          sort_order?: number | null
           team?: string | null
           updated_at?: string
           user_id: string
@@ -172,6 +174,7 @@ export type Database = {
           purchase_price?: number | null
           serial_number?: string | null
           set_name?: string | null
+          sort_order?: number | null
           team?: string | null
           updated_at?: string
           user_id?: string

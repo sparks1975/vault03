@@ -3,7 +3,25 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X, ChevronLeft, RefreshCw } from "lucide-react";
+import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X, ChevronLeft, RefreshCw, GripVertical } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
 import { listCardsightParallels } from "@/lib/cardsight.functions";
@@ -16,6 +34,7 @@ import {
   deleteCard,
   replaceValuation,
   uploadCardPhoto,
+  reorderCards,
 } from "@/lib/cards.functions";
 
 import { supabase } from "@/integrations/supabase/client";
@@ -128,6 +147,7 @@ type Card = {
   cardsight_parallel_id: string | null;
   cardsight_grade_id: string | null;
   created_at: string;
+  sort_order: number | null;
   sales: Sale[];
   history: HistoryPoint[];
 };
@@ -167,7 +187,7 @@ function Dashboard() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"value" | "player" | "added">("added");
+  const [sortBy, setSortBy] = useState<"value" | "player" | "added" | "manual">("manual");
   const [addOpen, setAddOpen] = useState(false);
   const [revalueProgress, setRevalueProgress] = useState<{
     isRunning: boolean;
@@ -348,8 +368,19 @@ function Dashboard() {
       case "player":
         return list.sort((a, b) => a.player_name.localeCompare(b.player_name));
       case "added":
-      default:
         return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      case "manual":
+      default:
+        return list.sort((a, b) => {
+          const ao = a.sort_order;
+          const bo = b.sort_order;
+          if (ao == null && bo == null) {
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          }
+          if (ao == null) return 1;
+          if (bo == null) return -1;
+          return ao - bo;
+        });
     }
   }, [filtered, sortBy]);
 
@@ -376,6 +407,41 @@ function Dashboard() {
   }, [cardData]);
 
   const [mobileDetail, setMobileDetail] = useState(false);
+
+  const reorderFn = useServerFn(reorderCards);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const currentIds = sorted.map((c) => c.id);
+    const oldIndex = currentIds.indexOf(String(active.id));
+    const newIndex = currentIds.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+    const newOrderIds = arrayMove(currentIds, oldIndex, newIndex);
+
+    // Optimistic update: patch the cards query cache with new sort_order values,
+    // and switch sort mode to manual so the drag result is visible.
+    setSortBy("manual");
+    qc.setQueryData(["cards"], (prev: Card[] | undefined) => {
+      if (!prev) return prev;
+      const orderMap = new Map(newOrderIds.map((id, i) => [id, i]));
+      return prev.map((c) =>
+        orderMap.has(c.id) ? { ...c, sort_order: orderMap.get(c.id) ?? c.sort_order } : c,
+      );
+    });
+
+    reorderFn({ data: { orderedIds: newOrderIds } }).catch((err) => {
+      console.error("Reorder failed", err);
+      toast.error("Failed to save order");
+      qc.invalidateQueries({ queryKey: ["cards"] });
+    });
+  }
+
 
   function selectCard(id: string) {
     setSelectedId(id);
@@ -481,6 +547,7 @@ function Dashboard() {
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent className="border-border bg-background rounded-sm text-xs font-mono uppercase tracking-widest shadow-none">
+                    <SelectItem value="manual">Manual</SelectItem>
                     <SelectItem value="added">Date added</SelectItem>
                     <SelectItem value="value">Value</SelectItem>
                     <SelectItem value="player">Player</SelectItem>
@@ -511,11 +578,15 @@ function Dashboard() {
                 </button>
               </div>
             ) : (
-              <div className="space-y-2">
-                {sorted.map((c) => (
-                  <CardRow key={c.id} card={c} active={c.id === selected} onClick={() => selectCard(c.id)} />
-                ))}
-              </div>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={sorted.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-2">
+                    {sorted.map((c) => (
+                      <SortableCardRow key={c.id} card={c} active={c.id === selected} onClick={() => selectCard(c.id)} />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </section>
 
@@ -652,6 +723,33 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
         </div>
       </div>
     </button>
+  );
+}
+
+function SortableCardRow({ card, active, onClick }: { card: Card; active: boolean; onClick: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.7 : 1,
+    zIndex: isDragging ? 20 : "auto",
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="relative group touch-manipulation">
+      <div
+        {...attributes}
+        {...listeners}
+        role="button"
+        aria-label="Drag to reorder"
+        className="absolute left-1 top-1/2 -translate-y-1/2 z-10 p-2 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground opacity-40 group-hover:opacity-100 touch-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="size-4" />
+      </div>
+      <div className="pl-6">
+        <CardRow card={card} active={active} onClick={onClick} />
+      </div>
+    </div>
   );
 }
 
