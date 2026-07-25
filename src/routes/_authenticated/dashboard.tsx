@@ -540,7 +540,7 @@ function Dashboard() {
         <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
           <section className={`lg:col-span-7 animate-in-up [animation-delay:100ms] ${mobileDetail ? "hidden lg:block" : ""}`}>
             <div className="flex flex-wrap items-center justify-between mb-6 gap-3">
-              <h3 className="text-sm font-mono uppercase tracking-widest">Portfolio Holdings</h3>
+              <h3 className="text-sm font-mono uppercase tracking-widest">My Vault</h3>
               <div className="flex items-center gap-3">
                 <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
                   <SelectTrigger className="text-xs font-mono uppercase tracking-widest border-border bg-background rounded-sm focus:ring-accent focus:ring-1 px-3 py-1 w-32 sm:w-36 shadow-none">
