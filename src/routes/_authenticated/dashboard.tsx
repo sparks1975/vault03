@@ -547,6 +547,7 @@ function Dashboard() {
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent className="border-border bg-background rounded-sm text-xs font-mono uppercase tracking-widest shadow-none">
+                    <SelectItem value="manual">Manual</SelectItem>
                     <SelectItem value="added">Date added</SelectItem>
                     <SelectItem value="value">Value</SelectItem>
                     <SelectItem value="player">Player</SelectItem>
