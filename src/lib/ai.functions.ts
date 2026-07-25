@@ -344,7 +344,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         });
 
       if (auctions.length > 0) {
-        sales = auctions.slice(0, 25).map((r) => {
+        sales = auctions.slice(0, 200).map((r) => {
           const typeLabel = r.listing_type === "fixed" ? "BIN" : r.listing_type === "auction" ? "Auction" : null;
           return {
             sold_at: r.date ?? null,
@@ -671,7 +671,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               const pMed = median(prior);
               if (pMed > 0) deltaPct = ((rMed - pMed) / pMed) * 100;
             }
-            sales = combined.slice(0, 25);
+            sales = combined.slice(0, 200);
             usedCardsight = true;
             compsNote = null;
           }
