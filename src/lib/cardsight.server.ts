@@ -103,6 +103,25 @@ type IdentifyResponse = {
   }>;
 };
 
+// Set names in Cardsight's `setName` field frequently contain parallel/refractor
+// descriptors (e.g. "Refractor", "Pink Refractor", "Gold /50"). Those belong on
+// the parallel, not the set. Return `releaseName` alone (the true product like
+// "2020 Topps Chrome"), appending `setName` only when it's a real sub-set (e.g.
+// "Update", "Draft Picks") rather than a parallel/insert descriptor.
+const PARALLEL_KEYWORDS = /\b(refractor|refractors|parallel|prizm|prizms|xfractor|superfractor|atomic|wave|shimmer|mojo|holo|holographic|rainbow|sparkle|foil|foilboard|die[- ]?cut|cracked ice|pulsar|scope|hyper|lazer|shock|silver|gold|black|red|blue|green|orange|purple|pink|yellow|bronze|copper|platinum|sapphire|ruby|emerald|onyx|aqua|teal|magenta|neon|camo|mini|mojo|numbered|serial|\/\d+|auto|autograph|patch|relic|memorabilia|jersey|insert|inserts|short print|sp\b|ssp\b|variation|image variation|photo variation)\b/i;
+function sanitizeSetName(releaseName?: string | null, setName?: string | null): string | null {
+  const release = (releaseName ?? "").trim();
+  const set = (setName ?? "").trim();
+  if (!release && !set) return null;
+  if (!release) return PARALLEL_KEYWORDS.test(set) ? null : set;
+  if (!set) return release;
+  if (PARALLEL_KEYWORDS.test(set)) return release;
+  if (/^(base|base set)$/i.test(set)) return release;
+  // Avoid duplicating a set descriptor already present in the release name.
+  if (release.toLowerCase().includes(set.toLowerCase())) return release;
+  return `${release} ${set}`;
+}
+
 // ---------- Identify ----------
 export type IdentifyResult = {
   cardsight_card_id: string | null;
