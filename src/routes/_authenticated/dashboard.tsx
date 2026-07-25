@@ -24,7 +24,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
-
+import { listCardsightParallels } from "@/lib/cardsight.functions";
 import { CardCropDialog } from "@/components/CardCropDialog";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
 import {
@@ -42,34 +42,6 @@ import { ShareDialog } from "@/components/ShareDialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-function SmoothImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
-  const [displayed, setDisplayed] = useState(src);
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    if (src === displayed) return;
-    let cancelled = false;
-    setLoading(true);
-    const img = new Image();
-    img.decoding = "async";
-    img.src = src;
-    const done = () => {
-      if (cancelled) return;
-      setDisplayed(src);
-      setLoading(false);
-    };
-    img.onload = done;
-    img.onerror = done;
-    return () => { cancelled = true; };
-  }, [src, displayed]);
-  return (
-    <img
-      src={displayed}
-      alt={alt}
-      className={`${className ?? ""} transition-opacity duration-150 ${loading ? "opacity-70" : "opacity-100"}`}
-    />
-  );
-}
 
 function CardRowSkeleton() {
   return (
@@ -230,18 +202,6 @@ function Dashboard() {
     queryFn: () => listFn(),
   });
   const cardData = (cardsQ.data ?? []) as Card[];
-
-  // Prefetch all card photos into browser cache so switching between cards is instant.
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    for (const c of cardData) {
-      if (c.photo_url) {
-        const img = new Image();
-        img.decoding = "async";
-        img.src = c.photo_url;
-      }
-    }
-  }, [cardData]);
 
   // Recalculate card values only if stale (>30 days since last valuation).
   const revaluedRef = useRef(false);
@@ -987,7 +947,7 @@ function CardDetail({
 
       <div className="w-full aspect-[2/3] bg-secondary mb-8 border border-border overflow-hidden grid place-items-center">
         {card.photo_url ? (
-          <SmoothImage src={card.photo_url} alt={card.player_name} className="w-full h-full object-cover" />
+          <img src={card.photo_url} alt={card.player_name} className="w-full h-full object-cover" />
         ) : (
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">No photo</span>
         )}
@@ -1061,6 +1021,12 @@ function CardDetail({
                 />
               )}
             </div>
+            <ParallelSelect
+              cardId={(draft.cardsight_card_id ?? card.cardsight_card_id) ?? null}
+              lookup={{ ...card, ...draft }}
+              value={draft.cardsight_parallel_id ?? null}
+              onChange={(id) => setDraft({ ...draft, cardsight_parallel_id: id })}
+            />
           <label className="block">
 
 
@@ -1664,6 +1630,12 @@ function AddCardDialog({
               )}
             </div>
 
+            <ParallelSelect
+              cardId={form.cardsight_card_id}
+              lookup={form}
+              value={form.cardsight_parallel_id}
+              onChange={(id) => setForm({ ...form, cardsight_parallel_id: id })}
+            />
 
 
 
@@ -1742,4 +1714,83 @@ function Field({
   );
 }
 
+function cardDescriptor(card: {
+  player_name?: string | null;
+  year?: string | number | null;
+  set_name?: string | null;
+  card_number?: string | null;
+}) {
+  return [card.year, card.set_name, card.player_name, card.card_number ? `#${card.card_number}` : null]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function ParallelSelect({
+  cardId,
+  lookup,
+  value,
+  onChange,
+}: {
+  cardId: string | null;
+  lookup: {
+    player_name?: string | null;
+    year?: string | number | null;
+    set_name?: string | null;
+    card_number?: string | null;
+  };
+  value: string | null;
+  onChange: (id: string | null) => void;
+}) {
+  const listFn = useServerFn(listCardsightParallels);
+  const descriptor = cardDescriptor(lookup);
+  const canLookup = !!cardId || descriptor.trim().length > 2;
+  const q = useQuery({
+    queryKey: ["cardsight-parallels-v2", cardId, lookup.year, lookup.set_name, lookup.player_name, lookup.card_number],
+    queryFn: () => listFn({
+      data: {
+        card_id: cardId,
+        descriptor,
+        player_name: lookup.player_name ?? null,
+        year: lookup.year ?? null,
+        set_name: lookup.set_name ?? null,
+        card_number: lookup.card_number ?? null,
+      },
+    }),
+    enabled: canLookup,
+    staleTime: 60 * 60 * 1000,
+  });
+  return (
+    <label className="block">
+      <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+        Parallel / Refractor
+      </span>
+      <select
+        value={value ?? ""}
+        disabled={!canLookup || q.isLoading}
+        onChange={(e) => onChange(e.target.value || null)}
+        className="mt-1 w-full h-10 px-3 border border-border rounded-sm text-sm bg-background focus:outline-none focus:border-accent"
+      >
+        <option value="">Base card</option>
+        {(q.data ?? []).map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+      {q.isLoading && (
+        <span className="text-[9px] font-mono text-muted-foreground">Loading scoped parallel/refractor options…</span>
+      )}
+      {!canLookup && (
+        <span className="text-[9px] font-mono text-muted-foreground">
+          Enter the year, set, player, and card number to load options.
+        </span>
+      )}
+      {!q.isLoading && (q.data?.length ?? 0) === 0 && (
+        <span className="text-[9px] font-mono text-muted-foreground">
+          No scoped parallel/refractor options found for this set.
+        </span>
+      )}
+    </label>
+  );
+}
 
