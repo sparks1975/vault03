@@ -697,6 +697,14 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     }
 
 
+    if (!usedCardsight) {
+      const saleMedian = await medianValueFromSales(sales);
+      if (saleMedian != null) {
+        currentValue = saleMedian;
+        usedCardsight = true;
+        compsNote = null;
+      }
+    }
 
     const fallbackHistory = (baseValue: number) => {
       const base = Number.isFinite(baseValue) && baseValue > 0 ? baseValue : 0;
