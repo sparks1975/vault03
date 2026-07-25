@@ -203,6 +203,18 @@ function Dashboard() {
   });
   const cardData = (cardsQ.data ?? []) as Card[];
 
+  // Prefetch all card photos into browser cache so switching between cards is instant.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    for (const c of cardData) {
+      if (c.photo_url) {
+        const img = new Image();
+        img.decoding = "async";
+        img.src = c.photo_url;
+      }
+    }
+  }, [cardData]);
+
   // Recalculate card values only if stale (>30 days since last valuation).
   const revaluedRef = useRef(false);
   useEffect(() => {
