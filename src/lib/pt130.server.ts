@@ -149,16 +149,19 @@ export async function refreshPt130ForCard(
   },
 ): Promise<{ stored: number; scraped: number }> {
   const descriptors = Array.isArray(args.descriptor) ? args.descriptor : [args.descriptor];
-  let sales: Pt130Sale[] = [];
+  const sales: Pt130Sale[] = [];
+  const seen = new Set<string>();
   let scraped = 0;
   for (const descriptor of descriptors) {
     const trimmed = descriptor.trim();
     if (!trimmed) continue;
     const attempt = await scrapePt130(trimmed);
     scraped += attempt.length;
-    if (attempt.length > 0) {
-      sales = attempt;
-      break;
+    for (const sale of attempt) {
+      const key = [sale.url, sale.title, sale.sold_at, sale.price].map((value) => String(value ?? "")).join("|");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      sales.push(sale);
     }
   }
   const del = await supabase.from("pt130_comps").delete().eq("card_id", args.card_id);
