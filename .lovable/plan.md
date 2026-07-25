@@ -1,27 +1,40 @@
-Add a visible progress bar to the dashboard when the user taps **Re-value** so they can see completion status while all cards are revalued.
+## Goal
+Monetize the app with **one tasteful EthicalAds unit on public shared collection pages only** (`/s/:slug`). The authenticated app stays ad-free, which sets up a future "free tier with ads → paid tier ad-free" model without any refactor.
 
-### Plan
+Why EthicalAds: no tracking, no creepy retargeting, dev/collector-friendly creatives, and it fits the collector-grade aesthetic. Carbon Ads is an alternative but is invite-only and heavily oversubscribed — EthicalAds is the realistic path to get running now.
 
-1. **Progress UI state**
-   - In `src/routes/_authenticated/dashboard.tsx`, add local state to track whether a bulk revaluation is running, the current card index, total count, and the name of the card currently being processed.
+## What ships
 
-2. **Client-driven revaluation loop**
-   - Replace the single `revalueAllCards` mutation with an async loop that revalues each card one by one using the existing `estimateCardValue` and `replaceValuation` server functions.
-   - After each card finishes, update the progress state so the UI reflects real progress.
-   - Continue on per-card failures and count failures, matching the current behavior of the server-side bulk function.
+1. **Signup step (user, out of band)** — you apply to EthicalAds at https://www.ethicalads.io/publishers/ and get a `publisher id`. Nothing to build until that's approved. I'll note this clearly and pause implementation there if the ID isn't ready.
 
-3. **Progress overlay**
-   - Show a modal/overlay while the bulk revaluation is active using the existing `Progress` component from `src/components/ui/progress.tsx`.
-   - Display processed count / total, percentage, and the current card name.
-   - Disable the **Re-value** button and prevent duplicate runs while one is in progress.
+2. **Ad component** — `src/components/EthicalAd.tsx`
+   - Renders the standard EthicalAds `<div data-ea-publisher="…" data-ea-type="image" data-ea-style="fixedfooter">` (or `image` inline — see Placement below).
+   - Loads `https://media.ethicalads.io/media/client/ethicalads.min.js` once, lazily, only when the component mounts.
+   - No-ops in dev (checks `import.meta.env.PROD`) so we don't hit their network during local work.
+   - Adds a tiny "Ad" eyebrow label so it's clearly disclosed.
 
-4. **Completion and cleanup**
-   - On completion, invalidate the `cards` query so the updated values appear.
-   - Show a summary toast with how many cards were re-valued and how many failed.
-   - Reset progress state and close the overlay.
+3. **Placement** — `src/routes/s.$slug.tsx` only
+   - One inline `image` ad slot inserted **after the header stats block, before the card grid**, centered, with the same border/tracking styling as the rest of the shared page so it feels native.
+   - Nothing on `/dashboard`, `/`, `/auth`, or any authenticated route.
 
-5. **Keep server-side helper**
-   - Leave `revalueAllCards` in `src/lib/cards.functions.ts` intact so it can still be used by other flows or re-enabled later without re-implementation.
+4. **CSP / script allowance**
+   - Confirm no CSP header blocks `media.ethicalads.io` and `server.ethicalads.io`. We don't currently set a strict CSP, so this should just work; I'll verify in the built HTML/headers before finishing.
 
-### Files to modify
-- `src/routes/_authenticated/dashboard.tsx`
+5. **Config**
+   - Publisher ID lives in `.env` as `VITE_ETHICALADS_PUBLISHER_ID` (publishable, safe in client bundle). Component renders nothing when it's absent, so the app is safe to ship before approval.
+
+## Explicitly NOT in this plan
+- No AdSense, no Mediavine/Ezoic/Raptive.
+- No ads on authenticated routes.
+- No paid tier / Stripe work yet — this plan just keeps the door open for it by scoping ads to the free/public surface.
+- No affiliate links on comps.
+
+## Technical notes
+- EthicalAds script is ~4KB and self-contained; loading it only on `/s/:slug` keeps the main app bundle untouched.
+- Loader guards against double-injection across client-side navigations by checking `window.ethicalads` / an existing `<script>` tag, and calls `window.ethicalads?.load()` on mount so navigating between shared pages re-fills the slot.
+- OG image and share metadata on `/s/:slug` are unchanged.
+
+## Rollout
+1. You apply to EthicalAds and share the publisher ID (or add it as `VITE_ETHICALADS_PUBLISHER_ID` in project env).
+2. I implement the component + placement.
+3. Verify in preview: ad renders on `/s/:slug`, does not render on `/dashboard`, no console/network errors, layout unaffected on mobile.
