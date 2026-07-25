@@ -97,7 +97,7 @@ async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
           {
             type: "text",
             text:
-              'Identify this sports card. Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null.',
+              'Identify this sports card. Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null. IMPORTANT: `set_name` must be ONLY the actual product/set name (e.g. "Topps Chrome", "Bowman Draft", "Panini Prizm", "Upper Deck Series 1"). Do NOT include parallel, refractor, insert, color, numbering, or autograph descriptors in `set_name` — those belong to a separate parallel field we handle elsewhere. If you cannot read a real set name from the card, return null. Never invent or guess a set name.',
           },
           { type: "image_url", image_url: { url: imageUrl } },
         ],
@@ -105,7 +105,22 @@ async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
     ],
   });
   const parsed = extractJson<Omit<ScanResult, "cardsight_card_id">>(text);
+  if (parsed && typeof parsed.set_name === "string") {
+    parsed.set_name = stripParallelFromSetName(parsed.set_name);
+  }
   return { ...parsed, cardsight_card_id: null };
+}
+
+// Remove parallel/refractor/insert descriptors an AI model may append to a set
+// name. Set names should only reflect the actual product; parallels live on a
+// separate field.
+const AI_PARALLEL_TOKENS = /\b(refractor|refractors|parallel|prizm(?!s? draft| basketball| baseball| football)|xfractor|superfractor|atomic|wave|shimmer|mojo|holo(graphic)?|rainbow|sparkle|foilboard|die[- ]?cut|cracked ice|pulsar|scope|hyper|lazer|shock|sapphire|ruby|emerald|onyx|aqua|teal|magenta|neon|camo|numbered|serial|auto|autograph|patch|relic|memorabilia|jersey|insert|inserts|short print|sp|ssp|variation|image variation|photo variation|\/\d+|silver|gold|black|red|blue|green|orange|purple|pink|yellow|bronze|copper|platinum)\b/gi;
+function stripParallelFromSetName(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  let s = raw.replace(AI_PARALLEL_TOKENS, " ");
+  s = s.replace(/\s{2,}/g, " ").replace(/[\s\-–—]+$/g, "").replace(/^[\s\-–—]+/g, "").trim();
+  if (!s || s.length < 3) return null;
+  return s;
 }
 
 // ---------- Photo scan: Cardsight REST identify, AI fallback ----------
