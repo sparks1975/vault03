@@ -179,15 +179,17 @@ export async function identifyCardRest(
   const det = j.detections?.[0];
   if (!det || !det.card) return null;
   const c = det.card;
+  const catalogLookup = c.id ? await getCatalogValuationLookup(c.id) : null;
+  const catalogYear = catalogLookup?.year == null ? null : Number(catalogLookup.year) || null;
   return {
     cardsight_card_id: c.id ?? null,
     cardsight_parallel_id: c.parallel?.id ?? null,
-    player_name: c.name ?? null,
+    player_name: catalogLookup?.player_name ?? c.name ?? null,
     team: null,
     position: null,
-    year: c.year ? Number(c.year) || null : null,
-    set_name: sanitizeSetName(c.releaseName, c.setName),
-    card_number: c.number ?? null,
+    year: catalogYear ?? (c.year ? Number(c.year) || null : null),
+    set_name: catalogLookup?.set_name ?? sanitizeSetName(c.releaseName, c.setName),
+    card_number: catalogLookup?.card_number ?? c.number ?? null,
     grade: null,
     grader: det.grading?.company?.name ?? null,
     confidence: (det.confidence?.toLowerCase() as "high" | "medium" | "low") ?? "medium",
@@ -219,6 +221,17 @@ type CatalogCard = {
   variationOf?: string | null;
   parallelCount?: number;
   parallels?: Array<{ id: string; name: string; numberedTo?: number | null }>;
+};
+
+export type SetCandidate = {
+  card_id: string;
+  set_name: string;
+  release_name: string | null;
+  subset_name: string | null;
+  player_name: string | null;
+  year: string | null;
+  card_number: string | null;
+  relevance: number;
 };
 
 type CardLookup = {
@@ -527,6 +540,110 @@ function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): n
   if (lookup.is_autograph && /\b(auto|autograph|autographs|signature|signatures)\b/.test(haystack)) score += 30;
   if ("variationOf" in candidate && candidate.variationOf) score -= 20;
   return score;
+}
+
+function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean {
+  const playerTokens = normalizeText(lookup.player_name)
+    .split(" ")
+    .filter((t) => t.length > 1);
+  const candidateName = normalizeText(candidate.name);
+  if (playerTokens.length > 0 && !playerTokens.every((t) => candidateName.includes(t))) return false;
+
+  const year = compact(lookup.year);
+  if (year && compact(candidate.releaseYear) !== year) return false;
+
+  const wantedNumber = normalizeCardNumber(lookup.card_number);
+  if (wantedNumber && normalizeCardNumber(candidate.number) !== wantedNumber) return false;
+
+  return Boolean(sanitizeSetName(candidate.releaseName, candidate.setName));
+}
+
+function setCandidateFromCard(card: CatalogCard, lookup: CardLookup): SetCandidate | null {
+  const setName = sanitizeSetName(card.releaseName, card.setName);
+  if (!setName) return null;
+  return {
+    card_id: card.id,
+    set_name: setName,
+    release_name: card.releaseName ?? null,
+    subset_name: card.setName ?? null,
+    player_name: card.name ?? null,
+    year: card.releaseYear ?? null,
+    card_number: card.number ?? null,
+    relevance: scoreCard(card, lookup),
+  };
+}
+
+export async function listSetCandidatesForCard(lookup: CardLookup): Promise<SetCandidate[]> {
+  const descriptorLookup = lookup.descriptor ? parseDescriptor(lookup.descriptor) : {};
+  const merged: CardLookup = { ...descriptorLookup, ...lookup };
+  const player = merged.player_name?.trim();
+  const year = merged.year == null ? null : String(merged.year).trim();
+  const setName = merged.set_name?.trim();
+  const number = merged.card_number?.trim().replace(/^#\s*/, "");
+
+  const paths = new Set<string>();
+  const addCardsPath = (params: Record<string, string | null | undefined>) => {
+    const sp = new URLSearchParams({ take: "50" });
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) sp.set(key, value);
+    });
+    if ([...sp.keys()].length > 1) paths.add(`/v1/catalog/cards?${sp.toString()}`);
+  };
+
+  addCardsPath({ name: player, number, year, releaseName: setName });
+  addCardsPath({ name: player, number, year, setName });
+  addCardsPath({ name: player, number, year });
+  addCardsPath({ number, year });
+  addCardsPath({ name: player, year });
+
+  const cardsById = new Map<string, CatalogCard>();
+  for (const path of paths) {
+    try {
+      const resp = await csFetch<{ cards: CatalogCard[] }>(path);
+      for (const card of resp.cards ?? []) cardsById.set(card.id, card);
+    } catch (err) {
+      console.error("Cardsight set candidates lookup failed:", err);
+    }
+  }
+
+  if (cardsById.size === 0) {
+    const queries = new Set<string>();
+    if (player && year && number) queries.add([year, player, `#${number}`].join(" "));
+    if (player && year && setName) queries.add([year, setName, player].join(" "));
+    if (merged.descriptor) queries.add(merged.descriptor);
+    for (const q of queries) {
+      if (q.trim().length < 2) continue;
+      try {
+        const resp = await csFetch<{ results: SearchResult[] }>(
+          `/v1/catalog/search?type=card&take=25&q=${encodeURIComponent(q.slice(0, 200))}`,
+        );
+        for (const result of resp.results ?? []) {
+          if (result.type !== "card" || cardsById.has(result.id)) continue;
+          try {
+            const detail = await csFetch<CatalogCard>(`/v1/catalog/cards/${result.id}`);
+            cardsById.set(detail.id, detail);
+          } catch {
+            // Ignore detail misses; only actual catalog card details are shown.
+          }
+        }
+      } catch (err) {
+        console.error("Cardsight set candidates search failed:", err);
+      }
+    }
+  }
+
+  const bySet = new Map<string, SetCandidate>();
+  for (const card of cardsById.values()) {
+    if (!cardMatchesLookup(card, merged)) continue;
+    const candidate = setCandidateFromCard(card, merged);
+    if (!candidate) continue;
+    const existing = bySet.get(candidate.set_name);
+    if (!existing || candidate.relevance > existing.relevance) bySet.set(candidate.set_name, candidate);
+  }
+
+  return [...bySet.values()]
+    .sort((a, b) => b.relevance - a.relevance || a.set_name.localeCompare(b.set_name))
+    .slice(0, 20);
 }
 
 function expandSetSearchTerms(setName: string | null | undefined): string[] {
