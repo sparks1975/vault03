@@ -741,12 +741,12 @@ function SortableCardRow({ card, active, onClick }: { card: Card; active: boolea
         {...listeners}
         role="button"
         aria-label="Drag to reorder"
-        className="absolute left-1 top-1/2 -translate-y-1/2 z-10 p-2 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground opacity-40 group-hover:opacity-100 touch-none"
+        className="absolute left-2 top-1/2 -translate-y-1/2 z-10 p-2 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground opacity-40 group-hover:opacity-100 touch-none"
         onClick={(e) => e.stopPropagation()}
       >
         <GripVertical className="size-4" />
       </div>
-      <div className="pl-6">
+      <div className="pl-10">
         <CardRow card={card} active={active} onClick={onClick} />
       </div>
     </div>
