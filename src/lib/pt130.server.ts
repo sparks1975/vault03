@@ -73,7 +73,8 @@ export function buildPt130Descriptor(fields: {
   selected_parallel_name?: string | null;
   grader?: string | null;
   grade?: string | null;
-}): string {
+}, opts: { includeCardNumber?: boolean } = {}): string {
+  const includeCardNumber = opts.includeCardNumber ?? true;
   const parallel = fields.selected_parallel_name
     ? fields.selected_parallel_name.replace(/\/\s*\d+/g, " ").replace(/\s+/g, " ").trim()
     : null;
@@ -81,12 +82,20 @@ export function buildPt130Descriptor(fields: {
     fields.year ? String(fields.year) : null,
     fields.set_name,
     fields.player_name,
-    fields.card_number ? `#${String(fields.card_number).replace(/^#/, "")}` : null,
+    includeCardNumber && fields.card_number ? `#${String(fields.card_number).replace(/^#/, "")}` : null,
     fields.is_autograph ? "auto" : null,
     parallel,
     fields.grader && fields.grade ? `${fields.grader} ${fields.grade}` : fields.grade ?? null,
   ].filter(Boolean) as string[];
   return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+export function buildPt130Descriptors(fields: Parameters<typeof buildPt130Descriptor>[0]): string[] {
+  const primary = buildPt130Descriptor(fields, { includeCardNumber: true });
+  const withoutNumber = fields.card_number
+    ? buildPt130Descriptor(fields, { includeCardNumber: false })
+    : "";
+  return [primary, withoutNumber].filter((value, index, all) => value && all.indexOf(value) === index);
 }
 
 export async function scrapePt130(descriptor: string): Promise<Pt130Sale[]> {
@@ -136,10 +145,25 @@ export async function refreshPt130ForCard(
   args: {
     card_id: string;
     user_id: string;
-    descriptor: string;
+    descriptor: string | string[];
   },
 ): Promise<{ stored: number; scraped: number }> {
-  const sales = await scrapePt130(args.descriptor);
+  const descriptors = Array.isArray(args.descriptor) ? args.descriptor : [args.descriptor];
+  const sales: Pt130Sale[] = [];
+  const seen = new Set<string>();
+  let scraped = 0;
+  for (const descriptor of descriptors) {
+    const trimmed = descriptor.trim();
+    if (!trimmed) continue;
+    const attempt = await scrapePt130(trimmed);
+    scraped += attempt.length;
+    for (const sale of attempt) {
+      const key = [sale.url, sale.title, sale.sold_at, sale.price].map((value) => String(value ?? "")).join("|");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      sales.push(sale);
+    }
+  }
   const del = await supabase.from("pt130_comps").delete().eq("card_id", args.card_id);
   if (del.error) throw del.error;
   if (sales.length === 0) return { stored: 0, scraped: 0 };
@@ -154,5 +178,5 @@ export async function refreshPt130ForCard(
   }));
   const ins = await supabase.from("pt130_comps").insert(rows);
   if (ins.error) throw ins.error;
-  return { stored: rows.length, scraped: sales.length };
+  return { stored: rows.length, scraped };
 }
