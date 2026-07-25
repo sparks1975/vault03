@@ -24,7 +24,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
-import { listCardsightParallels } from "@/lib/cardsight.functions";
+import { listCardsightParallels, listCardsightSetCandidates } from "@/lib/cardsight.functions";
 import { CardCropDialog } from "@/components/CardCropDialog";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
 import {
@@ -150,6 +150,17 @@ type Card = {
   sort_order: number | null;
   sales: Sale[];
   history: HistoryPoint[];
+};
+
+type SetCandidate = {
+  card_id: string;
+  set_name: string;
+  release_name: string | null;
+  subset_name: string | null;
+  player_name: string | null;
+  year: string | null;
+  card_number: string | null;
+  relevance: number;
 };
 
 function fmt(n: number | null | undefined) {
@@ -959,7 +970,20 @@ function CardDetail({
               <Field label="Player name*" value={String(draft.player_name ?? "")} onChange={(v) => setDraft({ ...draft, player_name: v })} />
               <Field label="Team" value={String(draft.team ?? "")} onChange={(v) => setDraft({ ...draft, team: v || null })} />
               <Field label="Year" type="number" value={draft.year == null ? "" : String(draft.year)} onChange={(v) => setDraft({ ...draft, year: v ? Number(v) : null })} />
-              <Field label="Set" value={String(draft.set_name ?? "")} onChange={(v) => setDraft({ ...draft, set_name: v || null })} />
+              <SetCandidateSelect
+                cardId={(draft.cardsight_card_id ?? card.cardsight_card_id) ?? null}
+                lookup={{ ...card, ...draft }}
+                value={String(draft.set_name ?? "") || null}
+                onSelect={(candidate) => setDraft({
+                  ...draft,
+                  set_name: candidate.set_name,
+                  cardsight_card_id: candidate.card_id,
+                  cardsight_parallel_id: null,
+                  year: candidate.year ? Number(candidate.year) || draft.year : draft.year,
+                  card_number: candidate.card_number ?? draft.card_number ?? null,
+                  player_name: candidate.player_name ?? draft.player_name,
+                })}
+              />
               <Field label="Card #" value={String(draft.card_number ?? "")} onChange={(v) => setDraft({ ...draft, card_number: v || null })} />
               <Field label="Position" value={String(draft.position ?? "")} onChange={(v) => setDraft({ ...draft, position: v || null })} />
               <Field label="Grader" value={String(draft.grader ?? "")} onChange={(v) => setDraft({ ...draft, grader: v || null })} />
@@ -1609,7 +1633,20 @@ function AddCardDialog({
               <Field label="Player name*" value={form.player_name} onChange={(v) => setForm({ ...form, player_name: v })} />
               <Field label="Team" value={form.team} onChange={(v) => setForm({ ...form, team: v })} />
               <Field label="Year" type="number" value={form.year} onChange={(v) => setForm({ ...form, year: v })} />
-              <Field label="Set" value={form.set_name} onChange={(v) => setForm({ ...form, set_name: v })} />
+              <SetCandidateSelect
+                cardId={form.cardsight_card_id}
+                lookup={form}
+                value={form.set_name || null}
+                onSelect={(candidate) => setForm({
+                  ...form,
+                  set_name: candidate.set_name,
+                  cardsight_card_id: candidate.card_id,
+                  cardsight_parallel_id: null,
+                  year: candidate.year ? String(candidate.year) : form.year,
+                  card_number: candidate.card_number ?? form.card_number,
+                  player_name: candidate.player_name ?? form.player_name,
+                })}
+              />
               <Field label="Card #" value={form.card_number} onChange={(v) => setForm({ ...form, card_number: v })} />
               <Field label="Position" value={form.position} onChange={(v) => setForm({ ...form, position: v })} />
               <Field label="Grader (PSA/BGS/SGC)" value={form.grader} onChange={(v) => setForm({ ...form, grader: v })} />
@@ -1766,6 +1803,84 @@ function cardDescriptor(card: {
   return [card.year, card.set_name, card.player_name, card.card_number ? `#${card.card_number}` : null]
     .filter(Boolean)
     .join(" ");
+}
+
+function SetCandidateSelect({
+  cardId,
+  lookup,
+  value,
+  onSelect,
+}: {
+  cardId: string | null;
+  lookup: {
+    player_name?: string | null;
+    year?: string | number | null;
+    set_name?: string | null;
+    card_number?: string | null;
+  };
+  value: string | null;
+  onSelect: (candidate: SetCandidate) => void;
+}) {
+  const listFn = useServerFn(listCardsightSetCandidates);
+  const descriptor = cardDescriptor(lookup);
+  const canLookup = Boolean(cardId || (lookup.player_name && lookup.year));
+  const q = useQuery({
+    queryKey: ["cardsight-set-candidates", lookup.player_name, lookup.year, lookup.set_name, lookup.card_number, cardId],
+    queryFn: () => listFn({
+      data: {
+        card_id: cardId,
+        descriptor,
+        player_name: lookup.player_name ?? null,
+        year: lookup.year ?? null,
+        set_name: lookup.set_name ?? null,
+        card_number: lookup.card_number ?? null,
+      },
+    }),
+    enabled: canLookup,
+    staleTime: 60 * 60 * 1000,
+  });
+  const candidates = (q.data ?? []) as SetCandidate[];
+  const selected = candidates.find((c) => c.card_id === cardId) ?? candidates.find((c) => c.set_name === value);
+  const selectValue = selected?.card_id ?? "";
+  return (
+    <label className="block">
+      <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Set</span>
+      <select
+        value={selectValue}
+        disabled={!canLookup || q.isLoading || candidates.length === 0}
+        onChange={(e) => {
+          const candidate = candidates.find((c) => c.card_id === e.target.value);
+          if (candidate) onSelect(candidate);
+        }}
+        className="mt-1 w-full h-10 px-3 border border-border rounded-sm text-sm bg-background focus:outline-none focus:border-accent"
+      >
+        <option value="">{value || "Select a catalog set"}</option>
+        {candidates.map((candidate) => (
+          <option key={candidate.card_id} value={candidate.card_id}>
+            {candidate.year ? `${candidate.year} ` : ""}{candidate.set_name}{candidate.card_number ? ` #${candidate.card_number}` : ""}
+          </option>
+        ))}
+      </select>
+      {q.isLoading && (
+        <span className="text-[9px] font-mono text-muted-foreground">Loading catalog sets…</span>
+      )}
+      {!canLookup && (
+        <span className="text-[9px] font-mono text-muted-foreground">
+          Enter player and year to load real catalog sets.
+        </span>
+      )}
+      {canLookup && !q.isLoading && candidates.length === 0 && (
+        <span className="text-[9px] font-mono text-muted-foreground">
+          No catalog set match found. Adjust player, year, or card number.
+        </span>
+      )}
+      {candidates.length > 0 && (
+        <span className="text-[9px] font-mono text-muted-foreground">
+          Showing {candidates.length} real catalog set{candidates.length === 1 ? "" : "s"}; set names cannot be typed manually.
+        </span>
+      )}
+    </label>
+  );
 }
 
 function ParallelSelect({
