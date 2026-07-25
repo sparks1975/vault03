@@ -43,6 +43,34 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+function SmoothImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [displayed, setDisplayed] = useState(src);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (src === displayed) return;
+    let cancelled = false;
+    setLoading(true);
+    const img = new Image();
+    img.decoding = "async";
+    img.src = src;
+    const done = () => {
+      if (cancelled) return;
+      setDisplayed(src);
+      setLoading(false);
+    };
+    img.onload = done;
+    img.onerror = done;
+    return () => { cancelled = true; };
+  }, [src, displayed]);
+  return (
+    <img
+      src={displayed}
+      alt={alt}
+      className={`${className ?? ""} transition-opacity duration-150 ${loading ? "opacity-70" : "opacity-100"}`}
+    />
+  );
+}
+
 function CardRowSkeleton() {
   return (
     <div className="w-full p-4 flex gap-4 border border-border bg-background">
