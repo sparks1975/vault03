@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { estimateCardValue } from "./ai.functions";
+import { toApprovedCardSet } from "./card-sets";
 
 
 
@@ -117,7 +118,7 @@ export const createCard = createServerFn({ method: "POST" })
     const { photo_path, ...rest } = data;
     const { data: row, error } = await supabase
       .from("cards")
-      .insert({ ...rest, photo_url: photo_path ?? null, user_id: userId })
+      .insert({ ...rest, set_name: toApprovedCardSet(rest.set_name), photo_url: photo_path ?? null, user_id: userId })
       .select("*")
       .single();
     if (error) throw error;
@@ -165,7 +166,10 @@ const allowed = [
       "cardsight_grade_id",
     ];
     const clean: Record<string, unknown> = {};
-    for (const k of allowed) if (k in data.patch) clean[k] = data.patch[k];
+    for (const k of allowed) {
+      if (!(k in data.patch)) continue;
+      clean[k] = k === "set_name" ? toApprovedCardSet(data.patch[k] as string | null | undefined) : data.patch[k];
+    }
     const { error } = await supabase.from("cards").update(clean as never).eq("id", data.id);
     if (error) throw error;
     return { ok: true };

@@ -1,5 +1,6 @@
 // Server-only Cardsight REST client. Do not import from client-reachable modules
 // at top level. See https://cardsight.ai/documentation/api-reference.
+import { toApprovedCardSet } from "./card-sets";
 
 const REST_BASE = "https://api.cardsight.ai";
 
@@ -112,14 +113,17 @@ const PARALLEL_KEYWORDS = /\b(refractor|refractors|parallel|prizm|prizms|xfracto
 function sanitizeSetName(releaseName?: string | null, setName?: string | null): string | null {
   const release = (releaseName ?? "").trim();
   const set = (setName ?? "").trim();
+  const cleanRelease = release.replace(/^\s*(19|20)\d{2}\s+/, "");
+  const cleanSet = PARALLEL_KEYWORDS.test(set) || /^(base|base set)$/i.test(set) ? null : set;
+  const approved = toApprovedCardSet(cleanRelease, cleanSet);
+  if (approved) return approved;
   if (!release && !set) return null;
-  if (!release) return PARALLEL_KEYWORDS.test(set) ? null : set;
-  if (!set) return release;
-  if (PARALLEL_KEYWORDS.test(set)) return release;
-  if (/^(base|base set)$/i.test(set)) return release;
+  if (!release) return null;
+  if (!set) return null;
+  if (!cleanSet) return null;
   // Avoid duplicating a set descriptor already present in the release name.
   if (release.toLowerCase().includes(set.toLowerCase())) return release;
-  return `${release} ${set}`;
+  return null;
 }
 
 // ---------- Identify ----------
