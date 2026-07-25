@@ -726,6 +726,33 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
   );
 }
 
+function SortableCardRow({ card, active, onClick }: { card: Card; active: boolean; onClick: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.7 : 1,
+    zIndex: isDragging ? 20 : "auto",
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="relative group touch-manipulation">
+      <div
+        {...attributes}
+        {...listeners}
+        role="button"
+        aria-label="Drag to reorder"
+        className="absolute left-1 top-1/2 -translate-y-1/2 z-10 p-2 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground opacity-40 group-hover:opacity-100 touch-none"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="size-4" />
+      </div>
+      <div className="pl-6">
+        <CardRow card={card} active={active} onClick={onClick} />
+      </div>
+    </div>
+  );
+}
+
 function CardDetail({
   card,
   onDeleted,
