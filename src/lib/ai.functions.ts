@@ -69,6 +69,7 @@ type ScanResult = {
   grader: string | null;
   confidence: "high" | "medium" | "low";
   cardsight_card_id: string | null;
+  cardsight_parallel_id?: string | null;
 };
 
 function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; contentType: string } {
