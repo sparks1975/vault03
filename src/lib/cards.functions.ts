@@ -89,6 +89,26 @@ export const listCards = createServerFn({ method: "GET" })
     return withUrls;
   });
 
+export const reorderCards = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ orderedIds: z.array(z.string().uuid()) }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    // Update each card's sort_order to its index in the array.
+    await Promise.all(
+      data.orderedIds.map((id, index) =>
+        supabase
+          .from("cards")
+          .update({ sort_order: index } as never)
+          .eq("id", id)
+          .eq("user_id", userId),
+      ),
+    );
+    return { ok: true };
+  });
+
 export const createCard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => cardInputSchema.parse(d))
