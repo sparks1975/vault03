@@ -746,7 +746,7 @@ function SortableCardRow({ card, active, onClick }: { card: Card; active: boolea
       >
         <GripVertical className="size-4" />
       </div>
-      <div className="pl-10">
+      <div className="pl-11">
         <CardRow card={card} active={active} onClick={onClick} />
       </div>
     </div>
