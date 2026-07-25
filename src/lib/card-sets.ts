@@ -27,6 +27,7 @@ export const APPROVED_CARD_SETS = [
   "Topps Inception",
   "Topps Sterling",
   "Topps Now",
+  "Topps Black and White",
   "Panini",
   "Donruss",
   "Donruss Optic",
