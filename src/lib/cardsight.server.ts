@@ -75,23 +75,30 @@ type PricingResponse = {
 
 type IdentifyResponse = {
   success: boolean;
-  detections: Array<{
+  requestId?: string;
+  processingTime?: number;
+  detections?: Array<{
     confidence: "High" | "Medium" | "Low";
     card: {
       id?: string;
+      segmentId?: string;
       releaseId?: string;
       setId?: string;
+      name?: string;
+      number?: string;
       year?: string;
       manufacturer?: string;
       releaseName?: string;
       setName?: string;
-      name?: string;
-      number?: string;
-      attributes?: string[];
+      parallel?: {
+        id?: string;
+        name?: string;
+        numberedTo?: number;
+      };
     };
     grading?: {
-      company?: { name?: string };
-      grade?: { value?: string };
+      confidence?: "High" | "Medium" | "Low";
+      company?: { id?: string; name?: string };
     };
   }>;
 };
@@ -99,6 +106,7 @@ type IdentifyResponse = {
 // ---------- Identify ----------
 export type IdentifyResult = {
   cardsight_card_id: string | null;
+  cardsight_parallel_id: string | null;
   player_name: string | null;
   team: string | null;
   position: string | null;
@@ -110,22 +118,42 @@ export type IdentifyResult = {
   confidence: "high" | "medium" | "low";
 };
 
+/**
+ * Identify a card via Cardsight's REST API.
+ *
+ * Per Cardsight's official documentation, we call the segment-specific
+ * endpoint `/v1/identify/card/baseball` — Vault.03 is a baseball-focused
+ * collection, so we always know the segment. Cardsight's docs state the
+ * segment-specific route is more accurate and faster than the mixed
+ * auto-detect route, which must infer segment before identification.
+ *
+ * Request shape follows Cardsight docs exactly:
+ *   - POST https://api.cardsight.ai/v1/identify/card/baseball
+ *   - Header: X-Api-Key
+ *   - Body: multipart/form-data with field name `image`
+ *
+ * Docs: https://cardsight.ai/documentation/api-reference
+ */
 export async function identifyCardRest(
   bytes: Uint8Array,
   contentType: string,
 ): Promise<IdentifyResult | null> {
-  const ct = /^image\/(jpeg|png|webp)$/i.test(contentType) ? contentType : "image/jpeg";
+  const ct = /^image\/(jpeg|png|webp|heif|heic)$/i.test(contentType) ? contentType : "image/jpeg";
   // Copy into a fresh ArrayBuffer to satisfy Blob's BlobPart typing.
   const buf = new ArrayBuffer(bytes.byteLength);
   new Uint8Array(buf).set(bytes);
-  const body = new Blob([buf], { type: ct });
-  const res = await fetch(`${REST_BASE}/v1/identify/card`, {
+  const blob = new Blob([buf], { type: ct });
+
+  const form = new FormData();
+  form.append("image", blob, "card.jpg");
+
+  const res = await fetch(`${REST_BASE}/v1/identify/card/baseball`, {
     method: "POST",
-    headers: { "X-API-Key": apiKey(), "Content-Type": ct, Accept: "application/json" },
-    body,
+    headers: { "X-Api-Key": apiKey(), Accept: "application/json" },
+    body: form,
   });
   if (!res.ok) {
-    console.error("Cardsight identify failed", res.status, (await res.text()).slice(0, 200));
+    console.error("Cardsight identify failed", res.status, (await res.text()).slice(0, 300));
     return null;
   }
   const j = (await res.json()) as IdentifyResponse;
@@ -134,13 +162,14 @@ export async function identifyCardRest(
   const c = det.card;
   return {
     cardsight_card_id: c.id ?? null,
+    cardsight_parallel_id: c.parallel?.id ?? null,
     player_name: c.name ?? null,
     team: null,
     position: null,
     year: c.year ? Number(c.year) || null : null,
     set_name: [c.releaseName, c.setName].filter(Boolean).join(" ") || null,
     card_number: c.number ?? null,
-    grade: det.grading?.grade?.value ?? null,
+    grade: null,
     grader: det.grading?.company?.name ?? null,
     confidence: (det.confidence?.toLowerCase() as "high" | "medium" | "low") ?? "medium",
   };
