@@ -408,6 +408,41 @@ function Dashboard() {
 
   const [mobileDetail, setMobileDetail] = useState(false);
 
+  const reorderFn = useServerFn(reorderCards);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const currentIds = sorted.map((c) => c.id);
+    const oldIndex = currentIds.indexOf(String(active.id));
+    const newIndex = currentIds.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+    const newOrderIds = arrayMove(currentIds, oldIndex, newIndex);
+
+    // Optimistic update: patch the cards query cache with new sort_order values,
+    // and switch sort mode to manual so the drag result is visible.
+    setSortBy("manual");
+    qc.setQueryData(["cards"], (prev: Card[] | undefined) => {
+      if (!prev) return prev;
+      const orderMap = new Map(newOrderIds.map((id, i) => [id, i]));
+      return prev.map((c) =>
+        orderMap.has(c.id) ? { ...c, sort_order: orderMap.get(c.id) ?? c.sort_order } : c,
+      );
+    });
+
+    reorderFn({ data: { orderedIds: newOrderIds } }).catch((err) => {
+      console.error("Reorder failed", err);
+      toast.error("Failed to save order");
+      qc.invalidateQueries({ queryKey: ["cards"] });
+    });
+  }
+
+
   function selectCard(id: string) {
     setSelectedId(id);
     setMobileDetail(true);
