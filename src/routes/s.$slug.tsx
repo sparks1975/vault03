@@ -81,8 +81,6 @@ function SharedCollection() {
           </div>
         </header>
 
-        <EthicalAd className="mt-8 border border-border bg-background p-5 flex flex-col items-center text-center" />
-
         {data.cards.length === 0 ? (
           <p className="text-center text-muted-foreground py-16">No cards yet.</p>
         ) : (
