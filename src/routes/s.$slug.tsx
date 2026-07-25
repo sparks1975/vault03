@@ -1,6 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { getPublicCollection } from "@/lib/share.functions";
-import { EthicalAd } from "@/components/EthicalAd";
 
 export const Route = createFileRoute("/s/$slug")({
   loader: async ({ params }) => {
