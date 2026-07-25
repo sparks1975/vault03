@@ -43,6 +43,34 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+function SmoothImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  const [displayed, setDisplayed] = useState(src);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (src === displayed) return;
+    let cancelled = false;
+    setLoading(true);
+    const img = new Image();
+    img.decoding = "async";
+    img.src = src;
+    const done = () => {
+      if (cancelled) return;
+      setDisplayed(src);
+      setLoading(false);
+    };
+    img.onload = done;
+    img.onerror = done;
+    return () => { cancelled = true; };
+  }, [src, displayed]);
+  return (
+    <img
+      src={displayed}
+      alt={alt}
+      className={`${className ?? ""} transition-opacity duration-150 ${loading ? "opacity-70" : "opacity-100"}`}
+    />
+  );
+}
+
 function CardRowSkeleton() {
   return (
     <div className="w-full p-4 flex gap-4 border border-border bg-background">
@@ -202,6 +230,18 @@ function Dashboard() {
     queryFn: () => listFn(),
   });
   const cardData = (cardsQ.data ?? []) as Card[];
+
+  // Prefetch all card photos into browser cache so switching between cards is instant.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    for (const c of cardData) {
+      if (c.photo_url) {
+        const img = new Image();
+        img.decoding = "async";
+        img.src = c.photo_url;
+      }
+    }
+  }, [cardData]);
 
   // Recalculate card values only if stale (>30 days since last valuation).
   const revaluedRef = useRef(false);
@@ -947,7 +987,7 @@ function CardDetail({
 
       <div className="w-full aspect-[2/3] bg-secondary mb-8 border border-border overflow-hidden grid place-items-center">
         {card.photo_url ? (
-          <img src={card.photo_url} alt={card.player_name} className="w-full h-full object-cover" />
+          <SmoothImage src={card.photo_url} alt={card.player_name} className="w-full h-full object-cover" />
         ) : (
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">No photo</span>
         )}
