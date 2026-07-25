@@ -412,7 +412,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             is_first_bowman: valuationLookup.is_first_bowman,
             serial_number: data.serial_number,
             selected_parallel_name: selectedParallelName,
-            period: "6m",
+            period: "5y",
           });
           await priceFromSlice(slice);
         }
@@ -460,7 +460,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             is_first_bowman: valuationLookup.is_first_bowman,
             serial_number: data.serial_number,
             selected_parallel_name: selectedParallelName,
-            period: "6m",
+            period: "5y",
           });
           await priceFromSlice(retrySlice);
           if (usedCardsight) resolvedCardId = retryCardId;
@@ -486,7 +486,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             grader: data.grader,
             grade: data.grade,
           },
-          { period: "6m", limit: 100 },
+          { period: "5y", limit: 100 },
         );
         await priceFromSlice(searchSlice);
         if (!usedCardsight && !compsNote) {
