@@ -368,8 +368,19 @@ function Dashboard() {
       case "player":
         return list.sort((a, b) => a.player_name.localeCompare(b.player_name));
       case "added":
-      default:
         return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      case "manual":
+      default:
+        return list.sort((a, b) => {
+          const ao = a.sort_order;
+          const bo = b.sort_order;
+          if (ao == null && bo == null) {
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+          }
+          if (ao == null) return 1;
+          if (bo == null) return -1;
+          return ao - bo;
+        });
     }
   }, [filtered, sortBy]);
 
