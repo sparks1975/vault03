@@ -187,7 +187,7 @@ function Dashboard() {
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"value" | "player" | "added">("added");
+  const [sortBy, setSortBy] = useState<"value" | "player" | "added" | "manual">("manual");
   const [addOpen, setAddOpen] = useState(false);
   const [revalueProgress, setRevalueProgress] = useState<{
     isRunning: boolean;
