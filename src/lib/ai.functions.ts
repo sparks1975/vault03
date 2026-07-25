@@ -97,7 +97,7 @@ async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
           {
             type: "text",
             text:
-              'Identify this sports card. Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null.',
+              'Identify this sports card. Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null. IMPORTANT: `set_name` must be ONLY the actual product/set name (e.g. "Topps Chrome", "Bowman Draft", "Panini Prizm", "Upper Deck Series 1"). Do NOT include parallel, refractor, insert, color, numbering, or autograph descriptors in `set_name` — those belong to a separate parallel field we handle elsewhere. If you cannot read a real set name from the card, return null. Never invent or guess a set name.',
           },
           { type: "image_url", image_url: { url: imageUrl } },
         ],
