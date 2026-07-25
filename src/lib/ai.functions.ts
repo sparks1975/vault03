@@ -607,7 +607,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           };
 
         let filteredCache = (cached ?? []).filter(rowPassesPt130Filter);
-        if (!stale && cached.length > 0 && filteredCache.length === 0) {
+        if (!stale && cached.length > 0 && filteredCache.length < 3) {
           try {
             const { buildPt130Descriptors, refreshPt130ForCard } = await import(
               "./pt130.server"
