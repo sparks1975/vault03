@@ -1,11 +1,8 @@
-// Ximilar API client for sports card identification + price stats.
+// Ximilar API client for sports card identification + pricing.
 // Docs: https://docs.ximilar.com/services/card_id/
 //
 // We use the "collectibles/v2/sport_id" endpoint which both identifies the
-// card and (when `price_stats: true`) returns aggregated market pricing.
-// Ximilar returns per-slab statistics (overall / graded / ungraded) — no
-// individual sale records — so we surface the aggregates as synthetic
-// "sale" entries in the UI.
+// card and returns market pricing/listing data when requested.
 
 const XIMILAR_URL = "https://api.ximilar.com/collectibles/v2/sport_id";
 
@@ -31,6 +28,20 @@ type PriceStat = {
   link_ebay?: string | null;
 };
 
+type PricingListing = {
+  item_id?: string | null;
+  item_link?: string | null;
+  name?: string | null;
+  price?: number | string | null;
+  currency?: string | null;
+  source?: string | null;
+  date_of_creation?: string | null;
+  date_of_sale?: string | null;
+  grade_company?: string | null;
+  grade?: string | number | null;
+  grade_value?: string | number | null;
+};
+
 type XimilarBestMatch = {
   full_name?: string | null;
   name?: string | null;
@@ -54,23 +65,36 @@ type XimilarRecord = {
     best_match?: XimilarBestMatch | null;
     alternatives?: XimilarBestMatch[] | null;
   } | null;
+  pricing?: { list?: PricingListing[] | null } | null;
 };
 
 type XimilarResponse = {
   records?: XimilarRecord[];
+  pricing?: { list?: PricingListing[] | null } | null;
   status?: { code?: number; text?: string };
 };
 
-async function callXimilar(record: Record<string, unknown>, priceStats: boolean): Promise<XimilarBestMatch | null> {
+type XimilarResult = {
+  match: XimilarBestMatch | null;
+  listings: PricingListing[];
+};
+
+async function callXimilar(
+  record: Record<string, unknown>,
+  opts: { priceStats: boolean; pricing: boolean },
+): Promise<XimilarResult> {
   const token = normalizeToken(process.env.XIMILAR_API_TOKEN);
   if (!token) throw new Error("XIMILAR_API_TOKEN is not configured");
+  const body: Record<string, unknown> = { records: [record], analyze_all: true };
+  if (opts.priceStats) body.price_stats = true;
+  if (opts.pricing) body.pricing = true;
   const res = await fetch(XIMILAR_URL, {
     method: "POST",
     headers: {
       Authorization: `Token ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ records: [record], price_stats: priceStats, analyze_all: true }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const t = await res.text();
@@ -84,7 +108,10 @@ async function callXimilar(record: Record<string, unknown>, priceStats: boolean)
     throw new XimilarAuthError();
   }
   const rec = j.records?.[0];
-  return rec?._identification?.best_match ?? null;
+  return {
+    match: rec?._identification?.best_match ?? null,
+    listings: [...(rec?.pricing?.list ?? []), ...(j.pricing?.list ?? [])].filter(Boolean),
+  };
 }
 
 function normalizeToken(value: string | undefined): string | null {
@@ -131,7 +158,7 @@ export async function identifyCardXimilar(
   _contentType: string,
 ): Promise<XimilarIdentification | null> {
   const b64 = bytesToBase64(bytes);
-  const match = await callXimilar({ _base64: b64 }, false);
+  const { match } = await callXimilar({ _base64: b64 }, { priceStats: false, pricing: false });
   if (!match) return null;
   const rawName = pickString(match.player_name, match.subject, match.full_name, match.name);
   return {
@@ -187,8 +214,8 @@ export async function pricingFromXimilarByUrl(
   imageUrl: string,
   opts: { grader?: string | null; grade?: string | null },
 ): Promise<XimilarPricing | null> {
-  const match = await callXimilar({ _url: imageUrl }, true);
-  return buildPricing(match, opts);
+  const result = await callXimilar({ _url: imageUrl }, { priceStats: true, pricing: true });
+  return buildPricing(result, opts);
 }
 
 export async function pricingFromXimilarByBytes(
@@ -197,14 +224,18 @@ export async function pricingFromXimilarByBytes(
   opts: { grader?: string | null; grade?: string | null },
 ): Promise<XimilarPricing | null> {
   const b64 = bytesToBase64(bytes);
-  const match = await callXimilar({ _base64: b64 }, true);
-  return buildPricing(match, opts);
+  const result = await callXimilar({ _base64: b64 }, { priceStats: true, pricing: true });
+  return buildPricing(result, opts);
 }
 
 function buildPricing(
-  match: XimilarBestMatch | null,
+  result: XimilarResult,
   opts: { grader?: string | null; grade?: string | null },
 ): XimilarPricing | null {
+  const { match } = result;
+  const listingPricing = buildPricingFromListings(result.listings, opts);
+  if (listingPricing) return listingPricing;
+
   if (!match) return null;
   const stats = (match.price_stats ?? []).filter(Boolean);
   if (stats.length === 0) return null;
@@ -287,4 +318,75 @@ function buildPricing(
     sales,
     history,
   };
+}
+
+function buildPricingFromListings(
+  listings: PricingListing[],
+  opts: { grader?: string | null; grade?: string | null },
+): XimilarPricing | null {
+  const usable = listings
+    .map((listing) => {
+      const price = Number(listing.price);
+      const currency = String(listing.currency ?? "USD").toUpperCase();
+      if (!Number.isFinite(price) || price <= 0 || currency !== "USD") return null;
+      const soldAt = listing.date_of_sale ?? listing.date_of_creation ?? new Date().toISOString();
+      const gradeCompany = pickString(listing.grade_company, opts.grader ?? null);
+      const gradeValue = pickString(listing.grade_value, listing.grade, opts.grade ?? null);
+      const gradeLabel = gradeCompany && gradeValue ? `${gradeCompany} ${gradeValue}` : pickString(gradeCompany, gradeValue);
+      return {
+        sold_at: soldAt,
+        grade: gradeLabel,
+        price,
+        source: "eBay sold",
+        url: listing.item_link ?? null,
+      };
+    })
+    .filter((sale): sale is XimilarPricing["sales"][number] => Boolean(sale))
+    .sort((a, b) => new Date(b.sold_at ?? 0).getTime() - new Date(a.sold_at ?? 0).getTime())
+    .slice(0, 12);
+
+  if (usable.length === 0) return null;
+
+  const prices = trimOutliers(usable.map((sale) => sale.price));
+  const value = prices.reduce((sum, price) => sum + price, 0) / prices.length;
+  const chronological = [...usable]
+    .filter((sale) => sale.sold_at)
+    .sort((a, b) => new Date(a.sold_at as string).getTime() - new Date(b.sold_at as string).getTime());
+  const oldest = chronological[0]?.price ?? value;
+  const latest = chronological[chronological.length - 1]?.price ?? value;
+  const deltaPct = oldest > 0 ? ((latest - oldest) / oldest) * 100 : 0;
+  const historySource = chronological.length >= 2 ? chronological : usable;
+  const history = historySource.slice(-6).map((sale) => ({
+    recorded_at: sale.sold_at ?? new Date().toISOString(),
+    value: Number(sale.price.toFixed(2)),
+  }));
+
+  return {
+    current_value: Number(value.toFixed(2)),
+    value_delta_pct: Number(deltaPct.toFixed(2)),
+    sales: usable,
+    history,
+  };
+}
+
+function trimOutliers(values: number[]): number[] {
+  if (values.length < 4) return values;
+  const sorted = [...values].sort((a, b) => a - b);
+  const q1 = percentile(sorted, 0.25);
+  const q3 = percentile(sorted, 0.75);
+  const iqr = q3 - q1;
+  const low = q1 - iqr * 1.5;
+  const high = q3 + iqr * 1.5;
+  const trimmed = sorted.filter((value) => value >= low && value <= high);
+  return trimmed.length > 0 ? trimmed : sorted;
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo] ?? 0;
+  const weight = idx - lo;
+  return (sorted[lo] ?? 0) * (1 - weight) + (sorted[hi] ?? 0) * weight;
 }
