@@ -589,9 +589,6 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         // refractors, /XX numbered variants, autos, or a completely different
         // player/year/card-number that happens to show up in search results.
         const { isVariantTitle, titleMatchesCard } = await import("./cardsight.server");
-        const isGradedCard = Boolean(data.grader && data.grade);
-        const graderLower = (data.grader ?? "").toLowerCase();
-        const gradeLower = String(data.grade ?? "").toLowerCase();
         const hasSelectedParallel = Boolean(data.cardsight_parallel_id);
 
         const rowPassesPt130Filter = (c: (typeof cached)[number]) => {
@@ -600,12 +597,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             if (!Number.isFinite(t)) return false;
             const rawTitle = String(c.title ?? "");
             const titleLower = rawTitle.toLowerCase();
-            if (isGradedCard) {
-              if (!titleLower.includes(graderLower)) return false;
-              if (!titleLower.includes(gradeLower)) return false;
-            } else {
-              if (/\b(psa|bgs|sgc|cgc)\b/i.test(rawTitle)) return false;
-            }
+            // Grader/grade are informational only — not required in the title.
             if (!titleMatchesCard(rawTitle, {
               player_name: valuationLookup.player_name,
               year: valuationLookup.year,
