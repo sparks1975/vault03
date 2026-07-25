@@ -167,7 +167,7 @@ export async function identifyCardRest(
     team: null,
     position: null,
     year: c.year ? Number(c.year) || null : null,
-    set_name: [c.releaseName, c.setName].filter(Boolean).join(" ") || null,
+    set_name: sanitizeSetName(c.releaseName, c.setName),
     card_number: c.number ?? null,
     grade: null,
     grader: det.grading?.company?.name ?? null,
