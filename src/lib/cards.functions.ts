@@ -204,6 +204,19 @@ async function applyValuation(
     history: Array<{ recorded_at: string; value: number }>;
   },
 ) {
+  const validSalePrices = valuation.sales
+    .map((s) => Number(s.price))
+    .filter((price) => Number.isFinite(price) && price > 0)
+    .sort((a, b) => a - b);
+  const medianSaleValue = (() => {
+    if (validSalePrices.length === 0) return null;
+    const mid = Math.floor(validSalePrices.length / 2);
+    return validSalePrices.length % 2
+      ? validSalePrices[mid]
+      : (validSalePrices[mid - 1] + validSalePrices[mid]) / 2;
+  })();
+  const currentValue = medianSaleValue ?? valuation.current_value;
+
   await supabase.from("card_sales").delete().eq("card_id", cardId);
   await supabase.from("card_value_history").delete().eq("card_id", cardId);
   if (valuation.sales.length) {
@@ -234,7 +247,7 @@ async function applyValuation(
   await supabase
     .from("cards")
     .update({
-      current_value: valuation.current_value,
+      current_value: currentValue,
       value_delta_pct: valuation.value_delta_pct,
       last_valued_at: new Date().toISOString(),
     })
