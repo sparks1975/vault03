@@ -1,0 +1,1 @@
+ALTER TABLE public.cards ADD COLUMN IF NOT EXISTS sort_order integer; CREATE INDEX IF NOT EXISTS idx_cards_user_sort ON public.cards(user_id, sort_order);
