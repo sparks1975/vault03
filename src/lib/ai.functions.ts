@@ -773,13 +773,31 @@ If unable to value, return current_value: 0.`;
       history: Array<{ recorded_at: string; value: number }>;
     }>(text);
 
+    // Guarantee a non-zero value: retry once with a stronger prompt if AI returned 0.
+    let aiValue = Number(ai.current_value) || 0;
+    if (aiValue <= 0) {
+      try {
+        const retry = await callAI({
+          model: MODEL,
+          messages: [
+            { role: "system", content: "You are a sports card market analyst. Always return a positive USD estimate even with limited data — never zero. Reply ONLY with JSON." },
+            { role: "user", content: `Estimate current secondary-market value in USD for: "${descriptor}". Return JSON: {"current_value": number}. current_value must be > 0.` },
+          ],
+        });
+        const parsed = extractJson<{ current_value: number }>(retry);
+        aiValue = Number(parsed.current_value) || 0;
+      } catch (err) {
+        console.error("AI value retry failed:", err);
+      }
+    }
+
     return {
-      current_value: ai.current_value,
+      current_value: aiValue,
       value_delta_pct: ai.value_delta_pct,
       sales,
-      history: ai.history,
+      history: ai.history?.length ? ai.history : fallbackHistory(aiValue),
       source: "ai" as const,
-      note: compsNote,
+      note: compsNote ?? (sales.length === 0 ? "No sold comps found — value is an AI market estimate." : compsNote),
       resolved_cardsight_card_id: resolvedCardId,
       resolved_cardsight_grade_id: resolvedGradeId,
     };
