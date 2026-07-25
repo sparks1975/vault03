@@ -649,7 +649,7 @@ export async function getCatalogValuationLookup(card_id: string): Promise<CardLo
     return {
       player_name: card.name ?? null,
       year: card.releaseYear ? Number(card.releaseYear) || card.releaseYear : null,
-      set_name: [card.releaseName, card.setName].filter(Boolean).join(" ") || null,
+      set_name: sanitizeSetName(card.releaseName, card.setName),
       card_number: card.number ?? null,
       is_autograph: /\b(auto|autograph|autographs|signature|signatures)\b/i.test(
         [card.releaseName, card.setName, card.name, card.description].filter(Boolean).join(" "),
