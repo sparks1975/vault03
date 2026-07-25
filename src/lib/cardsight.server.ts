@@ -819,7 +819,7 @@ export async function fetchPricing(
   // GET /v1/pricing/{card_id}?period=6m. Cardsight's /pricing endpoint only
   // returns completed transactions (both auction sales and fixed-price BIN
   // sales) — active/unsold listings are not included. We include both types.
-  params.set("period", opts.period ?? "6m");
+  params.set("period", opts.period ?? "5y");
   if (opts.parallel_id) params.set("parallel_id", opts.parallel_id);
   if (opts.grade_id) params.set("grade_id", opts.grade_id);
   if (opts.limit) params.set("limit", String(opts.limit));
