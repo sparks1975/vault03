@@ -219,7 +219,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           .maybeSingle();
         const rawPhoto = card?.photo_url ?? null;
         if (rawPhoto) {
-          const { pricingFromXimilarByUrl, pricingFromXimilarByBytes } = await import(
+          const { pricingFromXimilarByUrl, pricingFromXimilarByBytes, XimilarAuthError } = await import(
             "./ximilar.server"
           );
           let pricing = null as Awaited<ReturnType<typeof pricingFromXimilarByUrl>>;
@@ -239,6 +239,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
                   grade: data.grade,
                 });
               } catch (err) {
+                if (err instanceof XimilarAuthError || (err instanceof Error && err.name === "XimilarAuthError")) {
+                  throw err;
+                }
                 console.error("Ximilar pricing by URL failed, falling back to bytes:", err);
                 const { data: blob } = await context.supabase.storage
                   .from("card-photos")
@@ -267,6 +270,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         }
       } catch (err) {
         console.error("Ximilar pricing failed:", err);
+        if (err instanceof Error && err.name === "XimilarAuthError") {
+          throw err;
+        }
         compsNote = err instanceof Error ? err.message : "Ximilar pricing failed";
       }
     }
