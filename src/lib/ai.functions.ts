@@ -68,7 +68,7 @@ type ScanResult = {
   grade: string | null;
   grader: string | null;
   confidence: "high" | "medium" | "low";
-  cardsight_card_id: string | null;
+  cardsight_card_id: string | null; // kept for backward compat (always null)
 };
 
 function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; contentType: string } {
@@ -107,7 +107,7 @@ async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
   return { ...parsed, cardsight_card_id: null };
 }
 
-// ---------- Photo scan: Cardsight REST identify, AI fallback ----------
+// ---------- Photo scan: Ximilar identify, AI fallback ----------
 export const scanCardPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { imageDataUrl: string }) =>
@@ -116,42 +116,32 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { bytes, contentType } = dataUrlToBytes(data.imageDataUrl);
 
-    // 1) Cardsight structured identify (returns canonical card_id + slab data).
+    // 1) Ximilar identify.
     try {
-      const { identifyCardRest } = await import("./cardsight.server");
-      const { compressBytes } = await import("./tinypng.server");
-      const compressed = await compressBytes(bytes, contentType);
-      const ident = await identifyCardRest(compressed.bytes, compressed.contentType);
+      const { identifyCardXimilar } = await import("./ximilar.server");
+      const ident = await identifyCardXimilar(bytes, contentType);
       if (ident?.player_name) {
-        return enrichWithMlb(ident as ScanResult);
+        const enriched = await enrichWithMlb({
+          player_name: ident.player_name,
+          team: ident.team,
+          position: ident.position,
+          year: ident.year,
+          set_name: ident.set_name,
+          card_number: ident.card_number,
+          grade: null,
+          grader: null,
+          confidence: "high",
+          cardsight_card_id: null,
+        });
+        return enriched;
       }
     } catch (err) {
-      console.error("Cardsight identify failed:", err);
+      console.error("Ximilar identify failed:", err);
     }
 
     // 2) Fallback: direct AI vision on the original data URL.
     const result = await scanViaAIVision(data.imageDataUrl);
-    const enriched = await enrichWithMlb(result);
-    // Try to link a Cardsight card id via free-text search so pricing + parallels work.
-    try {
-      const { searchCatalogCardByFields } = await import("./cardsight.server");
-      const desc = [enriched.year, enriched.set_name, enriched.player_name, enriched.card_number ? `#${enriched.card_number}` : null]
-        .filter(Boolean)
-        .join(" ");
-      if (desc) {
-        const id = await searchCatalogCardByFields({
-          player_name: enriched.player_name,
-          year: enriched.year,
-          set_name: enriched.set_name,
-          card_number: enriched.card_number,
-          descriptor: desc,
-        });
-        if (id) enriched.cardsight_card_id = id;
-      }
-    } catch (err) {
-      console.error("Cardsight search (post-scan) failed:", err);
-    }
-    return enriched;
+    return enrichWithMlb(result);
   });
 
 // If team/position are missing, look them up from the free MLB Stats API.
@@ -180,15 +170,14 @@ async function enrichWithMlb(result: ScanResult): Promise<ScanResult> {
   }
 }
 
-// ---------- Value estimate + comparable sales ----------
-// Uses Cardsight's structured /v1/pricing endpoint when we have a canonical
-// card_id. Falls back to an AI estimate when comps are insufficient.
+// ---------- Value estimate ----------
+// Primary path: Ximilar `sport_id` with `price_stats: true` on the card's
+// stored photo. AI narrative fallback when Ximilar has no pricing.
 export const estimateCardValue = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
     z
       .object({
-        // Legacy descriptor fields (still used for the AI fallback).
         player_name: z.string().min(1),
         year: z.number().int().optional().nullable(),
         set_name: z.string().optional().nullable(),
@@ -198,16 +187,16 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         is_autograph: z.boolean().optional().nullable(),
         is_first_bowman: z.boolean().optional().nullable(),
         serial_number: z.string().optional().nullable(),
-        // Canonical Cardsight identifiers (preferred).
+        // Accepted for backward compat — ignored.
         cardsight_card_id: z.string().uuid().optional().nullable(),
         cardsight_parallel_id: z.string().uuid().optional().nullable(),
         cardsight_grade_id: z.string().uuid().optional().nullable(),
-        // Optional card_id enables merging cached 130point comps into the pool.
         card_id: z.string().uuid().optional().nullable(),
       })
       .parse(d),
   )
   .handler(async ({ data, context }) => {
+    let usedXimilar = false;
     let sales: Array<{
       sold_at: string | null;
       grade: string | null;
@@ -218,490 +207,80 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     let currentValue = 0;
     let deltaPct = 0;
     let compsNote: string | null = null;
-    let usedCardsight = false;
-    let resolvedGradeId: string | null = data.cardsight_grade_id ?? null;
-    let resolvedCardId: string | null = data.cardsight_card_id ?? null;
-    let selectedParallelName: string | null = null;
-    let valuationLookup: {
-      player_name: string | null;
-      year: string | number | null | undefined;
-      set_name: string | null | undefined;
-      card_number: string | null | undefined;
-      is_autograph: boolean | null | undefined;
-      is_first_bowman: boolean | null | undefined;
-    } = {
-      player_name: data.player_name,
-      year: data.year,
-      set_name: data.set_name,
-      card_number: data.card_number,
-      is_autograph: data.is_autograph,
-      is_first_bowman: data.is_first_bowman,
-    };
-    const submittedLookup = { ...valuationLookup };
+    let history: Array<{ recorded_at: string; value: number }> = [];
 
-    const normalizeLookupText = (value: string | number | null | undefined) =>
-      String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-    const usefulTokens = (value: string | number | null | undefined) =>
-      normalizeLookupText(value)
-        .split(" ")
-        .filter((t) => t.length > 1 && !["the", "card", "cards", "base", "set", "series", "autograph", "autographs"].includes(t));
-    const identityMatchesSubmitted = (candidate: Partial<typeof valuationLookup>) => {
-      const submittedPlayer = usefulTokens(submittedLookup.player_name);
-      const candidatePlayer = normalizeLookupText(candidate.player_name);
-      if (submittedPlayer.length > 0 && !submittedPlayer.every((t) => candidatePlayer.includes(t))) return false;
-      const submittedSetTokens = usefulTokens(submittedLookup.set_name);
-      const candidateSet = normalizeLookupText(candidate.set_name);
-      if (submittedSetTokens.length >= 2) {
-        const overlap = submittedSetTokens.filter((t) => candidateSet.includes(t)).length;
-        if (overlap < Math.min(2, submittedSetTokens.length)) return false;
-      }
-      return true;
-    };
-
-    // If we don't yet have a cardsight card id, resolve one via catalog search.
-    if (!resolvedCardId) {
-      try {
-        const { searchCatalogCardByFields } = await import("./cardsight.server");
-        const descriptorForSearch = [
-          data.year,
-          data.set_name,
-          data.player_name,
-          data.card_number ? `#${data.card_number}` : null,
-        ]
-          .filter(Boolean)
-          .join(" ");
-        resolvedCardId = await searchCatalogCardByFields({
-          player_name: data.player_name,
-          year: data.year,
-          set_name: data.set_name,
-          card_number: data.card_number,
-          descriptor: descriptorForSearch,
-          is_autograph: data.is_autograph,
-        });
-      } catch (err) {
-        console.error("Cardsight search failed:", err);
-      }
-    }
-
-    const normalizeSource = (raw: string) => {
-      const lower = String(raw ?? "").toLowerCase();
-      if (lower.includes("130") || lower.includes("ebay")) return "eBay sold";
-      return raw || "eBay sold";
-    };
-
-    // When we have a canonical catalog ID, use the catalog's own year/set/card
-    // number for matching. Editable/AI-extracted fields can be stale or wrong;
-    // using them to filter title comps creates false "no sales" results.
-    if (resolvedCardId) {
-      try {
-        const { getCatalogValuationLookup } = await import("./cardsight.server");
-        const catalogLookup = await getCatalogValuationLookup(resolvedCardId);
-        if (catalogLookup && identityMatchesSubmitted(catalogLookup)) {
-          valuationLookup = {
-            player_name: catalogLookup.player_name ?? valuationLookup.player_name,
-            year: catalogLookup.year == null ? valuationLookup.year : Number(catalogLookup.year) || valuationLookup.year,
-            set_name: catalogLookup.set_name ?? valuationLookup.set_name,
-            card_number: catalogLookup.card_number ?? valuationLookup.card_number,
-            is_autograph: data.is_autograph === true ? true : catalogLookup.is_autograph ?? valuationLookup.is_autograph,
-            is_first_bowman: data.is_first_bowman,
-          };
-        } else if (catalogLookup) {
-          const { searchCatalogCardByFields } = await import("./cardsight.server");
-          const descriptorForCorrection = [
-            submittedLookup.year,
-            submittedLookup.set_name,
-            submittedLookup.player_name,
-            submittedLookup.card_number ? `#${submittedLookup.card_number}` : null,
-          ].filter(Boolean).join(" ");
-          const correctedId = await searchCatalogCardByFields({
-            ...submittedLookup,
-            descriptor: descriptorForCorrection,
-          });
-          resolvedCardId = correctedId && correctedId !== resolvedCardId ? correctedId : null;
-        }
-      } catch (err) {
-        console.error("Cardsight valuation lookup failed:", err);
-      }
-      if (resolvedCardId && data.cardsight_parallel_id) {
-        try {
-          const { getParallelNameForCard } = await import("./cardsight.server");
-          selectedParallelName = await getParallelNameForCard(resolvedCardId, data.cardsight_parallel_id);
-        } catch (err) {
-          console.error("Cardsight parallel lookup failed:", err);
-        }
-      }
-    }
-
-    const priceFromSlice = async (slice: Awaited<ReturnType<typeof import("./cardsight.server").fetchPricing>>) => {
-      const { median, trimOutliersIQR } = await import("./cardsight.server");
-      const auctions = slice.auctionSales
-        .filter((r) => Number.isFinite(r.price) && r.price > 0)
-        .sort((a, b) => {
-          const ta = a.date ? new Date(a.date).getTime() : 0;
-          const tb = b.date ? new Date(b.date).getTime() : 0;
-          return tb - ta;
-        });
-
-      if (auctions.length > 0) {
-        sales = auctions.slice(0, 25).map((r) => {
-          const typeLabel = r.listing_type === "fixed" ? "BIN" : r.listing_type === "auction" ? "Auction" : null;
-          return {
-            sold_at: r.date ?? null,
-            grade: slice.gradeLabel,
-            price: r.price,
-            source: `${normalizeSource(r.source)}${typeLabel ? ` · ${typeLabel}` : ""}`,
-            url: r.url ?? null,
-          };
-        });
-      }
-
-      if (auctions.length >= 3) {
-        const trimmed = trimOutliersIQR(auctions.map((r) => r.price));
-        currentValue = median(trimmed);
-
-        // 30-day vs prior-30-day delta on the same stream.
-        const now = Date.now();
-        const day = 24 * 60 * 60 * 1000;
-        const recent: number[] = [];
-        const prior: number[] = [];
-        for (const r of auctions) {
-          if (!r.date) continue;
-          const t = new Date(r.date).getTime();
-          if (!Number.isFinite(t)) continue;
-          const age = now - t;
-          if (age <= 30 * day) recent.push(r.price);
-          else if (age <= 60 * day) prior.push(r.price);
-        }
-        if (recent.length >= 2 && prior.length >= 2) {
-          const rMed = median(recent);
-          const pMed = median(prior);
-          if (pMed > 0) deltaPct = ((rMed - pMed) / pMed) * 100;
-        }
-
-        usedCardsight = true;
-        compsNote = null;
-      } else {
-        compsNote = `Only ${auctions.length} recent sold comp${auctions.length === 1 ? "" : "s"} — using AI estimate.`;
-      }
-    };
-
-    if (resolvedCardId) {
-      try {
-        const { fetchPricing, resolveGradeId } = await import(
-          "./cardsight.server"
-        );
-        if (!resolvedGradeId && data.grader && data.grade) {
-          resolvedGradeId = await resolveGradeId(data.grader, data.grade);
-        }
-        // If the card is graded but we couldn't match a grade_id, skip Cardsight —
-        // we don't want to price a graded card against raw comps.
-        if (data.grader && data.grade && !resolvedGradeId) {
-          compsNote = `Couldn't match grade "${data.grader} ${data.grade}" in Cardsight — using AI estimate.`;
-        } else {
-          const slice = await fetchPricing(resolvedCardId, {
-            parallel_id: data.cardsight_parallel_id ?? null,
-            grade_id: resolvedGradeId,
-            player_name: valuationLookup.player_name,
-            year: valuationLookup.year,
-            set_name: valuationLookup.set_name,
-            card_number: valuationLookup.card_number,
-            grader: data.grader,
-            grade: data.grade,
-            is_autograph: valuationLookup.is_autograph,
-            is_first_bowman: valuationLookup.is_first_bowman,
-            serial_number: data.serial_number,
-            selected_parallel_name: selectedParallelName,
-            period: "6m",
-          });
-          await priceFromSlice(slice);
-        }
-      } catch (err) {
-        console.error("Cardsight pricing failed:", err);
-        compsNote = err instanceof Error ? err.message : String(err);
-      }
-    }
-
-    // Existing rows may have an older/wrong catalog ID saved from prior loose
-    // matching. If exact structured pricing returns too few sold comps, resolve
-    // the catalog card again from the editable fields and retry before using the
-    // broader pricing-search fallback.
-    if (!usedCardsight && resolvedCardId && !(data.grader && data.grade && !resolvedGradeId)) {
-      try {
-        const { fetchPricing, searchCatalogCardByFields } = await import("./cardsight.server");
-        const descriptorForRetry = [
-          valuationLookup.year,
-          valuationLookup.set_name,
-          valuationLookup.player_name,
-          valuationLookup.card_number ? `#${valuationLookup.card_number}` : null,
-        ]
-          .filter(Boolean)
-          .join(" ");
-        const retryCardId = await searchCatalogCardByFields({
-          player_name: valuationLookup.player_name,
-          year: valuationLookup.year,
-          set_name: valuationLookup.set_name,
-          card_number: valuationLookup.card_number,
-          descriptor: descriptorForRetry,
-          is_autograph: valuationLookup.is_autograph,
-          is_first_bowman: valuationLookup.is_first_bowman,
-        });
-        if (retryCardId && retryCardId !== resolvedCardId) {
-          const retrySlice = await fetchPricing(retryCardId, {
-            parallel_id: data.cardsight_parallel_id ?? null,
-            grade_id: resolvedGradeId,
-            player_name: valuationLookup.player_name,
-            year: valuationLookup.year,
-            set_name: valuationLookup.set_name,
-            card_number: valuationLookup.card_number,
-            grader: data.grader,
-            grade: data.grade,
-            is_autograph: valuationLookup.is_autograph,
-            is_first_bowman: valuationLookup.is_first_bowman,
-            serial_number: data.serial_number,
-            selected_parallel_name: selectedParallelName,
-            period: "6m",
-          });
-          await priceFromSlice(retrySlice);
-          if (usedCardsight) resolvedCardId = retryCardId;
-        }
-      } catch (err) {
-        console.error("Cardsight pricing retry failed:", err);
-      }
-    }
-
-    if (!usedCardsight) {
-      try {
-        const { searchPricingComps } = await import("./cardsight.server");
-        const searchSlice = await searchPricingComps(
-          {
-            player_name: valuationLookup.player_name,
-            year: valuationLookup.year,
-            set_name: valuationLookup.set_name,
-            card_number: valuationLookup.card_number,
-            is_autograph: valuationLookup.is_autograph,
-            is_first_bowman: valuationLookup.is_first_bowman,
-            serial_number: data.serial_number,
-            selected_parallel_name: selectedParallelName,
-            grader: data.grader,
-            grade: data.grade,
-          },
-          { period: "6m", limit: 100 },
-        );
-        await priceFromSlice(searchSlice);
-        if (!usedCardsight && !compsNote) {
-          compsNote = resolvedCardId
-            ? "Cardsight returned too few comps for this exact catalog card — using pricing search fallback."
-            : "Couldn't match this card to a catalog ID, and pricing search found too few comps — using AI estimate.";
-        }
-      } catch (err) {
-        console.error("Cardsight pricing search failed:", err);
-        if (!compsNote) compsNote = err instanceof Error ? err.message : String(err);
-      }
-    }
-
-    // -------- Merge cached 130point sold comps into the valuation pool --------
-    // Runs whenever the caller provided a card_id so we can load the per-card
-    // cache and (if stale) refresh it from 130point via Firecrawl.
+    // Attempt Ximilar pricing from the card's stored photo.
     if (data.card_id) {
-      const cardId = data.card_id;
-      const userId = context.userId;
-      const supabase = context.supabase;
-      const nowMs = Date.now();
-      const dayMs = 24 * 60 * 60 * 1000;
-      const sixMonthsMs = 180 * dayMs;
-
-      const loadCache = async () => {
-        const { data: rows, error } = await supabase
-          .from("pt130_comps")
-          .select("sold_at, price, title, url, listing_type, scraped_at")
-          .eq("card_id", cardId)
-          .order("scraped_at", { ascending: false });
-        if (error) throw error;
-        return rows ?? [];
-      };
-
       try {
-        let cached = await loadCache();
-        const latestScrape = cached[0]?.scraped_at
-          ? new Date(cached[0].scraped_at as string).getTime()
-          : 0;
-        const stale = !latestScrape || nowMs - latestScrape > dayMs;
-        if (stale) {
-          try {
-            const { buildPt130Descriptor, refreshPt130ForCard } = await import(
-              "./pt130.server"
-            );
-            const descriptor = buildPt130Descriptor({
-              year: valuationLookup.year,
-              set_name: valuationLookup.set_name,
-              player_name: valuationLookup.player_name,
-              card_number: valuationLookup.card_number,
-              is_autograph: valuationLookup.is_autograph,
-              selected_parallel_name: selectedParallelName,
+        const { data: card } = await context.supabase
+          .from("cards")
+          .select("photo_url")
+          .eq("id", data.card_id)
+          .maybeSingle();
+        const rawPhoto = card?.photo_url ?? null;
+        if (rawPhoto) {
+          const { pricingFromXimilarByUrl, pricingFromXimilarByBytes } = await import(
+            "./ximilar.server"
+          );
+          let pricing = null as Awaited<ReturnType<typeof pricingFromXimilarByUrl>>;
+          if (rawPhoto.startsWith("http")) {
+            pricing = await pricingFromXimilarByUrl(rawPhoto, {
               grader: data.grader,
               grade: data.grade,
             });
-            if (descriptor) {
-              await refreshPt130ForCard(supabase as never, {
-                card_id: cardId,
-                user_id: userId,
-                descriptor,
-              });
-              cached = await loadCache();
+          } else {
+            const { data: file } = await context.supabase.storage
+              .from("card-photos")
+              .createSignedUrl(rawPhoto, 60 * 10);
+            if (file?.signedUrl) {
+              try {
+                pricing = await pricingFromXimilarByUrl(file.signedUrl, {
+                  grader: data.grader,
+                  grade: data.grade,
+                });
+              } catch (err) {
+                console.error("Ximilar pricing by URL failed, falling back to bytes:", err);
+                const { data: blob } = await context.supabase.storage
+                  .from("card-photos")
+                  .download(rawPhoto);
+                if (blob) {
+                  const bytes = new Uint8Array(await blob.arrayBuffer());
+                  pricing = await pricingFromXimilarByBytes(bytes, blob.type || "image/jpeg", {
+                    grader: data.grader,
+                    grade: data.grade,
+                  });
+                }
+              }
             }
-          } catch (err) {
-            console.error("pt130 live refresh failed:", err);
           }
-        }
-
-        // Full variation filter so pt130 comps aren't polluted by parallels,
-        // refractors, /XX numbered variants, autos, or a completely different
-        // player/year/card-number that happens to show up in search results.
-        const { isVariantTitle, titleMatchesCard } = await import("./cardsight.server");
-        const isGradedCard = Boolean(data.grader && data.grade);
-        const graderLower = (data.grader ?? "").toLowerCase();
-        const gradeLower = String(data.grade ?? "").toLowerCase();
-        const hasSelectedParallel = Boolean(data.cardsight_parallel_id);
-
-        const rowPassesPt130Filter = (c: (typeof cached)[number]) => {
-            if (!c.sold_at) return false;
-            const t = new Date(c.sold_at as string).getTime();
-            if (!Number.isFinite(t) || nowMs - t > sixMonthsMs) return false;
-            const rawTitle = String(c.title ?? "");
-            const titleLower = rawTitle.toLowerCase();
-            if (isGradedCard) {
-              if (!titleLower.includes(graderLower)) return false;
-              if (!titleLower.includes(gradeLower)) return false;
-            } else {
-              if (/\b(psa|bgs|sgc|cgc)\b/i.test(rawTitle)) return false;
-            }
-            if (!titleMatchesCard(rawTitle, {
-              player_name: valuationLookup.player_name,
-              year: valuationLookup.year,
-              set_name: valuationLookup.set_name,
-              card_number: valuationLookup.card_number,
-              softCardNumber: true,
-            })) return false;
-            if (isVariantTitle(rawTitle, {
-              hasSelectedParallel,
-              selectedParallelName,
-              is_autograph: valuationLookup.is_autograph,
-              serial_number: data.serial_number,
-              is_first_bowman: valuationLookup.is_first_bowman,
-            })) return false;
-            if (data.serial_number) {
-              const denom = String(data.serial_number).match(/\/\s*(\d+)/)?.[1];
-              const needle = denom ? `/${denom}` : String(data.serial_number).toLowerCase();
-              if (!titleLower.includes(needle)) return false;
-            }
-            const price = Number(c.price);
-            return Number.isFinite(price) && price > 0;
-          };
-
-        let filteredCache = (cached ?? []).filter(rowPassesPt130Filter);
-        if (!stale && cached.length > 0 && filteredCache.length === 0) {
-          try {
-            const { buildPt130Descriptor, refreshPt130ForCard } = await import(
-              "./pt130.server"
-            );
-            const descriptor = buildPt130Descriptor({
-              year: valuationLookup.year,
-              set_name: valuationLookup.set_name,
-              player_name: valuationLookup.player_name,
-              card_number: valuationLookup.card_number,
-              is_autograph: valuationLookup.is_autograph,
-              selected_parallel_name: selectedParallelName,
-              grader: data.grader,
-              grade: data.grade,
-            });
-            if (descriptor) {
-              await refreshPt130ForCard(supabase as never, {
-                card_id: cardId,
-                user_id: userId,
-                descriptor,
-              });
-              cached = await loadCache();
-              filteredCache = (cached ?? []).filter(rowPassesPt130Filter);
-            }
-          } catch (err) {
-            console.error("pt130 descriptor refresh failed:", err);
+          if (pricing && pricing.current_value > 0) {
+            currentValue = pricing.current_value;
+            deltaPct = pricing.value_delta_pct;
+            sales = pricing.sales;
+            history = pricing.history;
+            usedXimilar = true;
+          } else {
+            compsNote = "Ximilar had no market data for this card — using AI estimate.";
           }
-        }
-
-        const pt130Sales = filteredCache
-          .map((c) => {
-            const lt = (c.listing_type as string | null) ?? null;
-            const typeLabel =
-              lt === "fixed" ? "BIN" : lt === "auction" ? "Auction" : lt === "best_offer" ? "Best Offer" : null;
-            return {
-              sold_at: c.sold_at as string,
-              grade: null as string | null,
-              price: Number(c.price),
-              source: `eBay sold${typeLabel ? ` · ${typeLabel}` : ""}`,
-              url: (c.url as string | null) ?? null,
-            };
-          });
-
-        if (pt130Sales.length > 0) {
-          // Combined pool: existing sales (cardsight) + pt130.
-          const combined = [...sales, ...pt130Sales].sort((a, b) => {
-            const ta = a.sold_at ? new Date(a.sold_at).getTime() : 0;
-            const tb = b.sold_at ? new Date(b.sold_at).getTime() : 0;
-            return tb - ta;
-          });
-
-          if (combined.length >= 3) {
-            const { median, trimOutliersIQR } = await import("./cardsight.server");
-            const trimmed = trimOutliersIQR(combined.map((r) => r.price));
-            currentValue = median(trimmed);
-            // 30-day vs prior-30 delta on the combined stream.
-            const recent: number[] = [];
-            const prior: number[] = [];
-            for (const r of combined) {
-              if (!r.sold_at) continue;
-              const t = new Date(r.sold_at).getTime();
-              if (!Number.isFinite(t)) continue;
-              const age = nowMs - t;
-              if (age <= 30 * dayMs) recent.push(r.price);
-              else if (age <= 60 * dayMs) prior.push(r.price);
-            }
-            if (recent.length >= 2 && prior.length >= 2) {
-              const rMed = median(recent);
-              const pMed = median(prior);
-              if (pMed > 0) deltaPct = ((rMed - pMed) / pMed) * 100;
-            }
-            sales = combined.slice(0, 25);
-            usedCardsight = true;
-            compsNote = null;
-          }
+        } else {
+          compsNote = "No photo on file to send to Ximilar — using AI estimate.";
         }
       } catch (err) {
-        console.error("pt130 merge failed:", err);
+        console.error("Ximilar pricing failed:", err);
+        compsNote = err instanceof Error ? err.message : "Ximilar pricing failed";
       }
     }
 
-
-
-    const fallbackHistory = (baseValue: number) => {
-      const base = Number.isFinite(baseValue) && baseValue > 0 ? baseValue : 0;
-      const now = new Date();
-      return Array.from({ length: 6 }, (_, i) => {
-        const d = new Date(now);
-        d.setMonth(now.getMonth() - (5 - i));
-        return { recorded_at: d.toISOString(), value: base };
-      });
-    };
-
-    if (usedCardsight) {
+    if (usedXimilar) {
       return {
         current_value: currentValue,
         value_delta_pct: deltaPct,
         sales,
-        history: fallbackHistory(currentValue),
-        source: "cardsight" as const,
+        history,
+        source: "ximilar" as const,
         note: compsNote,
-        resolved_cardsight_card_id: resolvedCardId,
-        resolved_cardsight_grade_id: resolvedGradeId,
+        resolved_cardsight_card_id: null as string | null,
+        resolved_cardsight_grade_id: null as string | null,
       };
     }
 
@@ -721,7 +300,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       .filter(Boolean)
       .join(" ");
 
-    const prompt = `Give a realistic current secondary-market value estimate (USD) for this baseball card: "${descriptor}". Also give a plausible 30-day percent change and 6 monthly historical value data points ending today. Return JSON ONLY:
+    const prompt = `Give a realistic current secondary-market value estimate (USD) for this sports card: "${descriptor}". Also give a plausible 30-day percent change and 6 monthly historical value data points ending today. Return JSON ONLY:
 {
   "current_value": number,
   "value_delta_pct": number,
@@ -754,7 +333,7 @@ If unable to value, return current_value: 0.`;
       history: ai.history,
       source: "ai" as const,
       note: compsNote,
-      resolved_cardsight_card_id: resolvedCardId,
-      resolved_cardsight_grade_id: resolvedGradeId,
+      resolved_cardsight_card_id: null as string | null,
+      resolved_cardsight_grade_id: null as string | null,
     };
   });
