@@ -567,7 +567,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         const rowPassesPt130Filter = (c: (typeof cached)[number]) => {
             if (!c.sold_at) return false;
             const t = new Date(c.sold_at as string).getTime();
-            if (!Number.isFinite(t) || nowMs - t > sixMonthsMs) return false;
+            if (!Number.isFinite(t)) return false;
             const rawTitle = String(c.title ?? "");
             const titleLower = rawTitle.toLowerCase();
             if (isGradedCard) {
