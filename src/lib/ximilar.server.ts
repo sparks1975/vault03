@@ -15,6 +15,8 @@ export class XimilarAuthError extends Error {
 
 type PriceStat = {
   stats_type?: string | null; // "overall" | "graded" | "ungraded" | "PSA 10" ...
+  interval?: string | null;
+  start_date?: string | null;
   median?: number | null;
   mean?: number | null;
   trimmed_mean?: number | null;
@@ -25,7 +27,9 @@ type PriceStat = {
   latest_date?: string | null;
   oldest_date?: string | null;
   count?: number | null;
+  volume?: number | null;
   link_ebay?: string | null;
+  value?: Omit<PriceStat, "stats_type" | "interval" | "start_date" | "value"> | null;
 };
 
 type PricingListing = {
@@ -118,24 +122,6 @@ async function callXimilar(
     throw new XimilarAuthError();
   }
   const rec = j.records?.[0];
-  const firstObject = rec?._objects?.[0];
-  const objectBestMatch = firstObject?._identification?.best_match;
-  console.info("Ximilar object debug", {
-    recordIdentificationKeys: rec?._identification ? Object.keys(rec._identification) : [],
-    objectIdentificationKeys: firstObject?._identification ? Object.keys(firstObject._identification) : [],
-    objectBestMatchKeys: objectBestMatch ? Object.keys(objectBestMatch) : [],
-    objectBestMatchPriceStatsCount: objectBestMatch?.price_stats?.length ?? 0,
-    objectBestMatchPriceStatsKeys: objectBestMatch?.price_stats?.slice(0, 2).map((stat) => Object.keys(stat)) ?? [],
-    objectBestMatchPriceStatsValueKeys: objectBestMatch?.price_stats
-      ?.slice(0, 2)
-      .map((stat) => {
-        const value = (stat as { value?: unknown }).value;
-        return value && typeof value === "object" ? Object.keys(value) : [];
-      }) ?? [],
-    objectBestMatchPricingCount: objectBestMatch?.pricing?.list?.length ?? 0,
-    objectBestMatchPricingKeys: objectBestMatch?.pricing?.list?.slice(0, 2).map((listing) => Object.keys(listing)) ?? [],
-    objectPricingCount: firstObject?.pricing?.list?.length ?? 0,
-  });
   const objectMatches = (rec?._objects ?? [])
     .map((obj) => obj._identification?.best_match ?? null)
     .filter((match): match is XimilarBestMatch => match !== null);
@@ -277,7 +263,7 @@ function buildPricing(
   if (listingPricing) return listingPricing;
 
   if (!match) return null;
-  const stats = (match.price_stats ?? []).filter(Boolean);
+  const stats = (match.price_stats ?? []).filter(Boolean).map(normalizePriceStat);
   if (stats.length === 0) return null;
   const chosen = pickStatForGrade(stats, opts.grader ?? null, opts.grade ?? null);
   if (!chosen) return null;
@@ -310,7 +296,7 @@ function buildPricing(
       sold_at: chosen.latest_date ?? nowIso,
       grade: gradeLabel,
       price: Number(chosen.median),
-      source: `eBay sold · Median${chosen.count ? ` (${chosen.count})` : ""}`,
+      source: `eBay sold · Median${chosen.count ?? chosen.volume ? ` (${chosen.count ?? chosen.volume})` : ""}`,
       url: ebayUrl,
     });
   }
@@ -319,7 +305,7 @@ function buildPricing(
       sold_at: chosen.latest_date ?? nowIso,
       grade: gradeLabel,
       price: Number(chosen.trimmed_mean),
-      source: `eBay sold · Trimmed avg${chosen.count ? ` (${chosen.count})` : ""}`,
+      source: `eBay sold · Trimmed avg${chosen.count ?? chosen.volume ? ` (${chosen.count ?? chosen.volume})` : ""}`,
       url: ebayUrl,
     });
   }
@@ -328,7 +314,7 @@ function buildPricing(
       sold_at: chosen.latest_date ?? nowIso,
       grade: gradeLabel,
       price: Number(chosen.mean),
-      source: `eBay sold · Average${chosen.count ? ` (${chosen.count})` : ""}`,
+      source: `eBay sold · Average${chosen.count ?? chosen.volume ? ` (${chosen.count ?? chosen.volume})` : ""}`,
       url: ebayUrl,
     });
   }
@@ -375,6 +361,19 @@ function buildPricing(
     value_delta_pct: Number(deltaPct.toFixed(2)),
     sales,
     history,
+  };
+}
+
+function normalizePriceStat(stat: PriceStat): PriceStat {
+  if (!stat.value) return stat;
+  return {
+    ...stat.value,
+    stats_type: stat.stats_type,
+    interval: stat.interval,
+    start_date: stat.start_date,
+    count: stat.count ?? stat.value.count ?? stat.value.volume ?? null,
+    volume: stat.volume ?? stat.value.volume ?? null,
+    link_ebay: stat.link_ebay ?? stat.value.link_ebay ?? null,
   };
 }
 
