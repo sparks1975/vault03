@@ -117,6 +117,13 @@ async function callXimilar(
     matchPricingCount: rec?._identification?.best_match?.pricing?.list?.length ?? 0,
     topPricingCount: j.pricing?.list?.length ?? 0,
     priceStatsCount: rec?._identification?.best_match?.price_stats?.length ?? 0,
+    topPricingType: typeof j.pricing,
+    topPricingKeys: j.pricing && typeof j.pricing === "object" ? Object.keys(j.pricing) : [],
+    topPriceStatsType: typeof (j as { price_stats?: unknown }).price_stats,
+    topPriceStatsKeys:
+      (j as { price_stats?: unknown }).price_stats && typeof (j as { price_stats?: unknown }).price_stats === "object"
+        ? Object.keys((j as { price_stats: Record<string, unknown> }).price_stats)
+        : [],
   });
   return {
     match: rec?._identification?.best_match ?? null,
