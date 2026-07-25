@@ -987,7 +987,7 @@ function CardDetail({
 
       <div className="w-full aspect-[2/3] bg-secondary mb-8 border border-border overflow-hidden grid place-items-center">
         {card.photo_url ? (
-          <img src={card.photo_url} alt={card.player_name} className="w-full h-full object-cover" />
+          <SmoothImage src={card.photo_url} alt={card.player_name} className="w-full h-full object-cover" />
         ) : (
           <span className="text-[10px] uppercase tracking-widest text-muted-foreground">No photo</span>
         )}
