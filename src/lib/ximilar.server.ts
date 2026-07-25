@@ -177,7 +177,7 @@ export async function pricingFromXimilarByBytes(
   _contentType: string,
   opts: { grader?: string | null; grade?: string | null },
 ): Promise<XimilarPricing | null> {
-  const b64 = btoa(String.fromCharCode(...bytes));
+  const b64 = bytesToBase64(bytes);
   const match = await callXimilar({ _base64: b64 }, true);
   return buildPricing(match, opts);
 }
