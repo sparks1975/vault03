@@ -1156,11 +1156,6 @@ function CardDetail({
         </div>
 
         <RecentComparables sales={sales} />
-
-          <p className="mt-4 text-[9px] font-mono text-muted-foreground uppercase tracking-widest">
-            Values reflect sold comps from eBay across all available history.
-          </p>
-        </div>
       </div>
     </div>
   );
