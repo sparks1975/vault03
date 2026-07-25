@@ -368,11 +368,9 @@ function pricingRecordMatches(
   const serial = serialSearchTerm(lookup.serial_number);
   if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) return false;
 
-  if (lookup.grader && !title.includes(normalizeText(lookup.grader))) return false;
-  if (lookup.grade) {
-    const g = normalizeText(lookup.grade);
-    if (g && !title.includes(g)) return false;
-  }
+  // Grader/grade are considered but never required — many marketplace titles
+  // omit the grader name (or use only the grade number). Filtering on them
+  // eliminated legitimate comps for niche graders (e.g. Arena Club).
 
   if (isVariantTitle(rawTitle, {
     is_autograph: lookup.is_autograph,
