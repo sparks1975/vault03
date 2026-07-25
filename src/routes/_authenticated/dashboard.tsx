@@ -578,11 +578,15 @@ function Dashboard() {
                 </button>
               </div>
             ) : (
-              <div className="space-y-2">
-                {sorted.map((c) => (
-                  <CardRow key={c.id} card={c} active={c.id === selected} onClick={() => selectCard(c.id)} />
-                ))}
-              </div>
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={sorted.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                  <div className="space-y-2">
+                    {sorted.map((c) => (
+                      <SortableCardRow key={c.id} card={c} active={c.id === selected} onClick={() => selectCard(c.id)} />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
             )}
           </section>
 
