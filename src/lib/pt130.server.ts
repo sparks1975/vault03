@@ -78,6 +78,11 @@ export function buildPt130Descriptor(fields: {
   const parallel = fields.selected_parallel_name
     ? fields.selected_parallel_name.replace(/\/\s*\d+/g, " ").replace(/\s+/g, " ").trim()
     : null;
+  // Grader/grade intentionally excluded — including them narrows 130point
+  // search too aggressively (especially for niche graders like Arena Club).
+  // We keep them as inputs so the API signature is stable.
+  void fields.grader;
+  void fields.grade;
   const parts = [
     fields.year ? String(fields.year) : null,
     fields.set_name,
@@ -85,10 +90,10 @@ export function buildPt130Descriptor(fields: {
     includeCardNumber && fields.card_number ? `#${String(fields.card_number).replace(/^#/, "")}` : null,
     fields.is_autograph ? "auto" : null,
     parallel,
-    fields.grader && fields.grade ? `${fields.grader} ${fields.grade}` : fields.grade ?? null,
   ].filter(Boolean) as string[];
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
+
 
 export function buildPt130Descriptors(fields: Parameters<typeof buildPt130Descriptor>[0]): string[] {
   const primary = buildPt130Descriptor(fields, { includeCardNumber: true });
