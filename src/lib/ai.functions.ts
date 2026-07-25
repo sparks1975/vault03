@@ -290,6 +290,13 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       return raw || "eBay sold";
     };
 
+    const medianValueFromSales = async (rows: typeof sales) => {
+      const prices = rows.map((r) => Number(r.price)).filter((p) => Number.isFinite(p) && p > 0);
+      if (prices.length === 0) return null;
+      const { median, trimOutliersIQR } = await import("./cardsight.server");
+      return median(trimOutliersIQR(prices));
+    };
+
     // When we have a canonical catalog ID, use the catalog's own year/set/card
     // number for matching. Editable/AI-extracted fields can be stale or wrong;
     // using them to filter title comps creates false "no sales" results.
@@ -529,10 +536,10 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         const stale = !latestScrape || nowMs - latestScrape > dayMs;
         if (stale) {
           try {
-            const { buildPt130Descriptor, refreshPt130ForCard } = await import(
+            const { buildPt130Descriptors, refreshPt130ForCard } = await import(
               "./pt130.server"
             );
-            const descriptor = buildPt130Descriptor({
+            const descriptors = buildPt130Descriptors({
               year: valuationLookup.year,
               set_name: valuationLookup.set_name,
               player_name: valuationLookup.player_name,
@@ -542,11 +549,11 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               grader: data.grader,
               grade: data.grade,
             });
-            if (descriptor) {
+            if (descriptors.length > 0) {
               await refreshPt130ForCard(supabase as never, {
                 card_id: cardId,
                 user_id: userId,
-                descriptor,
+                descriptor: descriptors,
               });
               cached = await loadCache();
             }
@@ -602,10 +609,10 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         let filteredCache = (cached ?? []).filter(rowPassesPt130Filter);
         if (!stale && cached.length > 0 && filteredCache.length === 0) {
           try {
-            const { buildPt130Descriptor, refreshPt130ForCard } = await import(
+            const { buildPt130Descriptors, refreshPt130ForCard } = await import(
               "./pt130.server"
             );
-            const descriptor = buildPt130Descriptor({
+            const descriptors = buildPt130Descriptors({
               year: valuationLookup.year,
               set_name: valuationLookup.set_name,
               player_name: valuationLookup.player_name,
@@ -615,11 +622,11 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               grader: data.grader,
               grade: data.grade,
             });
-            if (descriptor) {
+            if (descriptors.length > 0) {
               await refreshPt130ForCard(supabase as never, {
                 card_id: cardId,
                 user_id: userId,
-                descriptor,
+                descriptor: descriptors,
               });
               cached = await loadCache();
               filteredCache = (cached ?? []).filter(rowPassesPt130Filter);
@@ -674,6 +681,14 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             sales = combined.slice(0, 200);
             usedCardsight = true;
             compsNote = null;
+          } else {
+            const saleMedian = await medianValueFromSales(combined);
+            if (saleMedian != null) {
+              currentValue = saleMedian;
+              sales = combined.slice(0, 200);
+              usedCardsight = true;
+              compsNote = null;
+            }
           }
         }
       } catch (err) {
@@ -694,6 +709,8 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     };
 
     if (usedCardsight) {
+      const saleMedian = await medianValueFromSales(sales);
+      if (saleMedian != null) currentValue = saleMedian;
       return {
         current_value: currentValue,
         value_delta_pct: deltaPct,
