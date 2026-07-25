@@ -1823,11 +1823,12 @@ function SetCandidateSelect({
 }) {
   const listFn = useServerFn(listCardsightSetCandidates);
   const descriptor = cardDescriptor(lookup);
-  const canLookup = Boolean(lookup.player_name && lookup.year && (lookup.card_number || lookup.set_name || cardId));
+  const canLookup = Boolean(cardId || (lookup.player_name && lookup.year));
   const q = useQuery({
     queryKey: ["cardsight-set-candidates", lookup.player_name, lookup.year, lookup.set_name, lookup.card_number, cardId],
     queryFn: () => listFn({
       data: {
+        card_id: cardId,
         descriptor,
         player_name: lookup.player_name ?? null,
         year: lookup.year ?? null,
@@ -1865,7 +1866,7 @@ function SetCandidateSelect({
       )}
       {!canLookup && (
         <span className="text-[9px] font-mono text-muted-foreground">
-          Enter player, year, and card number to load real catalog sets.
+          Enter player and year to load real catalog sets.
         </span>
       )}
       {canLookup && !q.isLoading && candidates.length === 0 && (
