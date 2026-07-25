@@ -109,6 +109,15 @@ async function callXimilar(
     throw new XimilarAuthError();
   }
   const rec = j.records?.[0];
+  console.info("Ximilar pricing debug", {
+    topKeys: Object.keys(j),
+    recordKeys: rec ? Object.keys(rec) : [],
+    bestMatchKeys: rec?._identification?.best_match ? Object.keys(rec._identification.best_match) : [],
+    recordPricingCount: rec?.pricing?.list?.length ?? 0,
+    matchPricingCount: rec?._identification?.best_match?.pricing?.list?.length ?? 0,
+    topPricingCount: j.pricing?.list?.length ?? 0,
+    priceStatsCount: rec?._identification?.best_match?.price_stats?.length ?? 0,
+  });
   return {
     match: rec?._identification?.best_match ?? null,
     listings: [
