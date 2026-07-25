@@ -325,7 +325,7 @@ function buildPricingFromListings(
   opts: { grader?: string | null; grade?: string | null },
 ): XimilarPricing | null {
   const usable = listings
-    .map((listing) => {
+    .map((listing): XimilarPricing["sales"][number] | null => {
       const price = Number(listing.price);
       const currency = String(listing.currency ?? "USD").toUpperCase();
       if (!Number.isFinite(price) || price <= 0 || currency !== "USD") return null;
@@ -341,7 +341,7 @@ function buildPricingFromListings(
         url: listing.item_link ?? null,
       };
     })
-    .filter((sale): sale is XimilarPricing["sales"][number] => Boolean(sale))
+    .filter((sale): sale is XimilarPricing["sales"][number] => sale !== null)
     .sort((a, b) => new Date(b.sold_at ?? 0).getTime() - new Date(a.sold_at ?? 0).getTime())
     .slice(0, 12);
 
