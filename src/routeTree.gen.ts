@@ -14,7 +14,6 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
-import { Route as ApiPublicHooksRefresh130pointRouteImport } from './routes/api/public/hooks/refresh-130point'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -40,26 +39,18 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
-const ApiPublicHooksRefresh130pointRoute =
-  ApiPublicHooksRefresh130pointRouteImport.update({
-    id: '/api/public/hooks/refresh-130point',
-    path: '/api/public/hooks/refresh-130point',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/s/$slug': typeof SSlugRoute
-  '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/s/$slug': typeof SSlugRoute
-  '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -68,23 +59,12 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/s/$slug': typeof SSlugRoute
-  '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/auth'
-    | '/dashboard'
-    | '/s/$slug'
-    | '/api/public/hooks/refresh-130point'
+  fullPaths: '/' | '/auth' | '/dashboard' | '/s/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/auth'
-    | '/dashboard'
-    | '/s/$slug'
-    | '/api/public/hooks/refresh-130point'
+  to: '/' | '/auth' | '/dashboard' | '/s/$slug'
   id:
     | '__root__'
     | '/'
@@ -92,7 +72,6 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/dashboard'
     | '/s/$slug'
-    | '/api/public/hooks/refresh-130point'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -100,7 +79,6 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   SSlugRoute: typeof SSlugRoute
-  ApiPublicHooksRefresh130pointRoute: typeof ApiPublicHooksRefresh130pointRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -140,13 +118,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/api/public/hooks/refresh-130point': {
-      id: '/api/public/hooks/refresh-130point'
-      path: '/api/public/hooks/refresh-130point'
-      fullPath: '/api/public/hooks/refresh-130point'
-      preLoaderRoute: typeof ApiPublicHooksRefresh130pointRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -166,7 +137,6 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   SSlugRoute: SSlugRoute,
-  ApiPublicHooksRefresh130pointRoute: ApiPublicHooksRefresh130pointRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
