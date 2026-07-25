@@ -125,7 +125,9 @@ async function callXimilar(
     objectIdentificationKeys: firstObject?._identification ? Object.keys(firstObject._identification) : [],
     objectBestMatchKeys: objectBestMatch ? Object.keys(objectBestMatch) : [],
     objectBestMatchPriceStatsCount: objectBestMatch?.price_stats?.length ?? 0,
+    objectBestMatchPriceStatsKeys: objectBestMatch?.price_stats?.slice(0, 2).map((stat) => Object.keys(stat)) ?? [],
     objectBestMatchPricingCount: objectBestMatch?.pricing?.list?.length ?? 0,
+    objectBestMatchPricingKeys: objectBestMatch?.pricing?.list?.slice(0, 2).map((listing) => Object.keys(listing)) ?? [],
     objectPricingCount: firstObject?.pricing?.list?.length ?? 0,
   });
   const objectMatches = (rec?._objects ?? [])
