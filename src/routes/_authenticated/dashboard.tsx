@@ -1159,55 +1159,81 @@ function CardDetail({
           <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4 border-b border-border pb-2">Recent Comparables</h3>
           {sales.length === 0 ? (
             <p className="text-xs text-muted-foreground">No comparable sales yet. Refresh value to fetch estimates.</p>
-          ) : (
-            <div className="overflow-x-auto -mx-6 px-6">
-              <table className="w-full text-left">
-                <thead>
-                  <tr className="text-[9px] font-mono text-muted-foreground uppercase">
-                    <th className="pb-2">Date</th>
-                    <th className="pb-2">Grade</th>
-                    <th className="pb-2">Source</th>
-                    <th className="pb-2 text-right">Price</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sales.map((s) => {
-                    const url = (s as { url?: string | null }).url ?? null;
-                    const dateStr = s.sold_at ? new Date(s.sold_at).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "2-digit" }) : "Active";
-                    const rawSource = s.source ?? "—";
-                    const displaySource = rawSource.toLowerCase().includes("130") || rawSource.toLowerCase().includes("cardsight")
-                      ? rawSource.replace(/130\s?point/gi, "eBay sold").replace(/Cardsight \(eBay sold/gi, "eBay sold").replace(/Cardsight \(/gi, "eBay sold · ").replace(/\)/g, "")
-                      : rawSource;
-                    return (
-                      <tr key={s.id} className="text-xs border-b border-border/50 hover:bg-muted/30 transition-colors">
-                        <td className="py-2 whitespace-nowrap">
-                          {url ? (
-                            <a href={url} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-foreground">
-                              {dateStr}
-                            </a>
-                          ) : dateStr}
-                        </td>
-                        <td className="py-2 whitespace-nowrap">{s.grade ?? "—"}</td>
-                        <td className="py-2 text-muted-foreground whitespace-nowrap">
-                          {url ? (
-                            <a href={url} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-foreground inline-flex items-center gap-1">
-                              {displaySource}
-                              <span aria-hidden>↗</span>
-                            </a>
-                          ) : displaySource}
-                        </td>
-                        <td className="py-2 text-right font-mono whitespace-nowrap">{fmt(Number(s.price))}</td>
-                      </tr>
-                    );
-                  })}
-
-                </tbody>
-              </table>
-            </div>
-          )}
+          ) : (() => {
+            const valid = sales.filter((s) => Number.isFinite(Number(s.price)) && Number(s.price) > 0);
+            const byDateDesc = [...valid].sort((a, b) => {
+              const ta = a.sold_at ? new Date(a.sold_at).getTime() : 0;
+              const tb = b.sold_at ? new Date(b.sold_at).getTime() : 0;
+              return tb - ta;
+            });
+            const byPriceAsc = [...valid].sort((a, b) => Number(a.price) - Number(b.price));
+            const latest = byDateDesc[0];
+            const oldest = byDateDesc[byDateDesc.length - 1];
+            const low = byPriceAsc[0];
+            const high = byPriceAsc[byPriceAsc.length - 1];
+            const medianSale = byPriceAsc[Math.floor((byPriceAsc.length - 1) / 2)];
+            const rows: Array<{ key: string; label: string; sale: Sale | undefined }> = [
+              { key: "latest", label: "Latest", sale: latest },
+              { key: "median", label: `Median (${valid.length})`, sale: medianSale },
+              { key: "low", label: "Low", sale: low },
+              { key: "high", label: "High", sale: high },
+              { key: "oldest", label: "Oldest", sale: oldest },
+            ].filter((r) => r.sale);
+            return (
+              <div className="overflow-x-auto -mx-6 px-6">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-[9px] font-mono text-muted-foreground uppercase">
+                      <th className="pb-2">Date</th>
+                      <th className="pb-2">Grade</th>
+                      <th className="pb-2">Source</th>
+                      <th className="pb-2 text-right">Price</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map(({ key, label, sale }) => {
+                      const s = sale!;
+                      const url = (s as { url?: string | null }).url ?? null;
+                      const dateStr = s.sold_at ? new Date(s.sold_at).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "2-digit" }) : "—";
+                      const rawSource = s.source ?? "eBay sold";
+                      const cleaned = rawSource
+                        .replace(/130\s?point/gi, "eBay sold")
+                        .replace(/Cardsight \(eBay sold/gi, "eBay sold")
+                        .replace(/Cardsight \(/gi, "eBay sold · ")
+                        .replace(/\)/g, "")
+                        .split("·")[0]
+                        .trim() || "eBay sold";
+                      const displaySource = `${cleaned} · ${label}`;
+                      return (
+                        <tr key={key} className="text-xs border-b border-border/50 hover:bg-muted/30 transition-colors">
+                          <td className="py-2 whitespace-nowrap">
+                            {url ? (
+                              <a href={url} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-foreground">
+                                {dateStr}
+                              </a>
+                            ) : dateStr}
+                          </td>
+                          <td className="py-2 whitespace-nowrap">{s.grade ?? "overall"}</td>
+                          <td className="py-2 text-muted-foreground whitespace-nowrap">
+                            {url ? (
+                              <a href={url} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted underline-offset-2 hover:text-foreground inline-flex items-center gap-1">
+                                {displaySource}
+                                <span aria-hidden>↗</span>
+                              </a>
+                            ) : displaySource}
+                          </td>
+                          <td className="py-2 text-right font-mono whitespace-nowrap">{fmt(Number(s.price))}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
 
           <p className="mt-4 text-[9px] font-mono text-muted-foreground uppercase tracking-widest">
-            Values reflect recent sold comps from eBay when available.
+            Values reflect sold comps from eBay across all available history.
           </p>
         </div>
       </div>

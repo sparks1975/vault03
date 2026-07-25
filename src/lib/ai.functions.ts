@@ -344,7 +344,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         });
 
       if (auctions.length > 0) {
-        sales = auctions.slice(0, 25).map((r) => {
+        sales = auctions.slice(0, 200).map((r) => {
           const typeLabel = r.listing_type === "fixed" ? "BIN" : r.listing_type === "auction" ? "Auction" : null;
           return {
             sold_at: r.date ?? null,
@@ -412,7 +412,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             is_first_bowman: valuationLookup.is_first_bowman,
             serial_number: data.serial_number,
             selected_parallel_name: selectedParallelName,
-            period: "6m",
+            period: "5y",
           });
           await priceFromSlice(slice);
         }
@@ -460,7 +460,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             is_first_bowman: valuationLookup.is_first_bowman,
             serial_number: data.serial_number,
             selected_parallel_name: selectedParallelName,
-            period: "6m",
+            period: "5y",
           });
           await priceFromSlice(retrySlice);
           if (usedCardsight) resolvedCardId = retryCardId;
@@ -486,7 +486,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             grader: data.grader,
             grade: data.grade,
           },
-          { period: "6m", limit: 100 },
+          { period: "5y", limit: 100 },
         );
         await priceFromSlice(searchSlice);
         if (!usedCardsight && !compsNote) {
@@ -567,7 +567,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         const rowPassesPt130Filter = (c: (typeof cached)[number]) => {
             if (!c.sold_at) return false;
             const t = new Date(c.sold_at as string).getTime();
-            if (!Number.isFinite(t) || nowMs - t > sixMonthsMs) return false;
+            if (!Number.isFinite(t)) return false;
             const rawTitle = String(c.title ?? "");
             const titleLower = rawTitle.toLowerCase();
             if (isGradedCard) {
@@ -671,7 +671,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               const pMed = median(prior);
               if (pMed > 0) deltaPct = ((rMed - pMed) / pMed) * 100;
             }
-            sales = combined.slice(0, 25);
+            sales = combined.slice(0, 200);
             usedCardsight = true;
             compsNote = null;
           }
