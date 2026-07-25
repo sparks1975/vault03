@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { APPROVED_CARD_SETS, toApprovedCardSet } from "./card-sets";
 
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3.5-flash";
@@ -97,7 +98,7 @@ async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
           {
             type: "text",
             text:
-              'Identify this sports card. Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null. IMPORTANT: `set_name` must be ONLY the actual product/set name (e.g. "Topps Chrome", "Bowman Draft", "Panini Prizm", "Upper Deck Series 1"). Do NOT include parallel, refractor, insert, color, numbering, or autograph descriptors in `set_name` — those belong to a separate parallel field we handle elsewhere. If you cannot read a real set name from the card, return null. Never invent or guess a set name.',
+              `Identify this sports card. Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null. IMPORTANT: set_name must be one of this exact approved list or null: ${APPROVED_CARD_SETS.join(", ")}. Do NOT include parallel, refractor, insert, color, numbering, year, or autograph descriptors in set_name. Never invent or guess a set name.`,
           },
           { type: "image_url", image_url: { url: imageUrl } },
         ],
@@ -106,7 +107,7 @@ async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
   });
   const parsed = extractJson<Omit<ScanResult, "cardsight_card_id">>(text);
   if (parsed && typeof parsed.set_name === "string") {
-    parsed.set_name = stripParallelFromSetName(parsed.set_name);
+    parsed.set_name = toApprovedCardSet(stripParallelFromSetName(parsed.set_name)) ?? null;
   }
   return { ...parsed, cardsight_card_id: null };
 }

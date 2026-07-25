@@ -24,7 +24,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
-import { listCardsightParallels, listCardsightSetCandidates } from "@/lib/cardsight.functions";
+import { listCardsightParallels } from "@/lib/cardsight.functions";
+import { APPROVED_CARD_SETS } from "@/lib/card-sets";
 import { CardCropDialog } from "@/components/CardCropDialog";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
 import {
@@ -150,17 +151,6 @@ type Card = {
   sort_order: number | null;
   sales: Sale[];
   history: HistoryPoint[];
-};
-
-type SetCandidate = {
-  card_id: string;
-  set_name: string;
-  release_name: string | null;
-  subset_name: string | null;
-  player_name: string | null;
-  year: string | null;
-  card_number: string | null;
-  relevance: number;
 };
 
 function fmt(n: number | null | undefined) {
