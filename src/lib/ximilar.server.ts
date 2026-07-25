@@ -56,6 +56,7 @@ type XimilarBestMatch = {
   card_number?: string | number | null;
   number?: string | number | null;
   price_stats?: PriceStat[] | null;
+  pricing?: { list?: PricingListing[] | null } | null;
   links?: { ebay?: string | null } | null;
 };
 
@@ -110,7 +111,11 @@ async function callXimilar(
   const rec = j.records?.[0];
   return {
     match: rec?._identification?.best_match ?? null,
-    listings: [...(rec?.pricing?.list ?? []), ...(j.pricing?.list ?? [])].filter(Boolean),
+    listings: [
+      ...(rec?.pricing?.list ?? []),
+      ...(rec?._identification?.best_match?.pricing?.list ?? []),
+      ...(j.pricing?.list ?? []),
+    ].filter(Boolean),
   };
 }
 
@@ -326,10 +331,11 @@ function buildPricingFromListings(
 ): XimilarPricing | null {
   const usable = listings
     .map((listing): XimilarPricing["sales"][number] | null => {
-      const price = Number(listing.price);
+      if (!listing.date_of_sale) return null;
+      const price = parsePrice(listing.price);
       const currency = String(listing.currency ?? "USD").toUpperCase();
       if (!Number.isFinite(price) || price <= 0 || currency !== "USD") return null;
-      const soldAt = listing.date_of_sale ?? listing.date_of_creation ?? new Date().toISOString();
+      const soldAt = listing.date_of_sale;
       const gradeCompany = pickString(listing.grade_company, opts.grader ?? null);
       const gradeValue = pickString(listing.grade_value, listing.grade, opts.grade ?? null);
       const gradeLabel = gradeCompany && gradeValue ? `${gradeCompany} ${gradeValue}` : pickString(gradeCompany, gradeValue);
@@ -379,6 +385,12 @@ function trimOutliers(values: number[]): number[] {
   const high = q3 + iqr * 1.5;
   const trimmed = sorted.filter((value) => value >= low && value <= high);
   return trimmed.length > 0 ? trimmed : sorted;
+}
+
+function parsePrice(value: number | string | null | undefined): number {
+  if (typeof value === "number") return value;
+  if (typeof value !== "string") return Number.NaN;
+  return Number(value.replace(/[^0-9.]/g, ""));
 }
 
 function percentile(sorted: number[], p: number): number {
