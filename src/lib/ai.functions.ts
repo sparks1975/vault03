@@ -293,8 +293,8 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     const medianValueFromSales = async (rows: typeof sales) => {
       const prices = rows.map((r) => Number(r.price)).filter((p) => Number.isFinite(p) && p > 0);
       if (prices.length === 0) return null;
-      const { median, trimOutliersIQR } = await import("./cardsight.server");
-      return median(trimOutliersIQR(prices));
+      const { median } = await import("./cardsight.server");
+      return median(prices);
     };
 
     // When we have a canonical catalog ID, use the catalog's own year/set/card
