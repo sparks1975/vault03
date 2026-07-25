@@ -9,6 +9,13 @@
 
 const XIMILAR_URL = "https://api.ximilar.com/collectibles/v2/sport_id";
 
+export class XimilarAuthError extends Error {
+  constructor(message = "Ximilar could not authenticate. Check the saved API token and account credits.") {
+    super(message);
+    this.name = "XimilarAuthError";
+  }
+}
+
 type PriceStat = {
   stats_type?: string | null; // "overall" | "graded" | "ungraded" | "PSA 10" ...
   median?: number | null;
@@ -55,7 +62,7 @@ type XimilarResponse = {
 };
 
 async function callXimilar(record: Record<string, unknown>, priceStats: boolean): Promise<XimilarBestMatch | null> {
-  const token = process.env.XIMILAR_API_TOKEN;
+  const token = normalizeToken(process.env.XIMILAR_API_TOKEN);
   if (!token) throw new Error("XIMILAR_API_TOKEN is not configured");
   const res = await fetch(XIMILAR_URL, {
     method: "POST",
@@ -67,11 +74,23 @@ async function callXimilar(record: Record<string, unknown>, priceStats: boolean)
   });
   if (!res.ok) {
     const t = await res.text();
+    if (res.status === 401 || /authorization|invalid token|credit limits/i.test(t)) {
+      throw new XimilarAuthError();
+    }
     throw new Error(`Ximilar request failed [${res.status}]: ${t}`);
   }
   const j = (await res.json()) as XimilarResponse;
+  if (j.status?.code === 401 || /authorization|invalid token|credit limits/i.test(j.status?.text ?? "")) {
+    throw new XimilarAuthError();
+  }
   const rec = j.records?.[0];
   return rec?._identification?.best_match ?? null;
+}
+
+function normalizeToken(value: string | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return trimmed.replace(/^(token|bearer)\s+/i, "").trim();
 }
 
 export type XimilarIdentification = {
