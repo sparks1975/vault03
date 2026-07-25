@@ -279,6 +279,24 @@ function buildPricing(
       url: ebayUrl,
     });
   }
+  if (chosen.trimmed_mean != null && Number.isFinite(Number(chosen.trimmed_mean))) {
+    sales.push({
+      sold_at: chosen.latest_date ?? nowIso,
+      grade: gradeLabel,
+      price: Number(chosen.trimmed_mean),
+      source: `eBay sold · Trimmed avg${chosen.count ? ` (${chosen.count})` : ""}`,
+      url: ebayUrl,
+    });
+  }
+  if (sales.length === 0 && chosen.mean != null && Number.isFinite(Number(chosen.mean))) {
+    sales.push({
+      sold_at: chosen.latest_date ?? nowIso,
+      grade: gradeLabel,
+      price: Number(chosen.mean),
+      source: `eBay sold · Average${chosen.count ? ` (${chosen.count})` : ""}`,
+      url: ebayUrl,
+    });
+  }
   if (chosen.min != null && Number.isFinite(Number(chosen.min))) {
     sales.push({
       sold_at: chosen.oldest_date ?? nowIso,
