@@ -399,6 +399,10 @@ const WAVE_FAMILY_RE = /\b[a-z]+\s+wave\b/i;
 const FIRST_BOWMAN_RE = /\b(1st\s+bowman|first\s+bowman)\b/i;
 const SERIAL_RE = /(^|[^\w])(#?\s*\d+\s*\/\s*\d+|\/\s*\d{1,4})(?=$|[^\w])/i;
 const AUTO_RE = /\b(auto|autograph|autographs|signed|signature|signatures)\b/i;
+// Reject non-single-card listings: breaks, cases, boxes, packs, lots, sets.
+// These are group-buy / sealed-product listings whose prices are orders of
+// magnitude higher than an individual card and must never be used as comps.
+const NON_SINGLE_CARD_RE = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|hobby\s*box|jumbo\s*box|blaster\s*box|retail\s*box|mega\s*box|hanger\s*box|value\s*box|cello\s*box|sealed\s*box|factory\s*sealed|hobby\s*case|sealed\s*case|pack(s)?|booster|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
 // (graded regex intentionally inlined at call sites)
 
 // Reject titles that clearly indicate a different variation than the submitted
@@ -408,6 +412,7 @@ export function isVariantTitle(
   opts: { hasSelectedParallel?: boolean; selectedParallelName?: string | null; is_autograph?: boolean | null; serial_number?: string | null; is_first_bowman?: boolean | null } = {},
 ): boolean {
   if (!title) return false;
+  if (NON_SINGLE_CARD_RE.test(title)) return true;
   const hasSelectedParallel = Boolean(opts.hasSelectedParallel || opts.selectedParallelName);
   if (opts.selectedParallelName) {
     if (!selectedParallelTitleMatches(title, opts.selectedParallelName)) return true;
