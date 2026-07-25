@@ -1,6 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { getPublicCollection } from "@/lib/share.functions";
-import { EthicalAd } from "@/components/EthicalAd";
 
 export const Route = createFileRoute("/s/$slug")({
   loader: async ({ params }) => {
@@ -81,8 +80,6 @@ function SharedCollection() {
             <p className="text-xl font-bold leading-tight">{fmtMoney(data.total_value)}</p>
           </div>
         </header>
-
-        <EthicalAd className="mt-8 border border-border bg-background p-5 flex flex-col items-center text-center" />
 
         {data.cards.length === 0 ? (
           <p className="text-center text-muted-foreground py-16">No cards yet.</p>
