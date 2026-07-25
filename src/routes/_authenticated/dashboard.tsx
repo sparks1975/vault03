@@ -1243,7 +1243,7 @@ type SaleRow = {
   sold_at: string | null;
   grade: string | null;
   price: number | string;
-  source: string;
+  source: string | null;
   url?: string | null;
 };
 
