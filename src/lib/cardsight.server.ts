@@ -235,6 +235,7 @@ export type SetCandidate = {
 };
 
 type CardLookup = {
+  card_id?: string | null;
   player_name?: string | null;
   year?: string | number | null;
   set_name?: string | null;
@@ -597,6 +598,14 @@ export async function listSetCandidatesForCard(lookup: CardLookup): Promise<SetC
   addCardsPath({ name: player, year });
 
   const cardsById = new Map<string, CatalogCard>();
+  if (merged.card_id) {
+    try {
+      const detail = await csFetch<CatalogCard>(`/v1/catalog/cards/${merged.card_id}`);
+      cardsById.set(detail.id, detail);
+    } catch (err) {
+      console.error("Cardsight set candidate detail failed:", err);
+    }
+  }
   for (const path of paths) {
     try {
       const resp = await csFetch<{ cards: CatalogCard[] }>(path);
@@ -711,7 +720,8 @@ export async function findCatalogCard(lookup: CardLookup): Promise<CatalogCard |
   }
 
   if (candidates.length > 0) {
-    return candidates.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+    const matched = candidates.filter((c) => cardMatchesLookup(c, merged));
+    if (matched.length > 0) return matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
   }
 
   const searchQueries = new Set<string>();
@@ -749,7 +759,8 @@ export async function findCatalogCard(lookup: CardLookup): Promise<CatalogCard |
       }
     }
     if (detailed.length > 0) {
-      return detailed.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+      const matched = detailed.filter((c) => cardMatchesLookup(c, merged));
+      if (matched.length > 0) return matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
     }
     const card = [...searchCandidates.values()].sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
     if (card) return await csFetch<CatalogCard>(`/v1/catalog/cards/${card.id}`);
