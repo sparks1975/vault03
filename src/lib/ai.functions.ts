@@ -150,7 +150,7 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
     const enriched = await enrichWithMlb(result);
     // Try to link a Cardsight card id via free-text search so pricing + parallels work.
     try {
-      const { searchCatalogCardByFields } = await import("./cardsight.server");
+      const { getCatalogValuationLookup, searchCatalogCardByFields } = await import("./cardsight.server");
       const desc = [enriched.year, enriched.set_name, enriched.player_name, enriched.card_number ? `#${enriched.card_number}` : null]
         .filter(Boolean)
         .join(" ");
@@ -162,7 +162,14 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
           card_number: enriched.card_number,
           descriptor: desc,
         });
-        if (id) enriched.cardsight_card_id = id;
+        if (id) {
+          enriched.cardsight_card_id = id;
+          const canonical = await getCatalogValuationLookup(id);
+          if (canonical?.set_name) enriched.set_name = String(canonical.set_name);
+          if (canonical?.year != null) enriched.year = Number(canonical.year) || enriched.year;
+          if (canonical?.card_number) enriched.card_number = String(canonical.card_number);
+          if (canonical?.player_name) enriched.player_name = String(canonical.player_name);
+        }
       }
     } catch (err) {
       console.error("Cardsight search (post-scan) failed:", err);
