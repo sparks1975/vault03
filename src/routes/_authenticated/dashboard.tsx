@@ -147,6 +147,7 @@ type Card = {
   cardsight_parallel_id: string | null;
   cardsight_grade_id: string | null;
   created_at: string;
+  sort_order: number | null;
   sales: Sale[];
   history: HistoryPoint[];
 };
