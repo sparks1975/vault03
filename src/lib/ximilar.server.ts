@@ -118,6 +118,16 @@ async function callXimilar(
     throw new XimilarAuthError();
   }
   const rec = j.records?.[0];
+  const firstObject = rec?._objects?.[0];
+  const objectBestMatch = firstObject?._identification?.best_match;
+  console.info("Ximilar object debug", {
+    recordIdentificationKeys: rec?._identification ? Object.keys(rec._identification) : [],
+    objectIdentificationKeys: firstObject?._identification ? Object.keys(firstObject._identification) : [],
+    objectBestMatchKeys: objectBestMatch ? Object.keys(objectBestMatch) : [],
+    objectBestMatchPriceStatsCount: objectBestMatch?.price_stats?.length ?? 0,
+    objectBestMatchPricingCount: objectBestMatch?.pricing?.list?.length ?? 0,
+    objectPricingCount: firstObject?.pricing?.list?.length ?? 0,
+  });
   const objectMatches = (rec?._objects ?? [])
     .map((obj) => obj._identification?.best_match ?? null)
     .filter((match): match is XimilarBestMatch => match !== null);
