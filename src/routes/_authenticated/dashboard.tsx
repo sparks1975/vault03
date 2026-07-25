@@ -1130,7 +1130,7 @@ function CardDetail({
         {priceHistory.length >= 2 && (
           <div>
             <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4 border-b border-border pb-2">
-              Sold Comps · Last {priceHistory.length}
+              Price Trend
             </h3>
             <SalesSparkline points={priceHistory} />
           </div>
