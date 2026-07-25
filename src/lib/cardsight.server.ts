@@ -412,6 +412,7 @@ export function isVariantTitle(
   opts: { hasSelectedParallel?: boolean; selectedParallelName?: string | null; is_autograph?: boolean | null; serial_number?: string | null; is_first_bowman?: boolean | null } = {},
 ): boolean {
   if (!title) return false;
+  if (NON_SINGLE_CARD_RE.test(title)) return true;
   const hasSelectedParallel = Boolean(opts.hasSelectedParallel || opts.selectedParallelName);
   if (opts.selectedParallelName) {
     if (!selectedParallelTitleMatches(title, opts.selectedParallelName)) return true;
