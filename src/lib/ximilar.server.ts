@@ -98,11 +98,20 @@ function pickYear(v: number | string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let s = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    s += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(s);
+}
+
 export async function identifyCardXimilar(
   bytes: Uint8Array,
   _contentType: string,
 ): Promise<XimilarIdentification | null> {
-  const b64 = btoa(String.fromCharCode(...bytes));
+  const b64 = bytesToBase64(bytes);
   const match = await callXimilar({ _base64: b64 }, false);
   if (!match) return null;
   const rawName = pickString(match.player_name, match.subject, match.full_name, match.name);
