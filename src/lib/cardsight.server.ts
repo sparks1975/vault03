@@ -314,42 +314,56 @@ function titleHasPhrase(titleNorm: string, phrase: string): boolean {
   return new RegExp(`(^| )${escapeRegex(normalizedPhrase)}($| )`, "i").test(titleNorm);
 }
 
+const SET_TITLE_ALIASES: Record<string, string[]> = {
+  "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
+  "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
+  "Contenders / Contenders Draft Picks": ["contenders", "contenders draft picks"],
+  "BBM 1st Version": ["bbm 1st version", "bbm first version", "bbm 1st", "bbm first"],
+  "BBM 2nd Version": ["bbm 2nd version", "bbm second version", "bbm 2nd", "bbm second"],
+  "BBM Fusion": ["bbm fusion"],
+  "BBM Rookie Edition": ["bbm rookie edition", "bbm rookie"],
+  "BBM Draft": ["bbm draft"],
+  "BBM Team Sets": ["bbm team set", "bbm team sets"],
+  "BBM Premium / Genesis": ["bbm premium", "bbm genesis"],
+  "BBM Glory": ["bbm glory"],
+  "BBM Infinity": ["bbm infinity"],
+  "BBM Icons": ["bbm icons"],
+  "BBM Crown": ["bbm crown"],
+  "BBM Special / Theme Sets": ["bbm special", "bbm theme"],
+  "Epoch NPB": ["epoch npb"],
+  "Epoch NPB Luxury Collection": ["epoch npb luxury", "epoch luxury collection", "epoch luxury"],
+  "Epoch Team Premier Edition": ["epoch team premier edition", "epoch premier"],
+  "Epoch Stars & Legends": ["epoch stars legends", "epoch stars and legends"],
+  "Epoch Rookie Sets": ["epoch rookie set", "epoch rookie sets"],
+  "Epoch OB Club / Holographica": ["epoch ob club", "epoch holographica"],
+  "Epoch Team Sets": ["epoch team set", "epoch team sets"],
+  "Topps NPB Chrome": ["topps npb chrome"],
+  "Topps NPB Stadium Club": ["topps npb stadium club"],
+  "Topps NPB Finest": ["topps npb finest"],
+  "Topps Bowman NPB": ["topps bowman npb", "bowman npb"],
+  "Topps NPB 206": ["topps npb 206", "npb 206"],
+};
+
+function titleMatchesKnownSetAlias(titleNorm: string, setName: string): boolean {
+  return (SET_TITLE_ALIASES[setName] ?? []).some((phrase) => titleHasPhrase(titleNorm, phrase));
+}
+
+function hasConflictingKnownSetAlias(titleNorm: string, setName: string | null | undefined): boolean {
+  const approved = toApprovedCardSet(setName) ?? compact(setName);
+  if (!approved) return false;
+  return Object.entries(SET_TITLE_ALIASES).some(([otherSet, phrases]) => {
+    if (otherSet === approved) return false;
+    const sameBrand = normalizeText(otherSet).split(" ")[0] === normalizeText(approved).split(" ")[0];
+    return sameBrand && phrases.some((phrase) => titleHasPhrase(titleNorm, phrase));
+  });
+}
+
 function strictSetTitleMatches(title: string, setName: string | null | undefined): boolean {
   const approved = toApprovedCardSet(setName) ?? compact(setName);
   if (!approved) return true;
 
   const titleNorm = normalizeText(title);
-  const aliases: Record<string, string[]> = {
-    "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
-    "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
-    "Contenders / Contenders Draft Picks": ["contenders", "contenders draft picks"],
-    "BBM 1st Version": ["bbm 1st version", "bbm first version", "bbm 1st", "bbm first", "bbm rookie edition", "bbm rookie"],
-    "BBM 2nd Version": ["bbm 2nd version", "bbm second version", "bbm 2nd", "bbm second"],
-    "BBM Fusion": ["bbm fusion"],
-    "BBM Rookie Edition": ["bbm rookie edition", "bbm rookie"],
-    "BBM Draft": ["bbm draft"],
-    "BBM Team Sets": ["bbm team set", "bbm team sets"],
-    "BBM Premium / Genesis": ["bbm premium", "bbm genesis"],
-    "BBM Glory": ["bbm glory"],
-    "BBM Infinity": ["bbm infinity"],
-    "BBM Icons": ["bbm icons"],
-    "BBM Crown": ["bbm crown"],
-    "BBM Special / Theme Sets": ["bbm special", "bbm theme"],
-    "Epoch NPB": ["epoch npb"],
-    "Epoch NPB Luxury Collection": ["epoch npb luxury", "epoch luxury collection", "epoch luxury"],
-    "Epoch Team Premier Edition": ["epoch team premier edition", "epoch premier"],
-    "Epoch Stars & Legends": ["epoch stars legends", "epoch stars and legends"],
-    "Epoch Rookie Sets": ["epoch rookie set", "epoch rookie sets"],
-    "Epoch OB Club / Holographica": ["epoch ob club", "epoch holographica"],
-    "Epoch Team Sets": ["epoch team set", "epoch team sets"],
-    "Topps NPB Chrome": ["topps npb chrome"],
-    "Topps NPB Stadium Club": ["topps npb stadium club"],
-    "Topps NPB Finest": ["topps npb finest"],
-    "Topps Bowman NPB": ["topps bowman npb", "bowman npb"],
-    "Topps NPB 206": ["topps npb 206", "npb 206"],
-  };
-  const exactAliases = aliases[approved];
-  if (exactAliases) return exactAliases.some((phrase) => titleHasPhrase(titleNorm, phrase));
+  if (titleMatchesKnownSetAlias(titleNorm, approved)) return true;
 
   const setNorm = normalizeText(approved);
   if (titleHasPhrase(titleNorm, setNorm)) return true;
@@ -411,7 +425,9 @@ export function verifyCompTitle(
 
   if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
     const hasExactCardNumber = wantedNumber && explicitNumbers.includes(wantedNumber);
-    if (!lookup.relaxedSetMatch || !hasExactCardNumber) reasons.push("set mismatch");
+    if (!lookup.relaxedSetMatch || !hasExactCardNumber || hasConflictingKnownSetAlias(titleNorm, lookup.set_name)) {
+      reasons.push("set mismatch");
+    }
   }
 
   const isAutoTitle = AUTO_RE.test(rawTitle);
