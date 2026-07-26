@@ -127,12 +127,8 @@ export const listCards = createServerFn({ method: "GET" })
     if (error) throw error;
     const withUrls = await Promise.all(
       (cards ?? []).map(async (c) => {
-        const photoPath = c.photo_url;
-        const [photo_url, photo_thumb_url] = await Promise.all([
-          signPhoto(supabase as never, photoPath),
-          signPhotoThumb(supabase as never, photoPath),
-        ]);
-        return { ...c, photo_url, photo_thumb_url };
+        const variants = await signPhotoVariants(supabase as never, c.photo_url);
+        return { ...c, ...variants };
       }),
     );
     return withUrls;
