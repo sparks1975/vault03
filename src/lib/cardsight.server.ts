@@ -376,6 +376,7 @@ function pricingRecordMatches(
     is_autograph: lookup.is_autograph,
     serial_number: lookup.serial_number,
     is_first_bowman: lookup.is_first_bowman,
+    set_name: lookup.set_name,
     selectedParallelName: lookup.selected_parallel_name,
   })) return false;
 
@@ -414,11 +415,17 @@ export function isNonSingleCardListing(title: string | null | undefined): boolea
 // base card. Applies to both structured Cardsight pricing and pt130 comps.
 export function isVariantTitle(
   title: string,
-  opts: { hasSelectedParallel?: boolean; selectedParallelName?: string | null; is_autograph?: boolean | null; serial_number?: string | null; is_first_bowman?: boolean | null } = {},
+  opts: { hasSelectedParallel?: boolean; selectedParallelName?: string | null; set_name?: string | null; is_autograph?: boolean | null; serial_number?: string | null; is_first_bowman?: boolean | null } = {},
 ): boolean {
   if (!title) return false;
   if (isNonSingleCardListing(title)) return true;
-  const variantTitle = title
+  let variantTitle = title;
+  for (const setTerm of expandSetSearchTerms(opts.set_name)) {
+    const compactTerm = compact(setTerm);
+    if (compactTerm.length < 4) continue;
+    variantTitle = variantTitle.replace(new RegExp(escapeRegex(compactTerm), "gi"), " ");
+  }
+  variantTitle = variantTitle
     // Product/framing language, not a parallel color.
     .replace(/\btopps\s+gold\s+label\b/gi, "Topps Label")
     .replace(/\bgold\s+framed?\b/gi, "framed")
@@ -530,7 +537,7 @@ function pricingRecordMatchesStructured(
   const serial = serialSearchTerm(lookup.serial_number);
   if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) return false;
 
-  if (isVariantTitle(rawTitle, { hasSelectedParallel, selectedParallelName: lookup.selected_parallel_name, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number, is_first_bowman: lookup.is_first_bowman })) {
+  if (isVariantTitle(rawTitle, { hasSelectedParallel, selectedParallelName: lookup.selected_parallel_name, set_name: lookup.set_name, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number, is_first_bowman: lookup.is_first_bowman })) {
     return false;
   }
 
