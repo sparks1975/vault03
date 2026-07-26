@@ -238,6 +238,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       price: number;
       source: string;
       url: string | null;
+      title: string | null;
     }> = [];
     let currentValue = 0;
     let deltaPct = 0;
@@ -382,6 +383,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             price: r.price,
             source: `${normalizeSource(r.source)}${typeLabel ? ` · ${typeLabel}` : ""}`,
             url: r.url ?? null,
+            title: r.title ?? null,
           };
         });
       }

@@ -23,6 +23,7 @@ export type Database = {
           price: number
           sold_at: string
           source: string | null
+          title: string | null
           url: string | null
           user_id: string
         }
@@ -34,6 +35,7 @@ export type Database = {
           price: number
           sold_at: string
           source?: string | null
+          title?: string | null
           url?: string | null
           user_id: string
         }
@@ -45,6 +47,7 @@ export type Database = {
           price?: number
           sold_at?: string
           source?: string | null
+          title?: string | null
           url?: string | null
           user_id?: string
         }

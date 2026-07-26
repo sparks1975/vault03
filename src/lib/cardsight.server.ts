@@ -376,6 +376,7 @@ function pricingRecordMatches(
     is_autograph: lookup.is_autograph,
     serial_number: lookup.serial_number,
     is_first_bowman: lookup.is_first_bowman,
+    set_name: lookup.set_name,
     selectedParallelName: lookup.selected_parallel_name,
   })) return false;
 
@@ -397,21 +398,34 @@ const WAVE_FAMILY_RE = /\b[a-z]+\s+wave\b/i;
 const FIRST_BOWMAN_RE = /\b(1st\s+bowman|first\s+bowman)\b/i;
 const SERIAL_RE = /(^|[^\w])(#?\s*\d+\s*\/\s*\d+|\/\s*\d{1,4})(?=$|[^\w])/i;
 const AUTO_RE = /\b(auto|autograph|autographs|signed|signature|signatures)\b/i;
-// Reject non-single-card listings: breaks, cases, boxes, packs, lots, sets.
-// These are group-buy / sealed-product listings whose prices are orders of
-// magnitude higher than an individual card and must never be used as comps.
-const NON_SINGLE_CARD_RE = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|hobby\s*box|jumbo\s*box|blaster\s*box|retail\s*box|mega\s*box|hanger\s*box|value\s*box|cello\s*box|sealed\s*box|factory\s*sealed|hobby\s*case|sealed\s*case|pack(s)?|booster|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
+// Reject non-single-card listings: breaks, sealed wax, cases, packs, lots, sets.
+// This stays separate from card-identity matching so we can block obvious junk
+// without making real single-card comps disappear.
+const NON_SINGLE_CARD_RE = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
+const SEALED_PRODUCT_WORDS_RE = /\b(factory|sealed|unopened|hobby|jumbo|blaster|retail|mega|hanger|value|cello|wax)\b/i;
+const PRODUCT_CONTAINER_WORDS_RE = /\b(box|boxes|case|cases|pack|packs|product|wax)\b/i;
+export function isNonSingleCardListing(title: string | null | undefined): boolean {
+  const raw = compact(title);
+  if (!raw) return false;
+  return NON_SINGLE_CARD_RE.test(raw) || (SEALED_PRODUCT_WORDS_RE.test(raw) && PRODUCT_CONTAINER_WORDS_RE.test(raw));
+}
 // (graded regex intentionally inlined at call sites)
 
 // Reject titles that clearly indicate a different variation than the submitted
 // base card. Applies to both structured Cardsight pricing and pt130 comps.
 export function isVariantTitle(
   title: string,
-  opts: { hasSelectedParallel?: boolean; selectedParallelName?: string | null; is_autograph?: boolean | null; serial_number?: string | null; is_first_bowman?: boolean | null } = {},
+  opts: { hasSelectedParallel?: boolean; selectedParallelName?: string | null; set_name?: string | null; is_autograph?: boolean | null; serial_number?: string | null; is_first_bowman?: boolean | null } = {},
 ): boolean {
   if (!title) return false;
-  if (NON_SINGLE_CARD_RE.test(title)) return true;
-  const variantTitle = title
+  if (isNonSingleCardListing(title)) return true;
+  let variantTitle = title;
+  for (const setTerm of expandSetSearchTerms(opts.set_name)) {
+    const compactTerm = compact(setTerm);
+    if (compactTerm.length < 4) continue;
+    variantTitle = variantTitle.replace(new RegExp(escapeRegex(compactTerm), "gi"), " ");
+  }
+  variantTitle = variantTitle
     // Product/framing language, not a parallel color.
     .replace(/\btopps\s+gold\s+label\b/gi, "Topps Label")
     .replace(/\bgold\s+framed?\b/gi, "framed")
@@ -509,12 +523,12 @@ function pricingRecordMatchesStructured(
 
   const rawTitle = record.title ?? "";
 
-  // Defensive: even though the structured endpoint is scoped by canonical
-  // card_id, if the wrong catalog card was matched (e.g. a completely
-  // different player) the returned comps would silently pollute pricing.
-  // Require player-name tokens, year, and card_number to appear in the title
-  // when we have them.
-  if (!titleMatchesCard(rawTitle, lookup)) return false;
+  if (isNonSingleCardListing(rawTitle)) return false;
+
+  // The structured endpoint is already scoped by canonical card_id. Do not
+  // require every title to repeat year/set/card-number; many legitimate sold
+  // listings omit one of those fields. Only remove sealed/multi-item listings
+  // and variant mismatches below.
 
   const isAutoTitle = AUTO_RE.test(rawTitle);
   if (lookup.is_autograph && !isAutoTitle) return false;
@@ -523,7 +537,7 @@ function pricingRecordMatchesStructured(
   const serial = serialSearchTerm(lookup.serial_number);
   if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) return false;
 
-  if (isVariantTitle(rawTitle, { hasSelectedParallel, selectedParallelName: lookup.selected_parallel_name, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number, is_first_bowman: lookup.is_first_bowman })) {
+  if (isVariantTitle(rawTitle, { hasSelectedParallel, selectedParallelName: lookup.selected_parallel_name, set_name: lookup.set_name, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number, is_first_bowman: lookup.is_first_bowman })) {
     return false;
   }
 
