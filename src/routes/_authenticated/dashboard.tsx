@@ -1166,7 +1166,7 @@ function CardDetail({
           )}
         </div>
 
-        <RecentComparables sales={sales} />
+        <RecentComparables sales={sales} cardId={card.id} />
       </div>
     </div>
   );
