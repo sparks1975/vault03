@@ -363,7 +363,9 @@ function strictSetTitleMatches(title: string, setName: string | null | undefined
   const discriminators = setTokens.filter((token) => !brandTokens.includes(token) && !common.has(token));
   if (discriminators.length === 0) return brands.length === 0 || brands.some((brand) => titleHasPhrase(titleNorm, brand));
 
-  return discriminators.every((token) => titleHasPhrase(titleNorm, token));
+  const matched = discriminators.filter((token) => titleHasPhrase(titleNorm, token)).length;
+  if (discriminators.length <= 2) return matched === discriminators.length;
+  return matched >= Math.max(2, discriminators.length - 1);
 }
 
 export function verifyCompTitle(
@@ -378,6 +380,7 @@ export function verifyCompTitle(
     is_first_bowman?: boolean | null;
     selected_parallel_name?: string | null;
     hasSelectedParallel?: boolean;
+    relaxedSetMatch?: boolean;
   },
 ): { verified: boolean; reasons: string[] } {
   const rawTitle = compact(title);
@@ -397,16 +400,18 @@ export function verifyCompTitle(
     reasons.push("year mismatch");
   }
 
-  if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
-    reasons.push("set mismatch");
-  }
-
   const wantedNumber = normalizeCardNumber(lookup.card_number);
+  let explicitNumbers: string[] = [];
   if (wantedNumber) {
-    const explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
+    explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
     if (explicitNumbers.length > 0 && !explicitNumbers.includes(wantedNumber)) {
       reasons.push(`card number #${compact(lookup.card_number).replace(/^#\s*/, "")} not explicit`);
     }
+  }
+
+  if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
+    const hasExactCardNumber = wantedNumber && explicitNumbers.includes(wantedNumber);
+    if (!lookup.relaxedSetMatch || !hasExactCardNumber) reasons.push("set mismatch");
   }
 
   const isAutoTitle = AUTO_RE.test(rawTitle);
@@ -434,6 +439,7 @@ export function extractMarketplaceCardNumbers(title: string): string[] {
   const values = new Set<string>();
   const patterns = [
     /#\s*([A-Za-z0-9][A-Za-z0-9.-]{0,14})\b/g,
+    /\b(?:no|card)\.?\s*#?\s*([A-Za-z0-9][A-Za-z0-9.-]{0,14})\b/gi,
     /\b([A-Z]{1,5}-[A-Z0-9]{1,8})\b/g,
   ];
   for (const pattern of patterns) {
@@ -459,6 +465,7 @@ function pricingRecordMatches(
     grade?: string | null;
     is_first_bowman?: boolean | null;
     selected_parallel_name?: string | null;
+    relaxedSetMatch?: boolean;
   },
 ): boolean {
   if (!Number.isFinite(record.price) || record.price <= 0) return false;
@@ -576,6 +583,7 @@ function pricingRecordMatchesStructured(
     card_number?: string | null;
     is_first_bowman?: boolean | null;
     selected_parallel_name?: string | null;
+    relaxedSetMatch?: boolean;
   },
 ): boolean {
   if (!Number.isFinite(record.price) || record.price <= 0) return false;
@@ -1057,6 +1065,7 @@ export async function fetchPricing(
     selected_parallel_name?: string | null;
     period?: string;
     limit?: number;
+    relaxedSetMatch?: boolean;
   } = {},
 ): Promise<PricingSlice> {
   const params = new URLSearchParams();
@@ -1119,6 +1128,7 @@ type PricingSearchLookup = CardLookup & {
   grader?: string | null;
   grade?: string | null;
   selected_parallel_name?: string | null;
+  relaxedSetMatch?: boolean;
 };
 
 function setBrand(setName: string | null | undefined): string | null {
