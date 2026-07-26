@@ -115,7 +115,9 @@ type Sale = {
   source: string | null;
   title: string | null;
   url: string | null;
+  is_manual?: boolean | null;
 };
+
 
 type HistoryPoint = {
   id: string;
