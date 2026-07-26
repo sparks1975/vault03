@@ -324,17 +324,12 @@ function strictSetTitleMatches(title: string, setName: string | null | undefined
     "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
     "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
     "Contenders / Contenders Draft Picks": ["contenders", "contenders draft picks"],
+    "BBM Rookie Edition": ["bbm rookie edition", "bbm rookie"],
+    "BBM Draft": ["bbm draft"],
     "BBM Premium / Genesis": ["bbm premium", "bbm genesis"],
     "BBM Special / Theme Sets": ["bbm special", "bbm theme"],
     "Epoch OB Club / Holographica": ["epoch ob club", "epoch holographica"],
   };
-  if (approved === "BBM Rookie Edition / Draft") {
-    const explicitlyRookie = originalSetNorm.includes("rookie") && !originalSetNorm.includes("draft");
-    const explicitlyDraft = originalSetNorm.includes("draft") && !originalSetNorm.includes("rookie");
-    if (explicitlyRookie) return titleHasPhrase(titleNorm, "bbm rookie edition") || titleHasPhrase(titleNorm, "bbm rookie");
-    if (explicitlyDraft) return titleHasPhrase(titleNorm, "bbm draft");
-    return titleHasPhrase(titleNorm, "bbm rookie edition") || titleHasPhrase(titleNorm, "bbm rookie") || titleHasPhrase(titleNorm, "bbm draft");
-  }
   const exactAliases = aliases[approved];
   if (exactAliases) return exactAliases.some((phrase) => titleHasPhrase(titleNorm, phrase));
 
