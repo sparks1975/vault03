@@ -783,12 +783,21 @@ function CardDetail({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Partial<Card>>({});
   const [playerResults, setPlayerResults] = useState<Awaited<ReturnType<typeof searchMlbPlayer>>>([]);
+  const [imgLoaded, setImgLoaded] = useState(!card.photo_url);
+
+  useEffect(() => {
+    setImgLoaded(!card.photo_url);
+  }, [card.id, card.photo_url]);
 
   const stats = useQuery({
     queryKey: ["stats", card.mlb_player_id],
     queryFn: () => getStatsFn({ data: { playerId: card.mlb_player_id! } }),
     enabled: !!card.mlb_player_id,
   });
+
+  const contentReady =
+    editing ||
+    (imgLoaded && (!card.mlb_player_id || !stats.isLoading));
 
   function startEdit() {
     setDraft({
