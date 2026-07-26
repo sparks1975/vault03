@@ -411,19 +411,24 @@ export function isVariantTitle(
 ): boolean {
   if (!title) return false;
   if (NON_SINGLE_CARD_RE.test(title)) return true;
+  const variantTitle = title
+    // Product/framing language, not a parallel color.
+    .replace(/\btopps\s+gold\s+label\b/gi, "Topps Label")
+    .replace(/\bgold\s+framed?\b/gi, "framed")
+    .replace(/\bgold\s+label\b/gi, "label");
   const hasSelectedParallel = Boolean(opts.hasSelectedParallel || opts.selectedParallelName);
   if (opts.selectedParallelName) {
-    if (!selectedParallelTitleMatches(title, opts.selectedParallelName)) return true;
+    if (!selectedParallelTitleMatches(variantTitle, opts.selectedParallelName)) return true;
     const selectedHasSerial = /\/\s*\d+/.test(opts.selectedParallelName);
-    if (!selectedHasSerial && !opts.serial_number && SERIAL_RE.test(title)) return true;
-    if (hasUnselectedParallelModifier(title, opts.selectedParallelName)) return true;
+    if (!selectedHasSerial && !opts.serial_number && SERIAL_RE.test(variantTitle)) return true;
+    if (hasUnselectedParallelModifier(variantTitle, opts.selectedParallelName)) return true;
   }
-  if (!hasSelectedParallel && PARALLEL_COLOR_RE.test(title)) return true;
-  if (!hasSelectedParallel && REFRACTOR_FAMILY_RE.test(title)) return true;
-  if (!hasSelectedParallel && WAVE_FAMILY_RE.test(title)) return true;
-  if (!opts.is_first_bowman && FIRST_BOWMAN_RE.test(title)) return true;
-  if (!hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(title)) return true;
-  if (!opts.is_autograph && AUTO_RE.test(title)) return true;
+  if (!hasSelectedParallel && PARALLEL_COLOR_RE.test(variantTitle)) return true;
+  if (!hasSelectedParallel && REFRACTOR_FAMILY_RE.test(variantTitle)) return true;
+  if (!hasSelectedParallel && WAVE_FAMILY_RE.test(variantTitle)) return true;
+  if (!opts.is_first_bowman && FIRST_BOWMAN_RE.test(variantTitle)) return true;
+  if (!hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(variantTitle)) return true;
+  if (!opts.is_autograph && AUTO_RE.test(variantTitle)) return true;
   return false;
 }
 
