@@ -308,6 +308,108 @@ function normalizeCardNumber(value: string | number | null | undefined): string 
     .replace(/[^a-z0-9]/g, "");
 }
 
+function titleHasPhrase(titleNorm: string, phrase: string): boolean {
+  const normalizedPhrase = normalizeText(phrase);
+  if (!normalizedPhrase) return false;
+  return new RegExp(`(^| )${escapeRegex(normalizedPhrase)}($| )`, "i").test(titleNorm);
+}
+
+function strictSetTitleMatches(title: string, setName: string | null | undefined): boolean {
+  const approved = toApprovedCardSet(setName) ?? compact(setName);
+  if (!approved) return true;
+
+  const titleNorm = normalizeText(title);
+  const aliases: Record<string, string[]> = {
+    "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
+    "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
+    "Contenders / Contenders Draft Picks": ["contenders", "contenders draft picks"],
+    "BBM Rookie Edition / Draft": ["bbm rookie edition", "bbm rookie", "bbm draft"],
+    "BBM Premium / Genesis": ["bbm premium", "bbm genesis"],
+    "BBM Special / Theme Sets": ["bbm special", "bbm theme"],
+    "Epoch OB Club / Holographica": ["epoch ob club", "epoch holographica"],
+  };
+  const exactAliases = aliases[approved];
+  if (exactAliases) return exactAliases.some((phrase) => titleHasPhrase(titleNorm, phrase));
+
+  const setNorm = normalizeText(approved);
+  if (titleHasPhrase(titleNorm, setNorm)) return true;
+
+  const brandTokens = ["topps", "bowman", "panini", "donruss", "bbm", "epoch", "calbee", "prizm", "select", "fleer", "ultra"];
+  const common = new Set(["base", "card", "cards", "set", "sets", "series", "and", "the", "collection", "edition"]);
+  const setTokens = setNorm.split(" ").filter(Boolean);
+  const brands = setTokens.filter((token) => brandTokens.includes(token));
+  if (brands.length > 0 && !brands.some((brand) => titleHasPhrase(titleNorm, brand))) return false;
+
+  const discriminators = setTokens.filter((token) => !brandTokens.includes(token) && !common.has(token));
+  if (discriminators.length === 0) return brands.length === 0 || brands.some((brand) => titleHasPhrase(titleNorm, brand));
+
+  return discriminators.every((token) => titleHasPhrase(titleNorm, token));
+}
+
+export function verifyCompTitle(
+  title: string | null | undefined,
+  lookup: {
+    player_name?: string | null;
+    year?: string | number | null;
+    set_name?: string | null;
+    card_number?: string | null;
+    is_autograph?: boolean | null;
+    serial_number?: string | null;
+    is_first_bowman?: boolean | null;
+    selected_parallel_name?: string | null;
+    hasSelectedParallel?: boolean;
+  },
+): { verified: boolean; reasons: string[] } {
+  const rawTitle = compact(title);
+  const reasons: string[] = [];
+  if (!rawTitle) return { verified: false, reasons: ["missing title"] };
+
+  const titleNorm = normalizeText(rawTitle);
+  const playerTokens = normalizeText(lookup.player_name)
+    .split(" ")
+    .filter((t) => t.length > 1);
+  if (playerTokens.length > 0 && !playerTokens.every((t) => titleHasPhrase(titleNorm, t))) {
+    reasons.push("player name mismatch");
+  }
+
+  const year = compact(lookup.year);
+  if (year && !new RegExp(`(^|[^0-9])${escapeRegex(year)}($|[^0-9])`).test(rawTitle)) {
+    reasons.push("year mismatch");
+  }
+
+  if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
+    reasons.push("set mismatch");
+  }
+
+  const wantedNumber = normalizeCardNumber(lookup.card_number);
+  if (wantedNumber) {
+    const explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
+    if (!explicitNumbers.includes(wantedNumber)) {
+      reasons.push(`card number #${compact(lookup.card_number).replace(/^#\s*/, "")} not explicit`);
+    }
+  }
+
+  const isAutoTitle = AUTO_RE.test(rawTitle);
+  if (lookup.is_autograph && !isAutoTitle) reasons.push("missing autograph marker");
+  if (!lookup.is_autograph && isAutoTitle) reasons.push("autograph mismatch");
+
+  const serial = serialSearchTerm(lookup.serial_number);
+  if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) reasons.push("serial mismatch");
+
+  if (isVariantTitle(rawTitle, {
+    hasSelectedParallel: lookup.hasSelectedParallel,
+    selectedParallelName: lookup.selected_parallel_name,
+    set_name: lookup.set_name,
+    is_autograph: lookup.is_autograph,
+    serial_number: lookup.serial_number,
+    is_first_bowman: lookup.is_first_bowman,
+  })) {
+    reasons.push(isNonSingleCardListing(rawTitle) ? "sealed/lot/non-single listing" : "parallel or variation mismatch");
+  }
+
+  return { verified: reasons.length === 0, reasons };
+}
+
 export function extractMarketplaceCardNumbers(title: string): string[] {
   const values = new Set<string>();
   const patterns = [
@@ -339,48 +441,8 @@ function pricingRecordMatches(
     selected_parallel_name?: string | null;
   },
 ): boolean {
-  const rawTitle = record.title ?? "";
-  if (!rawTitle.trim()) return false;
-  const title = normalizeText(rawTitle);
-  const playerTokens = normalizeText(lookup.player_name)
-    .split(" ")
-    .filter((t) => t.length > 1);
-  if (playerTokens.length > 0 && !playerTokens.every((t) => title.includes(t))) return false;
-  const year = compact(lookup.year);
-  if (year && !rawTitle.includes(year)) return false;
-  if (!setTitleMatches(rawTitle, lookup.set_name)) return false;
-  const number = compact(lookup.card_number).replace(/^#\s*/, "");
-  if (number) {
-    const explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
-    const wanted = normalizeCardNumber(number);
-    if (explicitNumbers.length > 0) {
-      if (!explicitNumbers.includes(wanted)) return false;
-    } else {
-      const numberPattern = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
-      if (!numberPattern.test(rawTitle)) return false;
-    }
-  }
-
-  const isAutoTitle = /\b(auto|autograph|autographs|signed|signature)\b/i.test(rawTitle);
-  if (lookup.is_autograph && !isAutoTitle) return false;
-  if (!lookup.is_autograph && isAutoTitle) return false;
-
-  const serial = serialSearchTerm(lookup.serial_number);
-  if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) return false;
-
-  // Grader/grade are considered but never required — many marketplace titles
-  // omit the grader name (or use only the grade number). Filtering on them
-  // eliminated legitimate comps for niche graders (e.g. Arena Club).
-
-  if (isVariantTitle(rawTitle, {
-    is_autograph: lookup.is_autograph,
-    serial_number: lookup.serial_number,
-    is_first_bowman: lookup.is_first_bowman,
-    set_name: lookup.set_name,
-    selectedParallelName: lookup.selected_parallel_name,
-  })) return false;
-
-  return Number.isFinite(record.price) && record.price > 0;
+  if (!Number.isFinite(record.price) || record.price <= 0) return false;
+  return verifyCompTitle(record.title, lookup).verified;
 }
 
 // Shared parallel/variant regexes used by both the structured and pt130 paths.
@@ -523,27 +585,7 @@ function pricingRecordMatchesStructured(
   // name (e.g. "Base"), which was wiping out every legitimate comp. Rely on
   // title-based variant detection below to filter true parallel variants.
 
-  const rawTitle = record.title ?? "";
-
-  if (isNonSingleCardListing(rawTitle)) return false;
-
-  // The structured endpoint is already scoped by canonical card_id. Do not
-  // require every title to repeat year/set/card-number; many legitimate sold
-  // listings omit one of those fields. Only remove sealed/multi-item listings
-  // and variant mismatches below.
-
-  const isAutoTitle = AUTO_RE.test(rawTitle);
-  if (lookup.is_autograph && !isAutoTitle) return false;
-  if (!lookup.is_autograph && isAutoTitle) return false;
-
-  const serial = serialSearchTerm(lookup.serial_number);
-  if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) return false;
-
-  if (isVariantTitle(rawTitle, { hasSelectedParallel, selectedParallelName: lookup.selected_parallel_name, set_name: lookup.set_name, is_autograph: lookup.is_autograph, serial_number: lookup.serial_number, is_first_bowman: lookup.is_first_bowman })) {
-    return false;
-  }
-
-  return true;
+  return verifyCompTitle(record.title, { ...lookup, hasSelectedParallel }).verified;
 }
 
 function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): number {
