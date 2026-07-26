@@ -323,11 +323,30 @@ function strictSetTitleMatches(title: string, setName: string | null | undefined
     "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
     "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
     "Contenders / Contenders Draft Picks": ["contenders", "contenders draft picks"],
+    "BBM 1st Version": ["bbm 1st version", "bbm first version", "bbm 1st", "bbm first"],
+    "BBM 2nd Version": ["bbm 2nd version", "bbm second version", "bbm 2nd", "bbm second"],
+    "BBM Fusion": ["bbm fusion"],
     "BBM Rookie Edition": ["bbm rookie edition", "bbm rookie"],
     "BBM Draft": ["bbm draft"],
+    "BBM Team Sets": ["bbm team set", "bbm team sets"],
     "BBM Premium / Genesis": ["bbm premium", "bbm genesis"],
+    "BBM Glory": ["bbm glory"],
+    "BBM Infinity": ["bbm infinity"],
+    "BBM Icons": ["bbm icons"],
+    "BBM Crown": ["bbm crown"],
     "BBM Special / Theme Sets": ["bbm special", "bbm theme"],
+    "Epoch NPB": ["epoch npb"],
+    "Epoch NPB Luxury Collection": ["epoch npb luxury", "epoch luxury collection", "epoch luxury"],
+    "Epoch Team Premier Edition": ["epoch team premier edition", "epoch premier"],
+    "Epoch Stars & Legends": ["epoch stars legends", "epoch stars and legends"],
+    "Epoch Rookie Sets": ["epoch rookie set", "epoch rookie sets"],
     "Epoch OB Club / Holographica": ["epoch ob club", "epoch holographica"],
+    "Epoch Team Sets": ["epoch team set", "epoch team sets"],
+    "Topps NPB Chrome": ["topps npb chrome"],
+    "Topps NPB Stadium Club": ["topps npb stadium club"],
+    "Topps NPB Finest": ["topps npb finest"],
+    "Topps Bowman NPB": ["topps bowman npb", "bowman npb"],
+    "Topps NPB 206": ["topps npb 206", "npb 206"],
   };
   const exactAliases = aliases[approved];
   if (exactAliases) return exactAliases.some((phrase) => titleHasPhrase(titleNorm, phrase));
@@ -385,7 +404,7 @@ export function verifyCompTitle(
   const wantedNumber = normalizeCardNumber(lookup.card_number);
   if (wantedNumber) {
     const explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
-    if (!explicitNumbers.includes(wantedNumber)) {
+    if (explicitNumbers.length > 0 && !explicitNumbers.includes(wantedNumber)) {
       reasons.push(`card number #${compact(lookup.card_number).replace(/^#\s*/, "")} not explicit`);
     }
   }
@@ -535,7 +554,7 @@ export function titleMatchesCard(
   if (number && lookup.requireCardNumber !== false) {
     const explicitNumbers = extractMarketplaceCardNumbers(title);
     const wanted = normalizeCardNumber(number);
-    if (!explicitNumbers.includes(wanted)) return false;
+    if (explicitNumbers.length > 0 && !explicitNumbers.includes(wanted)) return false;
   }
   return true;
 }
@@ -611,7 +630,12 @@ function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean 
   const wantedNumber = normalizeCardNumber(lookup.card_number);
   if (wantedNumber && normalizeCardNumber(candidate.number) !== wantedNumber) return false;
 
-  return Boolean(sanitizeSetName(candidate.releaseName, candidate.setName));
+  const candidateSet = sanitizeSetName(candidate.releaseName, candidate.setName);
+  if (!candidateSet) return false;
+  const wantedSet = toApprovedCardSet(lookup.set_name);
+  if (wantedSet && candidateSet !== wantedSet) return false;
+
+  return true;
 }
 
 function setCandidateFromCard(card: CatalogCard, lookup: CardLookup): SetCandidate | null {
