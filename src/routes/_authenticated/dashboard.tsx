@@ -1253,8 +1253,17 @@ type SaleRow = {
   url?: string | null;
 };
 
+function isNonSingleSaleTitle(title: string | null | undefined) {
+  const raw = String(title ?? "").trim();
+  if (!raw) return false;
+  const nonSingle = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
+  const sealedWords = /\b(factory|sealed|unopened|hobby|jumbo|blaster|retail|mega|hanger|value|cello|wax)\b/i;
+  const containers = /\b(box|boxes|case|cases|pack|packs|product|wax)\b/i;
+  return nonSingle.test(raw) || (sealedWords.test(raw) && containers.test(raw));
+}
+
 function RecentComparables({ sales }: { sales: SaleRow[] }) {
-  const valid = (sales ?? []).filter((s) => Number.isFinite(Number(s.price)) && Number(s.price) > 0);
+  const valid = (sales ?? []).filter((s) => Number.isFinite(Number(s.price)) && Number(s.price) > 0 && !isNonSingleSaleTitle(s.title));
   if (valid.length === 0) {
     return (
       <div>
