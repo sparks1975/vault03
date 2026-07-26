@@ -991,6 +991,12 @@ function CardDetail({
         {card.photo_url ? (
           <img
             src={card.photo_url}
+            srcSet={
+              card.photo_url_2x
+                ? `${card.photo_url} 1x, ${card.photo_url_2x} 2x`
+                : undefined
+            }
+            sizes="(min-width: 1024px) 40vw, 92vw"
             alt={card.player_name}
             decoding="async"
             fetchPriority="high"
