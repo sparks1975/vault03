@@ -323,7 +323,7 @@ function strictSetTitleMatches(title: string, setName: string | null | undefined
     "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
     "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
     "Contenders / Contenders Draft Picks": ["contenders", "contenders draft picks"],
-    "BBM 1st Version": ["bbm 1st version", "bbm first version", "bbm 1st", "bbm first"],
+    "BBM 1st Version": ["bbm 1st version", "bbm first version", "bbm 1st", "bbm first", "bbm rookie edition", "bbm rookie"],
     "BBM 2nd Version": ["bbm 2nd version", "bbm second version", "bbm 2nd", "bbm second"],
     "BBM Fusion": ["bbm fusion"],
     "BBM Rookie Edition": ["bbm rookie edition", "bbm rookie"],
@@ -439,7 +439,7 @@ export function extractMarketplaceCardNumbers(title: string): string[] {
   const values = new Set<string>();
   const patterns = [
     /#\s*([A-Za-z0-9][A-Za-z0-9.-]{0,14})\b/g,
-    /\b(?:no|card)\.?\s*#?\s*([A-Za-z0-9][A-Za-z0-9.-]{0,14})\b/gi,
+    /\b(?:no\.?|card\s*(?:no\.?|number|#))\s*#?\s*([A-Za-z0-9][A-Za-z0-9.-]{0,14})\b/gi,
     /\b([A-Z]{1,5}-[A-Z0-9]{1,8})\b/g,
   ];
   for (const pattern of patterns) {
