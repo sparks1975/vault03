@@ -20,6 +20,7 @@ export type Database = {
           created_at: string
           grade: string | null
           id: string
+          is_manual: boolean
           price: number
           sold_at: string
           source: string | null
@@ -32,6 +33,7 @@ export type Database = {
           created_at?: string
           grade?: string | null
           id?: string
+          is_manual?: boolean
           price: number
           sold_at: string
           source?: string | null
@@ -44,6 +46,7 @@ export type Database = {
           created_at?: string
           grade?: string | null
           id?: string
+          is_manual?: boolean
           price?: number
           sold_at?: string
           source?: string | null
