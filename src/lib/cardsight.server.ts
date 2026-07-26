@@ -1193,3 +1193,26 @@ export function trimOutliersIQR(values: number[]): number[] {
   const trimmed = s.filter((v) => v >= lo && v <= hi);
   return trimmed.length >= 3 ? trimmed : s;
 }
+
+// Unfiltered candidate pull for the manual-comp picker. Includes raw + all
+// graded buckets, tagged with grade in the source so the UI can label them.
+export async function fetchAllCompCandidates(
+  card_id: string,
+  opts: { period?: string } = {},
+): Promise<PricingRecord[]> {
+  const params = new URLSearchParams();
+  params.set("period", opts.period ?? "5y");
+  const resp = await csFetch<PricingResponse>(`/v1/pricing/${card_id}?${params.toString()}`);
+  const rows: PricingRecord[] = [];
+  for (const r of resp.raw?.records ?? []) rows.push(r);
+  for (const co of resp.graded ?? []) {
+    for (const g of co.grades ?? []) {
+      for (const r of g.records ?? []) {
+        const label = `${co.company_name} ${g.grade_value}`;
+        rows.push({ ...r, source: r.source ? `${r.source} · ${label}` : label });
+      }
+    }
+  }
+  return dedupePricingRecords(rows);
+}
+
