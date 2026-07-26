@@ -1315,7 +1315,10 @@ function RecentComparables({ sales, cardId }: { sales: SaleRow[]; cardId: string
   const fmtUsd = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
   return (
     <div>
-      <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4 border-b border-border pb-2">Recent Comparables</h3>
+      <div className="flex items-center justify-between mb-4 border-b border-border pb-2">
+        <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Recent Comparables</h3>
+        {headerBtn}
+      </div>
       <div className="overflow-x-auto -mx-6 px-6">
         <table className="w-full text-left">
           <thead>
@@ -1366,9 +1369,208 @@ function RecentComparables({ sales, cardId }: { sales: SaleRow[]; cardId: string
       <p className="mt-4 text-[9px] font-mono text-muted-foreground uppercase tracking-widest">
         Values reflect sold comps from eBay across all available history.
       </p>
+      {manageOpen && <ManageCompsDialog cardId={cardId} onClose={() => setManageOpen(false)} />}
     </div>
   );
 }
+
+type CompCandidate = {
+  title: string | null;
+  price: number;
+  sold_at: string | null;
+  source: string;
+  url: string | null;
+};
+
+function candidateKey(c: { url: string | null; title: string | null; price: number | string; sold_at: string | null }) {
+  return c.url || `${c.title ?? ""}|${c.price}|${c.sold_at ?? ""}`;
+}
+
+function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () => void }) {
+  const fetchFn = useServerFn(fetchCompCandidates);
+  const addFn = useServerFn(addManualComps);
+  const removeFn = useServerFn(removeManualComp);
+  const qc = useQueryClient();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [candidates, setCandidates] = useState<CompCandidate[]>([]);
+  const [existing, setExisting] = useState<Array<{ id: string; url: string | null; title: string | null; price: number | string; sold_at: string | null; source: string | null }>>([]);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [filter, setFilter] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const r = await fetchFn({ data: { card_id: cardId } });
+        if (!alive) return;
+        setCandidates(r.candidates as CompCandidate[]);
+        setExisting(r.selected);
+        setSelectedKeys(new Set(r.selected.map((s) => candidateKey({ url: s.url, title: s.title, price: Number(s.price), sold_at: s.sold_at }))));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to load candidates");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardId]);
+
+  // Merge existing manual comps into displayable list so users can toggle them off.
+  const merged: CompCandidate[] = useMemo(() => {
+    const known = new Set(candidates.map(candidateKey));
+    const extras: CompCandidate[] = existing
+      .filter((e) => !known.has(candidateKey({ url: e.url, title: e.title, price: Number(e.price), sold_at: e.sold_at })))
+      .map((e) => ({ title: e.title, price: Number(e.price), sold_at: e.sold_at, source: e.source ?? "eBay sold", url: e.url }));
+    const all = [...candidates, ...extras];
+    const q = filter.trim().toLowerCase();
+    return q ? all.filter((c) => (c.title ?? "").toLowerCase().includes(q)) : all;
+  }, [candidates, existing, filter]);
+
+  function toggle(key: string) {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      const existingByKey = new Map(existing.map((e) => [candidateKey({ url: e.url, title: e.title, price: Number(e.price), sold_at: e.sold_at }), e]));
+      // Remove any existing manual comps that are no longer selected.
+      const toRemove = existing.filter((e) => !selectedKeys.has(candidateKey({ url: e.url, title: e.title, price: Number(e.price), sold_at: e.sold_at })));
+      for (const r of toRemove) {
+        await removeFn({ data: { id: r.id, card_id: cardId } });
+      }
+      // Add newly selected candidates that aren't already stored.
+      const candidateByKey = new Map(candidates.map((c) => [candidateKey(c), c]));
+      const toAdd: CompCandidate[] = [];
+      for (const k of selectedKeys) {
+        if (existingByKey.has(k)) continue;
+        const c = candidateByKey.get(k);
+        if (c) toAdd.push(c);
+      }
+      if (toAdd.length > 0) {
+        await addFn({ data: { card_id: cardId, comps: toAdd } });
+      }
+      await qc.invalidateQueries({ queryKey: ["cards"] });
+      toast.success("Comps updated");
+      onClose();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const fmtUsd = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card border border-border shadow-lg w-full max-w-3xl max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="p-4 border-b border-border flex items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-mono uppercase tracking-widest">Manage comps</h3>
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Pick the listings that match your card. Selected comps merge with the automated set when computing value.
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="p-3 border-b border-border">
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter by title..."
+            className="w-full bg-background border border-border px-3 py-2 text-xs"
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="p-6 text-center text-xs text-muted-foreground flex items-center justify-center gap-2">
+              <Loader2 className="size-4 animate-spin" /> Loading candidates…
+            </div>
+          ) : merged.length === 0 ? (
+            <div className="p-6 text-center text-xs text-muted-foreground">
+              No candidates returned. Try a manual re-value first, or check the source APIs.
+            </div>
+          ) : (
+            <ul className="divide-y divide-border">
+              {merged.map((c) => {
+                const key = candidateKey(c);
+                const checked = selectedKeys.has(key);
+                const dateStr = c.sold_at
+                  ? new Date(c.sold_at).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "2-digit" })
+                  : "—";
+                return (
+                  <li key={key} className="flex items-start gap-3 p-3 hover:bg-muted/30">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(key)}
+                      className="mt-1 shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs truncate" title={c.title ?? ""}>{c.title ?? "(no title)"}</p>
+                      <div className="flex items-center gap-2 mt-1 text-[10px] font-mono text-muted-foreground uppercase">
+                        <span>{dateStr}</span>
+                        <span>·</span>
+                        <span className="truncate">{c.source}</span>
+                        {c.url && (
+                          <>
+                            <span>·</span>
+                            <a href={c.url} target="_blank" rel="noopener noreferrer" className="underline decoration-dotted hover:text-foreground">
+                              view ↗
+                            </a>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    <div className="text-xs font-mono whitespace-nowrap">{fmtUsd(Number(c.price))}</div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+        <div className="p-3 border-t border-border flex items-center justify-between gap-3">
+          <span className="text-[10px] font-mono text-muted-foreground uppercase">
+            {selectedKeys.size} selected
+          </span>
+          <div className="flex gap-2">
+            <button
+              onClick={onClose}
+              className="text-xs font-mono uppercase px-3 py-2 border border-border hover:bg-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={save}
+              disabled={saving}
+              className="text-xs font-mono uppercase px-3 py-2 bg-primary text-primary-foreground disabled:opacity-60 inline-flex items-center gap-2"
+            >
+              {saving && <Loader2 className="size-3 animate-spin" />}
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 
 
