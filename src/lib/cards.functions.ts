@@ -218,8 +218,21 @@ async function applyValuation(
   });
   const validSalePrices = singleCardSales
     .map((s) => Number(s.price))
-    .filter((price) => Number.isFinite(price) && price > 0)
-    .sort((a, b) => a - b);
+    .filter((price) => Number.isFinite(price) && price > 0);
+  // Merge any preserved manual comps into the median so user picks influence value.
+  const { data: manualRows } = await supabase
+    .from("card_sales")
+    .select("price, title")
+    .eq("card_id", cardId)
+    .eq("is_manual", true);
+  const nonSingleRe = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
+  for (const m of manualRows ?? []) {
+    const p = Number(m.price);
+    if (Number.isFinite(p) && p > 0 && !nonSingleRe.test(String(m.title ?? ""))) {
+      validSalePrices.push(p);
+    }
+  }
+  validSalePrices.sort((a, b) => a - b);
   const medianSaleValue = (() => {
     if (validSalePrices.length === 0) return null;
     const mid = Math.floor(validSalePrices.length / 2);
@@ -229,7 +242,7 @@ async function applyValuation(
   })();
   const currentValue = medianSaleValue ?? valuation.current_value;
 
-  await supabase.from("card_sales").delete().eq("card_id", cardId);
+  await supabase.from("card_sales").delete().eq("card_id", cardId).eq("is_manual", false);
   await supabase.from("card_value_history").delete().eq("card_id", cardId);
   if (singleCardSales.length) {
     const { error } = await supabase.from("card_sales").insert(
@@ -424,3 +437,170 @@ export const compressExistingPhotos = createServerFn({ method: "POST" })
     }
     return { processed, skipped, failed, bytesBefore, bytesAfter };
   });
+
+// ---------- Manual comp override ----------
+
+const NON_SINGLE_RE_LOCAL = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
+
+async function recomputeCardValue(
+  supabase: Awaited<ReturnType<typeof import("@supabase/supabase-js").createClient<Database>>>,
+  cardId: string,
+) {
+  const { data: rows } = await supabase
+    .from("card_sales")
+    .select("price, title")
+    .eq("card_id", cardId);
+  const prices = (rows ?? [])
+    .filter((r) => !NON_SINGLE_RE_LOCAL.test(String(r.title ?? "")))
+    .map((r) => Number(r.price))
+    .filter((p) => Number.isFinite(p) && p > 0)
+    .sort((a, b) => a - b);
+  if (prices.length === 0) return;
+  const mid = Math.floor(prices.length / 2);
+  const med = prices.length % 2 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
+  await supabase
+    .from("cards")
+    .update({ current_value: med, last_valued_at: new Date().toISOString() } as never)
+    .eq("id", cardId);
+}
+
+export const fetchCompCandidates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ card_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: card, error } = await supabase
+      .from("cards")
+      .select("id, cardsight_card_id")
+      .eq("id", data.card_id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (error) throw error;
+
+    const candidates: Array<{
+      title: string | null;
+      price: number;
+      sold_at: string | null;
+      source: string;
+      url: string | null;
+    }> = [];
+
+    if (card?.cardsight_card_id) {
+      try {
+        const { fetchAllCompCandidates } = await import("./cardsight.server");
+        const rows = await fetchAllCompCandidates(card.cardsight_card_id);
+        for (const r of rows) {
+          const price = Number(r.price);
+          if (!Number.isFinite(price) || price <= 0) continue;
+          candidates.push({
+            title: r.title ?? null,
+            price,
+            sold_at: r.date ?? null,
+            source: r.source || "eBay sold",
+            url: r.url ?? null,
+          });
+        }
+      } catch (err) {
+        console.error("fetchCompCandidates cardsight failed", err);
+      }
+    }
+
+    // Include cached 130point rows if any.
+    const { data: pt } = await supabase
+      .from("pt130_comps")
+      .select("title, price, sold_at, url")
+      .eq("card_id", data.card_id)
+      .eq("user_id", userId);
+    for (const r of pt ?? []) {
+      const price = Number(r.price);
+      if (!Number.isFinite(price) || price <= 0) continue;
+      candidates.push({
+        title: r.title ?? null,
+        price,
+        sold_at: r.sold_at ?? null,
+        source: "eBay sold",
+        url: r.url ?? null,
+      });
+    }
+
+    // Dedupe by url (or title|price|date).
+    const seen = new Set<string>();
+    const deduped = candidates.filter((c) => {
+      const key = c.url || `${c.title ?? ""}|${c.price}|${c.sold_at ?? ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    deduped.sort((a, b) => {
+      const ta = a.sold_at ? new Date(a.sold_at).getTime() : 0;
+      const tb = b.sold_at ? new Date(b.sold_at).getTime() : 0;
+      return tb - ta;
+    });
+
+    const { data: selected } = await supabase
+      .from("card_sales")
+      .select("id, url, title, price, sold_at, source")
+      .eq("card_id", data.card_id)
+      .eq("is_manual", true);
+
+    return { candidates: deduped, selected: selected ?? [] };
+  });
+
+export const addManualComps = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z
+      .object({
+        card_id: z.string().uuid(),
+        comps: z
+          .array(
+            z.object({
+              title: z.string().nullable(),
+              price: z.number().positive(),
+              sold_at: z.string().nullable(),
+              source: z.string(),
+              url: z.string().nullable(),
+            }),
+          )
+          .max(200),
+      })
+      .parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    if (data.comps.length > 0) {
+      const { error } = await supabase.from("card_sales").insert(
+        data.comps.map((c) => ({
+          card_id: data.card_id,
+          user_id: userId,
+          sold_at: c.sold_at ? c.sold_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
+          grade: null,
+          price: c.price,
+          source: c.source || "eBay sold",
+          url: c.url,
+          title: c.title,
+          is_manual: true,
+        })) as never,
+      );
+      if (error) throw error;
+    }
+    await recomputeCardValue(supabase as never, data.card_id);
+    return { ok: true };
+  });
+
+export const removeManualComp = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ id: z.string().uuid(), card_id: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    await supabase
+      .from("card_sales")
+      .delete()
+      .eq("id", data.id)
+      .eq("is_manual", true);
+    await recomputeCardValue(supabase as never, data.card_id);
+    return { ok: true };
+  });
+
