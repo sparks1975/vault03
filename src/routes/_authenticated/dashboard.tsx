@@ -1544,6 +1544,7 @@ function candidateMatchesExisting(candidate: CompCandidate, existing: ExistingCo
 
 function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () => void }) {
   const fetchFn = useServerFn(fetchCompCandidates);
+  const previewFn = useServerFn(fetchCompPreviews);
   const addFn = useServerFn(addManualComps);
   const removeFn = useServerFn(removeManualComp);
   const qc = useQueryClient();
@@ -1553,6 +1554,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
   const [existing, setExisting] = useState<ExistingComp[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
+  const [previews, setPreviews] = useState<Record<string, { image: string | null; title: string | null; description: string | null }>>({});
 
   useEffect(() => {
     let alive = true;
@@ -1572,6 +1574,36 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardId]);
+
+  // Fetch OG image/description previews for each unique URL, in batches.
+  useEffect(() => {
+    const allUrls = new Set<string>();
+    for (const c of candidates) if (c.url) allUrls.add(c.url);
+    for (const e of existing) if (e.url) allUrls.add(e.url);
+    const need = Array.from(allUrls).filter((u) => !(u in previews));
+    if (need.length === 0) return;
+    let alive = true;
+    (async () => {
+      const BATCH = 20;
+      for (let i = 0; i < need.length; i += BATCH) {
+        const slice = need.slice(i, i + BATCH);
+        try {
+          const r = await previewFn({ data: { urls: slice } });
+          if (!alive) return;
+          setPreviews((prev) => {
+            const next = { ...prev };
+            for (const p of r.previews) next[p.url] = { image: p.image, title: p.title, description: p.description };
+            return next;
+          });
+        } catch {
+          // ignore preview failures; UI degrades gracefully
+        }
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidates, existing]);
+
 
   // Merge currently selected comps into displayable list so users can toggle them off.
   const merged: CompCandidate[] = useMemo(() => {
