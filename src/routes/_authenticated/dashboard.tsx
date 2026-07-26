@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X, ChevronLeft, RefreshCw, GripVertical } from "lucide-react";
 import {
@@ -783,39 +783,11 @@ function CardDetail({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Partial<Card>>({});
   const [playerResults, setPlayerResults] = useState<Awaited<ReturnType<typeof searchMlbPlayer>>>([]);
-  const [imgLoaded, setImgLoaded] = useState(!card.photo_url);
-  const [imgWaitExpired, setImgWaitExpired] = useState(false);
-
-  useLayoutEffect(() => {
-    setImgLoaded(!card.photo_url);
-    setImgWaitExpired(false);
-  }, [card.id, card.photo_url]);
+  const [imgLoaded, setImgLoaded] = useState(true);
 
   useEffect(() => {
-    if (!card.photo_url) return;
-    let cancelled = false;
-    const timeout = window.setTimeout(() => {
-      if (!cancelled) setImgWaitExpired(true);
-    }, 900);
-    const img = new Image();
-    img.onload = () => {
-      if (!cancelled) setImgLoaded(true);
-    };
-    img.onerror = () => {
-      if (!cancelled) setImgLoaded(true);
-    };
-    img.src = card.photo_url;
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timeout);
-    };
+    setImgLoaded(!card.photo_url);
   }, [card.id, card.photo_url]);
-
-  const imgRefCb = (el: HTMLImageElement | null) => {
-    if (el && el.complete && el.naturalWidth > 0 && (el.currentSrc === card.photo_url || el.src === card.photo_url)) {
-      setImgLoaded(true);
-    }
-  };
 
   const stats = useQuery({
     queryKey: ["stats", card.mlb_player_id],
@@ -823,7 +795,7 @@ function CardDetail({
     enabled: !!card.mlb_player_id,
   });
 
-  const contentReady = editing || imgLoaded || imgWaitExpired;
+  const contentReady = editing || imgLoaded;
 
   function startEdit() {
     setDraft({
@@ -1001,7 +973,6 @@ function CardDetail({
       <div className="w-full aspect-[2/3] bg-secondary mb-8 border border-border overflow-hidden grid place-items-center">
         {card.photo_url ? (
           <img
-            ref={imgRefCb}
             src={card.photo_url}
             alt={card.player_name}
             className="w-full h-full object-cover"
@@ -1879,6 +1850,7 @@ function AddCardDialog({
       });
 
       onCreated(created.id);
+      onClose();
       toast.success("Card added. Fetching valuation…");
 
       // Async valuation
@@ -1924,7 +1896,6 @@ function AddCardDialog({
         console.error("Valuation failed", e);
       }
       void updateFn;
-      onClose();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Save failed");
     } finally {
