@@ -160,6 +160,8 @@ type Card = {
   sales: Sale[];
   history: HistoryPoint[];
   photo_thumb_url?: string | null;
+  photo_thumb_url_2x?: string | null;
+  photo_url_2x?: string | null;
 };
 
 function fmt(n: number | null | undefined) {
