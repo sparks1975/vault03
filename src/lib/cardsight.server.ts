@@ -517,9 +517,11 @@ function pricingRecordMatchesStructured(
   const hasSelectedParallel = Boolean(lookup.parallel_id);
   if (lookup.parallel_id) {
     if (record.parallel_id && record.parallel_id !== lookup.parallel_id) return false;
-  } else if (record.parallel_id || record.parallel_name) {
-    return false;
   }
+  // When no parallel is selected, don't blanket-reject records that carry a
+  // parallel tag. Cardsight often labels base/graded records with a parallel
+  // name (e.g. "Base"), which was wiping out every legitimate comp. Rely on
+  // title-based variant detection below to filter true parallel variants.
 
   const rawTitle = record.title ?? "";
 
