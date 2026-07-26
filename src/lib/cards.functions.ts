@@ -168,8 +168,7 @@ export const createCard = createServerFn({ method: "POST" })
     if (error) throw error;
     return {
       ...row,
-      photo_url: await signPhoto(supabase as never, row.photo_url),
-      photo_thumb_url: await signPhotoThumb(supabase as never, row.photo_url),
+      ...(await signPhotoVariants(supabase as never, row.photo_url)),
       sales: [],
       history: [],
     };
