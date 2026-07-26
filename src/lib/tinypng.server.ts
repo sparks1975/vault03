@@ -7,6 +7,9 @@ export async function compressBytes(
 ): Promise<{ bytes: Uint8Array; contentType: string }> {
   const key = process.env.TINYPNG_API_KEY;
   if (!key) return { bytes, contentType };
+  // Locally resized card JPEGs are already small; avoid adding a remote API
+  // round-trip that can make saves feel stuck.
+  if (bytes.byteLength <= 500_000) return { bytes, contentType };
   // TinyPNG only supports PNG/JPEG/WebP.
   if (!/^image\/(png|jpe?g|webp)$/i.test(contentType)) {
     return { bytes, contentType };

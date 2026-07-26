@@ -13,6 +13,8 @@ interface Props {
 
 // Standard trading card aspect ratio (2.5 x 3.5 inches).
 const CARD_ASPECT = 2.5 / 3.5;
+const MAX_CARD_IMAGE_WIDTH = 900;
+const MAX_CARD_IMAGE_HEIGHT = 1260;
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
@@ -45,22 +47,30 @@ async function getCroppedDataUrl(
   rctx.rotate(rad);
   rctx.drawImage(image, -image.width / 2, -image.height / 2);
 
+  const sourceWidth = Math.max(1, Math.round(crop.width));
+  const sourceHeight = Math.max(1, Math.round(crop.height));
+  const scale = Math.min(1, MAX_CARD_IMAGE_WIDTH / sourceWidth, MAX_CARD_IMAGE_HEIGHT / sourceHeight);
+  const outWidth = Math.max(1, Math.round(sourceWidth * scale));
+  const outHeight = Math.max(1, Math.round(sourceHeight * scale));
+
   const out = document.createElement("canvas");
-  out.width = Math.round(crop.width);
-  out.height = Math.round(crop.height);
+  out.width = outWidth;
+  out.height = outHeight;
   const octx = out.getContext("2d")!;
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = "high";
   octx.drawImage(
     rotCanvas,
     Math.round(crop.x),
     Math.round(crop.y),
-    Math.round(crop.width),
-    Math.round(crop.height),
+    sourceWidth,
+    sourceHeight,
     0,
     0,
-    Math.round(crop.width),
-    Math.round(crop.height),
+    outWidth,
+    outHeight,
   );
-  return out.toDataURL("image/jpeg", 0.92);
+  return out.toDataURL("image/jpeg", 0.82);
 }
 
 export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use photo", busy }: Props) {
