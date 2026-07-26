@@ -455,6 +455,9 @@ function Dashboard() {
   function selectCard(id: string) {
     setSelectedId(id);
     setMobileDetail(true);
+    if (typeof window !== "undefined" && window.innerWidth >= 1024) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   return (
