@@ -314,23 +314,56 @@ function titleHasPhrase(titleNorm: string, phrase: string): boolean {
   return new RegExp(`(^| )${escapeRegex(normalizedPhrase)}($| )`, "i").test(titleNorm);
 }
 
+const SET_TITLE_ALIASES: Record<string, string[]> = {
+  "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
+  "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
+  "Contenders / Contenders Draft Picks": ["contenders", "contenders draft picks"],
+  "BBM 1st Version": ["bbm 1st version", "bbm first version", "bbm 1st", "bbm first"],
+  "BBM 2nd Version": ["bbm 2nd version", "bbm second version", "bbm 2nd", "bbm second"],
+  "BBM Fusion": ["bbm fusion"],
+  "BBM Rookie Edition": ["bbm rookie edition", "bbm rookie"],
+  "BBM Draft": ["bbm draft"],
+  "BBM Team Sets": ["bbm team set", "bbm team sets"],
+  "BBM Premium / Genesis": ["bbm premium", "bbm genesis"],
+  "BBM Glory": ["bbm glory"],
+  "BBM Infinity": ["bbm infinity"],
+  "BBM Icons": ["bbm icons"],
+  "BBM Crown": ["bbm crown"],
+  "BBM Special / Theme Sets": ["bbm special", "bbm theme"],
+  "Epoch NPB": ["epoch npb"],
+  "Epoch NPB Luxury Collection": ["epoch npb luxury", "epoch luxury collection", "epoch luxury"],
+  "Epoch Team Premier Edition": ["epoch team premier edition", "epoch premier"],
+  "Epoch Stars & Legends": ["epoch stars legends", "epoch stars and legends"],
+  "Epoch Rookie Sets": ["epoch rookie set", "epoch rookie sets"],
+  "Epoch OB Club / Holographica": ["epoch ob club", "epoch holographica"],
+  "Epoch Team Sets": ["epoch team set", "epoch team sets"],
+  "Topps NPB Chrome": ["topps npb chrome"],
+  "Topps NPB Stadium Club": ["topps npb stadium club"],
+  "Topps NPB Finest": ["topps npb finest"],
+  "Topps Bowman NPB": ["topps bowman npb", "bowman npb"],
+  "Topps NPB 206": ["topps npb 206", "npb 206"],
+};
+
+function titleMatchesKnownSetAlias(titleNorm: string, setName: string): boolean {
+  return (SET_TITLE_ALIASES[setName] ?? []).some((phrase) => titleHasPhrase(titleNorm, phrase));
+}
+
+function hasConflictingKnownSetAlias(titleNorm: string, setName: string | null | undefined): boolean {
+  const approved = toApprovedCardSet(setName) ?? compact(setName);
+  if (!approved) return false;
+  return Object.entries(SET_TITLE_ALIASES).some(([otherSet, phrases]) => {
+    if (otherSet === approved) return false;
+    const sameBrand = normalizeText(otherSet).split(" ")[0] === normalizeText(approved).split(" ")[0];
+    return sameBrand && phrases.some((phrase) => titleHasPhrase(titleNorm, phrase));
+  });
+}
+
 function strictSetTitleMatches(title: string, setName: string | null | undefined): boolean {
   const approved = toApprovedCardSet(setName) ?? compact(setName);
   if (!approved) return true;
 
   const titleNorm = normalizeText(title);
-  const aliases: Record<string, string[]> = {
-    "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
-    "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
-    "Contenders / Contenders Draft Picks": ["contenders", "contenders draft picks"],
-    "BBM Rookie Edition": ["bbm rookie edition", "bbm rookie"],
-    "BBM Draft": ["bbm draft"],
-    "BBM Premium / Genesis": ["bbm premium", "bbm genesis"],
-    "BBM Special / Theme Sets": ["bbm special", "bbm theme"],
-    "Epoch OB Club / Holographica": ["epoch ob club", "epoch holographica"],
-  };
-  const exactAliases = aliases[approved];
-  if (exactAliases) return exactAliases.some((phrase) => titleHasPhrase(titleNorm, phrase));
+  if (titleMatchesKnownSetAlias(titleNorm, approved)) return true;
 
   const setNorm = normalizeText(approved);
   if (titleHasPhrase(titleNorm, setNorm)) return true;
@@ -344,7 +377,9 @@ function strictSetTitleMatches(title: string, setName: string | null | undefined
   const discriminators = setTokens.filter((token) => !brandTokens.includes(token) && !common.has(token));
   if (discriminators.length === 0) return brands.length === 0 || brands.some((brand) => titleHasPhrase(titleNorm, brand));
 
-  return discriminators.every((token) => titleHasPhrase(titleNorm, token));
+  const matched = discriminators.filter((token) => titleHasPhrase(titleNorm, token)).length;
+  if (discriminators.length <= 2) return matched === discriminators.length;
+  return matched >= Math.max(2, discriminators.length - 1);
 }
 
 export function verifyCompTitle(
@@ -359,6 +394,7 @@ export function verifyCompTitle(
     is_first_bowman?: boolean | null;
     selected_parallel_name?: string | null;
     hasSelectedParallel?: boolean;
+    relaxedSetMatch?: boolean;
   },
 ): { verified: boolean; reasons: string[] } {
   const rawTitle = compact(title);
@@ -378,15 +414,19 @@ export function verifyCompTitle(
     reasons.push("year mismatch");
   }
 
-  if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
-    reasons.push("set mismatch");
+  const wantedNumber = normalizeCardNumber(lookup.card_number);
+  let explicitNumbers: string[] = [];
+  if (wantedNumber) {
+    explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
+    if (explicitNumbers.length > 0 && !explicitNumbers.includes(wantedNumber)) {
+      reasons.push(`card number #${compact(lookup.card_number).replace(/^#\s*/, "")} not explicit`);
+    }
   }
 
-  const wantedNumber = normalizeCardNumber(lookup.card_number);
-  if (wantedNumber) {
-    const explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
-    if (!explicitNumbers.includes(wantedNumber)) {
-      reasons.push(`card number #${compact(lookup.card_number).replace(/^#\s*/, "")} not explicit`);
+  if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
+    const hasExactCardNumber = wantedNumber && explicitNumbers.includes(wantedNumber);
+    if (!lookup.relaxedSetMatch || !hasExactCardNumber || hasConflictingKnownSetAlias(titleNorm, lookup.set_name)) {
+      reasons.push("set mismatch");
     }
   }
 
@@ -415,6 +455,7 @@ export function extractMarketplaceCardNumbers(title: string): string[] {
   const values = new Set<string>();
   const patterns = [
     /#\s*([A-Za-z0-9][A-Za-z0-9.-]{0,14})\b/g,
+    /\b(?:no\.?|card\s*(?:no\.?|number|#))\s*#?\s*([A-Za-z0-9][A-Za-z0-9.-]{0,14})\b/gi,
     /\b([A-Z]{1,5}-[A-Z0-9]{1,8})\b/g,
   ];
   for (const pattern of patterns) {
@@ -440,6 +481,7 @@ function pricingRecordMatches(
     grade?: string | null;
     is_first_bowman?: boolean | null;
     selected_parallel_name?: string | null;
+    relaxedSetMatch?: boolean;
   },
 ): boolean {
   if (!Number.isFinite(record.price) || record.price <= 0) return false;
@@ -535,7 +577,7 @@ export function titleMatchesCard(
   if (number && lookup.requireCardNumber !== false) {
     const explicitNumbers = extractMarketplaceCardNumbers(title);
     const wanted = normalizeCardNumber(number);
-    if (!explicitNumbers.includes(wanted)) return false;
+    if (explicitNumbers.length > 0 && !explicitNumbers.includes(wanted)) return false;
   }
   return true;
 }
@@ -557,6 +599,7 @@ function pricingRecordMatchesStructured(
     card_number?: string | null;
     is_first_bowman?: boolean | null;
     selected_parallel_name?: string | null;
+    relaxedSetMatch?: boolean;
   },
 ): boolean {
   if (!Number.isFinite(record.price) || record.price <= 0) return false;
@@ -611,7 +654,12 @@ function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean 
   const wantedNumber = normalizeCardNumber(lookup.card_number);
   if (wantedNumber && normalizeCardNumber(candidate.number) !== wantedNumber) return false;
 
-  return Boolean(sanitizeSetName(candidate.releaseName, candidate.setName));
+  const candidateSet = sanitizeSetName(candidate.releaseName, candidate.setName);
+  if (!candidateSet) return false;
+  const wantedSet = toApprovedCardSet(lookup.set_name);
+  if (wantedSet && candidateSet !== wantedSet) return false;
+
+  return true;
 }
 
 function setCandidateFromCard(card: CatalogCard, lookup: CardLookup): SetCandidate | null {
@@ -1033,6 +1081,7 @@ export async function fetchPricing(
     selected_parallel_name?: string | null;
     period?: string;
     limit?: number;
+    relaxedSetMatch?: boolean;
   } = {},
 ): Promise<PricingSlice> {
   const params = new URLSearchParams();
@@ -1095,6 +1144,7 @@ type PricingSearchLookup = CardLookup & {
   grader?: string | null;
   grade?: string | null;
   selected_parallel_name?: string | null;
+  relaxedSetMatch?: boolean;
 };
 
 function setBrand(setName: string | null | undefined): string | null {

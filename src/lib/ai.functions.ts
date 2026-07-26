@@ -447,6 +447,25 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             period: "5y",
           });
           await priceFromSlice(slice);
+          if (!usedCardsight && sales.length === 0 && valuationLookup.card_number) {
+            const relaxedSlice = await fetchPricing(resolvedCardId, {
+              parallel_id: data.cardsight_parallel_id ?? null,
+              grade_id: resolvedGradeId,
+              player_name: valuationLookup.player_name,
+              year: valuationLookup.year,
+              set_name: valuationLookup.set_name,
+              card_number: valuationLookup.card_number,
+              grader: data.grader,
+              grade: data.grade,
+              is_autograph: valuationLookup.is_autograph,
+              is_first_bowman: valuationLookup.is_first_bowman,
+              serial_number: data.serial_number,
+              selected_parallel_name: selectedParallelName,
+              period: "5y",
+              relaxedSetMatch: true,
+            });
+            await priceFromSlice(relaxedSlice);
+          }
         }
       } catch (err) {
         console.error("Cardsight pricing failed:", err);
@@ -521,6 +540,25 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           { period: "5y", limit: 100 },
         );
         await priceFromSlice(searchSlice);
+          if (!usedCardsight && sales.length === 0 && valuationLookup.card_number) {
+            const relaxedSearchSlice = await searchPricingComps(
+              {
+                player_name: valuationLookup.player_name,
+                year: valuationLookup.year,
+                set_name: valuationLookup.set_name,
+                card_number: valuationLookup.card_number,
+                is_autograph: valuationLookup.is_autograph,
+                is_first_bowman: valuationLookup.is_first_bowman,
+                serial_number: data.serial_number,
+                selected_parallel_name: selectedParallelName,
+                grader: data.grader,
+                grade: data.grade,
+                relaxedSetMatch: true,
+              },
+              { period: "5y", limit: 100 },
+            );
+            await priceFromSlice(relaxedSearchSlice);
+          }
         if (!usedCardsight && !compsNote) {
           compsNote = resolvedCardId
             ? "Cardsight returned too few comps for this exact catalog card — using pricing search fallback."
