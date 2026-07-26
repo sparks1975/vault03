@@ -711,6 +711,13 @@ export async function findCatalogCard(lookup: CardLookup): Promise<CatalogCard |
   addCardsAttempt({ name: player, number, year, setName });
   addCardsAttempt({ number, year, releaseName: setName });
   addCardsAttempt({ name: player, year, releaseName: setName });
+  // If the scanned/edited year is wrong, an exact-year lookup returns nothing
+  // even when player + set + card number uniquely identify the catalog card.
+  // Retry without year before falling back to loose text search.
+  addCardsAttempt({ name: player, number, releaseName: setName });
+  addCardsAttempt({ name: player, number, setName });
+  addCardsAttempt({ number, releaseName: setName });
+  addCardsAttempt({ name: player, releaseName: setName });
 
   const seen = new Set<string>();
   const candidates: CatalogCard[] = [];
@@ -729,6 +736,12 @@ export async function findCatalogCard(lookup: CardLookup): Promise<CatalogCard |
   if (candidates.length > 0) {
     const matched = candidates.filter((c) => cardMatchesLookup(c, merged));
     if (matched.length > 0) return matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+    const yearAgnosticMatched = year
+      ? candidates.filter((c) => cardMatchesLookup(c, { ...merged, year: null }))
+      : [];
+    if (yearAgnosticMatched.length > 0) {
+      return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
+    }
   }
 
   const searchQueries = new Set<string>();
@@ -768,6 +781,12 @@ export async function findCatalogCard(lookup: CardLookup): Promise<CatalogCard |
     if (detailed.length > 0) {
       const matched = detailed.filter((c) => cardMatchesLookup(c, merged));
       if (matched.length > 0) return matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+      const yearAgnosticMatched = year
+        ? detailed.filter((c) => cardMatchesLookup(c, { ...merged, year: null }))
+        : [];
+      if (yearAgnosticMatched.length > 0) {
+        return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
+      }
     }
     const card = [...searchCandidates.values()].sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
     if (card) return await csFetch<CatalogCard>(`/v1/catalog/cards/${card.id}`);
