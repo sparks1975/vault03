@@ -229,7 +229,7 @@ async function applyValuation(
   })();
   const currentValue = medianSaleValue ?? valuation.current_value;
 
-  await supabase.from("card_sales").delete().eq("card_id", cardId);
+  await supabase.from("card_sales").delete().eq("card_id", cardId).eq("is_manual", false);
   await supabase.from("card_value_history").delete().eq("card_id", cardId);
   if (singleCardSales.length) {
     const { error } = await supabase.from("card_sales").insert(
