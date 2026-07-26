@@ -40,6 +40,7 @@ import {
   addManualComps,
   removeManualComp,
 } from "@/lib/cards.functions";
+import { fetchCompPreviews } from "@/lib/comp-previews.functions";
 import { Button } from "@/components/ui/button";
 
 
@@ -1543,6 +1544,7 @@ function candidateMatchesExisting(candidate: CompCandidate, existing: ExistingCo
 
 function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () => void }) {
   const fetchFn = useServerFn(fetchCompCandidates);
+  const previewFn = useServerFn(fetchCompPreviews);
   const addFn = useServerFn(addManualComps);
   const removeFn = useServerFn(removeManualComp);
   const qc = useQueryClient();
@@ -1552,6 +1554,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
   const [existing, setExisting] = useState<ExistingComp[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
+  const [previews, setPreviews] = useState<Record<string, { image: string | null; title: string | null; description: string | null }>>({});
 
   useEffect(() => {
     let alive = true;
@@ -1571,6 +1574,36 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardId]);
+
+  // Fetch OG image/description previews for each unique URL, in batches.
+  useEffect(() => {
+    const allUrls = new Set<string>();
+    for (const c of candidates) if (c.url) allUrls.add(c.url);
+    for (const e of existing) if (e.url) allUrls.add(e.url);
+    const need = Array.from(allUrls).filter((u) => !(u in previews));
+    if (need.length === 0) return;
+    let alive = true;
+    (async () => {
+      const BATCH = 20;
+      for (let i = 0; i < need.length; i += BATCH) {
+        const slice = need.slice(i, i + BATCH);
+        try {
+          const r = await previewFn({ data: { urls: slice } });
+          if (!alive) return;
+          setPreviews((prev) => {
+            const next = { ...prev };
+            for (const p of r.previews) next[p.url] = { image: p.image, title: p.title, description: p.description };
+            return next;
+          });
+        } catch {
+          // ignore preview failures; UI degrades gracefully
+        }
+      }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidates, existing]);
+
 
   // Merge currently selected comps into displayable list so users can toggle them off.
   const merged: CompCandidate[] = useMemo(() => {
@@ -1669,6 +1702,9 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
                 const dateStr = c.sold_at
                   ? new Date(c.sold_at).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit", year: "2-digit" })
                   : "—";
+                const preview = c.url ? previews[c.url] : undefined;
+                const displayTitle = preview?.title || c.title || "(no title)";
+                const displayDesc = preview?.description || null;
                 return (
                   <li key={key} className="flex items-start gap-3 p-3 hover:bg-muted/30">
                     <button
@@ -1676,13 +1712,31 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
                       aria-label={checked ? "Deselect comp" : "Select comp"}
                       aria-pressed={checked}
                       onClick={() => toggle(key)}
-                      className={`mt-0.5 flex size-5 shrink-0 items-center justify-center border transition-colors ${checked ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent hover:border-primary"}`}
+                      className={`mt-1 flex size-5 shrink-0 items-center justify-center border transition-colors ${checked ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent hover:border-primary"}`}
                     >
                       <Check className="size-3" />
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => toggle(key)}
+                      className="shrink-0 size-16 bg-muted border border-border overflow-hidden flex items-center justify-center"
+                      aria-label="Toggle comp"
+                    >
+                      {preview?.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={preview.image}
+                          alt=""
+                          loading="lazy"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-[9px] font-mono text-muted-foreground">—</span>
+                      )}
+                    </button>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs truncate" title={c.title ?? ""}>{c.title ?? "(no title)"}</p>
+                      <div className="flex items-start gap-2">
+                        <p className="text-xs leading-snug break-words">{displayTitle}</p>
                         {existing.some((e) => candidateMatchesExisting(c, e) && !e.is_manual) && (
                           <span className="shrink-0 border border-border px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground">Current</span>
                         )}
@@ -1690,6 +1744,11 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
                           <span className="shrink-0 border border-primary/40 px-1.5 py-0.5 text-[9px] font-mono uppercase text-primary">Manual</span>
                         )}
                       </div>
+                      {displayDesc && (
+                        <p className="mt-1 text-[11px] leading-snug text-muted-foreground line-clamp-2">
+                          {displayDesc}
+                        </p>
+                      )}
                       <div className="flex items-center gap-2 mt-1 text-[10px] font-mono text-muted-foreground uppercase">
                         <span>{dateStr}</span>
                         <span>·</span>
@@ -1704,10 +1763,11 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
                         )}
                       </div>
                     </div>
-                    <div className="text-xs font-mono whitespace-nowrap">{fmtUsd(Number(c.price))}</div>
+                    <div className="text-xs font-mono whitespace-nowrap pt-0.5">{fmtUsd(Number(c.price))}</div>
                   </li>
                 );
               })}
+
             </ul>
           )}
         </div>
