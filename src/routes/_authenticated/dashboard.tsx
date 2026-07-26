@@ -40,6 +40,7 @@ import {
   addManualComps,
   removeManualComp,
 } from "@/lib/cards.functions";
+import { Button } from "@/components/ui/button";
 
 
 import { supabase } from "@/integrations/supabase/client";
@@ -1382,8 +1383,55 @@ type CompCandidate = {
   url: string | null;
 };
 
+type ExistingComp = {
+  id: string;
+  url: string | null;
+  title: string | null;
+  price: number | string;
+  sold_at: string | null;
+  source: string | null;
+  is_manual?: boolean | null;
+};
+
+function normalizeCompUrl(url: string | null | undefined) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const itemMatch = parsed.pathname.match(/\/itm\/(\d+)/i);
+    return itemMatch?.[1] ? `ebay:${itemMatch[1]}` : parsed.origin + parsed.pathname;
+  } catch {
+    return url.trim().toLowerCase();
+  }
+}
+
+function normalizeCompText(text: string | null | undefined) {
+  return String(text ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function normalizeCompDate(value: string | null | undefined) {
+  return value ? value.slice(0, 10) : "";
+}
+
+function normalizeCompPrice(value: number | string | null | undefined) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(2) : "0.00";
+}
+
 function candidateKey(c: { url: string | null; title: string | null; price: number | string; sold_at: string | null }) {
-  return c.url || `${c.title ?? ""}|${c.price}|${c.sold_at ?? ""}`;
+  const urlKey = normalizeCompUrl(c.url);
+  if (urlKey) return urlKey;
+  return `${normalizeCompText(c.title)}|${normalizeCompPrice(c.price)}|${normalizeCompDate(c.sold_at)}`;
+}
+
+function candidateMatchesExisting(candidate: CompCandidate, existing: ExistingComp) {
+  const candidateUrl = normalizeCompUrl(candidate.url);
+  const existingUrl = normalizeCompUrl(existing.url);
+  if (candidateUrl && existingUrl && candidateUrl === existingUrl) return true;
+  return (
+    normalizeCompText(candidate.title) === normalizeCompText(existing.title) &&
+    normalizeCompPrice(candidate.price) === normalizeCompPrice(existing.price) &&
+    normalizeCompDate(candidate.sold_at) === normalizeCompDate(existing.sold_at)
+  );
 }
 
 function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () => void }) {
@@ -1394,7 +1442,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [candidates, setCandidates] = useState<CompCandidate[]>([]);
-  const [existing, setExisting] = useState<Array<{ id: string; url: string | null; title: string | null; price: number | string; sold_at: string | null; source: string | null }>>([]);
+  const [existing, setExisting] = useState<ExistingComp[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
 
@@ -1406,7 +1454,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
         if (!alive) return;
         setCandidates(r.candidates as CompCandidate[]);
         setExisting(r.selected);
-        setSelectedKeys(new Set(r.selected.map((s) => candidateKey({ url: s.url, title: s.title, price: Number(s.price), sold_at: s.sold_at }))));
+        setSelectedKeys(new Set((r.selected as ExistingComp[]).map((s) => candidateKey(s))));
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load candidates");
       } finally {
@@ -1417,11 +1465,11 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardId]);
 
-  // Merge existing manual comps into displayable list so users can toggle them off.
+  // Merge currently selected comps into displayable list so users can toggle them off.
   const merged: CompCandidate[] = useMemo(() => {
     const known = new Set(candidates.map(candidateKey));
     const extras: CompCandidate[] = existing
-      .filter((e) => !known.has(candidateKey({ url: e.url, title: e.title, price: Number(e.price), sold_at: e.sold_at })))
+      .filter((e) => !known.has(candidateKey(e)))
       .map((e) => ({ title: e.title, price: Number(e.price), sold_at: e.sold_at, source: e.source ?? "eBay sold", url: e.url }));
     const all = [...candidates, ...extras];
     const q = filter.trim().toLowerCase();
@@ -1440,13 +1488,13 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
     setSaving(true);
     try {
       const existingByKey = new Map(existing.map((e) => [candidateKey({ url: e.url, title: e.title, price: Number(e.price), sold_at: e.sold_at }), e]));
-      // Remove any existing manual comps that are no longer selected.
-      const toRemove = existing.filter((e) => !selectedKeys.has(candidateKey({ url: e.url, title: e.title, price: Number(e.price), sold_at: e.sold_at })));
+      // Remove any currently selected comps that are no longer selected.
+      const toRemove = existing.filter((e) => !selectedKeys.has(candidateKey(e)));
       for (const r of toRemove) {
         await removeFn({ data: { id: r.id, card_id: cardId } });
       }
       // Add newly selected candidates that aren't already stored.
-      const candidateByKey = new Map(candidates.map((c) => [candidateKey(c), c]));
+      const candidateByKey = new Map(merged.map((c) => [candidateKey(c), c]));
       const toAdd: CompCandidate[] = [];
       for (const k of selectedKeys) {
         if (existingByKey.has(k)) continue;
@@ -1481,7 +1529,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
           <div>
             <h3 className="text-sm font-mono uppercase tracking-widest">Manage comps</h3>
             <p className="text-[10px] text-muted-foreground mt-1">
-              Pick the listings that match your card. Selected comps merge with the automated set when computing value.
+              Current comps are checked. Deselect bad matches and select replacements to set the card value.
             </p>
           </div>
           <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
@@ -1516,14 +1564,25 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
                   : "—";
                 return (
                   <li key={key} className="flex items-start gap-3 p-3 hover:bg-muted/30">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggle(key)}
-                      className="mt-1 shrink-0"
-                    />
+                    <button
+                      type="button"
+                      aria-label={checked ? "Deselect comp" : "Select comp"}
+                      aria-pressed={checked}
+                      onClick={() => toggle(key)}
+                      className={`mt-0.5 flex size-5 shrink-0 items-center justify-center border transition-colors ${checked ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-transparent hover:border-primary"}`}
+                    >
+                      <Check className="size-3" />
+                    </button>
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs truncate" title={c.title ?? ""}>{c.title ?? "(no title)"}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs truncate" title={c.title ?? ""}>{c.title ?? "(no title)"}</p>
+                        {existing.some((e) => candidateMatchesExisting(c, e) && !e.is_manual) && (
+                          <span className="shrink-0 border border-border px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground">Current</span>
+                        )}
+                        {existing.some((e) => candidateMatchesExisting(c, e) && e.is_manual) && (
+                          <span className="shrink-0 border border-primary/40 px-1.5 py-0.5 text-[9px] font-mono uppercase text-primary">Manual</span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2 mt-1 text-[10px] font-mono text-muted-foreground uppercase">
                         <span>{dateStr}</span>
                         <span>·</span>
@@ -1550,20 +1609,21 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
             {selectedKeys.size} selected
           </span>
           <div className="flex gap-2">
-            <button
+             <Button
+              variant="outline"
               onClick={onClose}
-              className="text-xs font-mono uppercase px-3 py-2 border border-border hover:bg-secondary"
+              className="h-9 rounded-none text-xs font-mono uppercase"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={save}
               disabled={saving}
-              className="text-xs font-mono uppercase px-3 py-2 bg-primary text-primary-foreground disabled:opacity-60 inline-flex items-center gap-2"
+              className="h-9 rounded-none text-xs font-mono uppercase"
             >
               {saving && <Loader2 className="size-3 animate-spin" />}
               Save
-            </button>
+            </Button>
           </div>
         </div>
       </div>
