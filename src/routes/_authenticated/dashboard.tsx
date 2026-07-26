@@ -36,7 +36,11 @@ import {
   replaceValuation,
   uploadCardPhoto,
   reorderCards,
+  fetchCompCandidates,
+  addManualComps,
+  removeManualComp,
 } from "@/lib/cards.functions";
+
 
 import { supabase } from "@/integrations/supabase/client";
 import { ShareDialog } from "@/components/ShareDialog";
