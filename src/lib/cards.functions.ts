@@ -236,7 +236,7 @@ async function applyValuation(
         source: s.source,
         url: s.url,
         title: s.title ?? null,
-      }) as never),
+      })),
     );
     if (error) throw error;
   }
