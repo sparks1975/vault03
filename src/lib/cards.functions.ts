@@ -69,6 +69,33 @@ async function signPhotoThumb(
   return signPhoto(supabase, path, { width: 160, height: 224, resize: "contain", quality: 52 });
 }
 
+async function signPhotoVariants(
+  supabase: Awaited<ReturnType<typeof import("@supabase/supabase-js").createClient>>,
+  path: string | null,
+): Promise<{
+  photo_url: string | null;
+  photo_url_2x: string | null;
+  photo_thumb_url: string | null;
+  photo_thumb_url_2x: string | null;
+}> {
+  if (!path || path.startsWith("http") || path.startsWith("data:")) {
+    const passthrough = path && (path.startsWith("http") || path.startsWith("data:")) ? path : null;
+    return {
+      photo_url: passthrough,
+      photo_url_2x: passthrough,
+      photo_thumb_url: passthrough,
+      photo_thumb_url_2x: passthrough,
+    };
+  }
+  const [photo_url, photo_url_2x, photo_thumb_url, photo_thumb_url_2x] = await Promise.all([
+    signPhoto(supabase, path, { width: 640, height: 896, resize: "contain", quality: 68 }),
+    signPhoto(supabase, path, { width: 1280, height: 1792, resize: "contain", quality: 62 }),
+    signPhoto(supabase, path, { width: 160, height: 224, resize: "contain", quality: 52 }),
+    signPhoto(supabase, path, { width: 320, height: 448, resize: "contain", quality: 55 }),
+  ]);
+  return { photo_url, photo_url_2x, photo_thumb_url, photo_thumb_url_2x };
+}
+
 export const uploadCardPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { imageDataUrl: string }) =>
@@ -100,12 +127,8 @@ export const listCards = createServerFn({ method: "GET" })
     if (error) throw error;
     const withUrls = await Promise.all(
       (cards ?? []).map(async (c) => {
-        const photoPath = c.photo_url;
-        const [photo_url, photo_thumb_url] = await Promise.all([
-          signPhoto(supabase as never, photoPath),
-          signPhotoThumb(supabase as never, photoPath),
-        ]);
-        return { ...c, photo_url, photo_thumb_url };
+        const variants = await signPhotoVariants(supabase as never, c.photo_url);
+        return { ...c, ...variants };
       }),
     );
     return withUrls;
@@ -145,8 +168,7 @@ export const createCard = createServerFn({ method: "POST" })
     if (error) throw error;
     return {
       ...row,
-      photo_url: await signPhoto(supabase as never, row.photo_url),
-      photo_thumb_url: await signPhotoThumb(supabase as never, row.photo_url),
+      ...(await signPhotoVariants(supabase as never, row.photo_url)),
       sales: [],
       history: [],
     };

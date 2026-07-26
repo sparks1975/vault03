@@ -89,9 +89,18 @@ function SharedCollection() {
               <article key={c.id} className="border border-border bg-background p-4 flex gap-4">
                 {c.photo_url ? (
                   <img
-                    src={c.photo_url}
+                    src={c.photo_thumb_url ?? c.photo_url}
+                    srcSet={
+                      c.photo_thumb_url
+                        ? `${c.photo_thumb_url} 1x${c.photo_thumb_url_2x ? `, ${c.photo_thumb_url_2x} 2x` : ""}`
+                        : undefined
+                    }
+                    sizes="80px"
                     alt={c.player_name}
                     loading="lazy"
+                    decoding="async"
+                    width={80}
+                    height={112}
                     className="w-20 h-28 object-cover shrink-0"
                   />
                 ) : (

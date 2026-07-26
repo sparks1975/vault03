@@ -21,6 +21,9 @@ type PublicCard = {
   value_delta_pct: number | null;
   last_valued_at: string | null;
   photo_url: string | null;
+  photo_url_2x: string | null;
+  photo_thumb_url: string | null;
+  photo_thumb_url_2x: string | null;
   created_at: string;
 };
 
@@ -143,19 +146,30 @@ export const getPublicCollection = createServerFn({ method: "GET" })
     if (cErr) throw cErr;
     const cards = (cardsRaw ?? []) as unknown as PublicCard[];
 
+    async function signVariant(path: string, width: number, height: number, quality: number) {
+      const { data: signed } = await supabaseAdmin.storage
+        .from("card-photos")
+        .createSignedUrl(path, SIGNED_URL_TTL, {
+          transform: { width, height, resize: "contain", quality },
+        });
+      return signed?.signedUrl ?? null;
+    }
+
     const withSigned: PublicCard[] = await Promise.all(
       cards.map(async (c) => {
         const path = c.photo_url;
         let photo_url: string | null = null;
+        let photo_url_2x: string | null = null;
+        let photo_thumb_url: string | null = null;
+        let photo_thumb_url_2x: string | null = null;
         if (path && !path.startsWith("http") && !path.startsWith("data:")) {
-          const { data: signed } = await supabaseAdmin.storage
-            .from("card-photos")
-            .createSignedUrl(path, SIGNED_URL_TTL, {
-              transform: { width: 640, height: 896, resize: "contain", quality: 68 },
-            });
-          if (signed?.signedUrl) {
-            photo_url = signed.signedUrl;
-          } else {
+          [photo_url, photo_url_2x, photo_thumb_url, photo_thumb_url_2x] = await Promise.all([
+            signVariant(path, 640, 896, 68),
+            signVariant(path, 1280, 1792, 62),
+            signVariant(path, 160, 224, 52),
+            signVariant(path, 320, 448, 55),
+          ]);
+          if (!photo_url) {
             const { data: fallback } = await supabaseAdmin.storage
               .from("card-photos")
               .createSignedUrl(path, SIGNED_URL_TTL);
@@ -163,8 +177,11 @@ export const getPublicCollection = createServerFn({ method: "GET" })
           }
         } else if (typeof path === "string") {
           photo_url = path;
+          photo_url_2x = path;
+          photo_thumb_url = path;
+          photo_thumb_url_2x = path;
         }
-        return { ...c, photo_url };
+        return { ...c, photo_url, photo_url_2x, photo_thumb_url, photo_thumb_url_2x };
       }),
     );
 

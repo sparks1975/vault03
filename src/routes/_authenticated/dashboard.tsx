@@ -160,6 +160,8 @@ type Card = {
   sales: Sale[];
   history: HistoryPoint[];
   photo_thumb_url?: string | null;
+  photo_thumb_url_2x?: string | null;
+  photo_url_2x?: string | null;
 };
 
 function fmt(n: number | null | undefined) {
@@ -680,7 +682,21 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
     >
       <div className="w-16 h-24 bg-secondary shrink-0 border border-border overflow-hidden grid place-items-center">
         {card.photo_url ? (
-          <img src={card.photo_thumb_url ?? card.photo_url} alt={card.player_name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+          <img
+            src={card.photo_thumb_url ?? card.photo_url}
+            srcSet={
+              card.photo_thumb_url
+                ? `${card.photo_thumb_url} 1x${card.photo_thumb_url_2x ? `, ${card.photo_thumb_url_2x} 2x` : ""}`
+                : undefined
+            }
+            sizes="64px"
+            alt={card.player_name}
+            loading="lazy"
+            decoding="async"
+            width={64}
+            height={96}
+            className="w-full h-full object-cover"
+          />
         ) : (
           <span className="text-[8px] uppercase tracking-tighter text-muted-foreground">Asset</span>
         )}
@@ -975,6 +991,12 @@ function CardDetail({
         {card.photo_url ? (
           <img
             src={card.photo_url}
+            srcSet={
+              card.photo_url_2x
+                ? `${card.photo_url} 1x, ${card.photo_url_2x} 2x`
+                : undefined
+            }
+            sizes="(min-width: 1024px) 40vw, 92vw"
             alt={card.player_name}
             decoding="async"
             fetchPriority="high"
