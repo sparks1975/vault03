@@ -555,7 +555,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               year: valuationLookup.year,
               set_name: valuationLookup.set_name,
               card_number: valuationLookup.card_number,
-              selectedParallelName: selectedParallelName,
+              selected_parallel_name: selectedParallelName,
               is_autograph: valuationLookup.is_autograph,
               serial_number: data.serial_number,
               is_first_bowman: valuationLookup.is_first_bowman,
