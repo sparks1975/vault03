@@ -675,28 +675,42 @@ function StatCell({ label, value, sub, subAccent }: { label: string; value: stri
 
 function CardRow({ card, active, onClick }: { card: Card; active: boolean; onClick: () => void }) {
   const delta = gainPct(card);
+  const imgSrc = card.photo_thumb_url ?? card.photo_url;
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  useEffect(() => {
+    if (!imgSrc) { setImgLoaded(true); return; }
+    if (imgRef.current?.complete && imgRef.current.naturalWidth > 0) setImgLoaded(true);
+    else setImgLoaded(false);
+  }, [imgSrc]);
   return (
     <button
       onClick={onClick}
       className={`w-full text-left p-4 flex gap-4 transition-colors ${active ? "ring-1 ring-inset ring-accent bg-accent/[0.06]" : "border border-foreground bg-background hover:bg-secondary"}`}
     >
-      <div className="w-16 h-24 bg-secondary shrink-0 border border-border overflow-hidden grid place-items-center">
+      <div className="w-16 h-24 bg-secondary shrink-0 border border-border overflow-hidden grid place-items-center relative">
         {card.photo_url ? (
-          <img
-            src={card.photo_thumb_url ?? card.photo_url}
-            srcSet={
-              card.photo_thumb_url
-                ? `${card.photo_thumb_url} 1x${card.photo_thumb_url_2x ? `, ${card.photo_thumb_url_2x} 2x` : ""}`
-                : undefined
-            }
-            sizes="64px"
-            alt={card.player_name}
-            loading="lazy"
-            decoding="async"
-            width={64}
-            height={96}
-            className="w-full h-full object-cover"
-          />
+          <>
+            {!imgLoaded && <Skeleton className="absolute inset-0 rounded-none" />}
+            <img
+              ref={imgRef}
+              src={imgSrc ?? undefined}
+              srcSet={
+                card.photo_thumb_url
+                  ? `${card.photo_thumb_url} 1x${card.photo_thumb_url_2x ? `, ${card.photo_thumb_url_2x} 2x` : ""}`
+                  : undefined
+              }
+              sizes="64px"
+              alt={card.player_name}
+              loading="lazy"
+              decoding="async"
+              width={64}
+              height={96}
+              onLoad={() => setImgLoaded(true)}
+              onError={() => setImgLoaded(true)}
+              className={`w-full h-full object-cover transition-opacity duration-200 ${imgLoaded ? "opacity-100" : "opacity-0"}`}
+            />
+          </>
         ) : (
           <span className="text-[8px] uppercase tracking-tighter text-muted-foreground">Asset</span>
         )}
