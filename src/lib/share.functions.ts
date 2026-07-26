@@ -21,6 +21,9 @@ type PublicCard = {
   value_delta_pct: number | null;
   last_valued_at: string | null;
   photo_url: string | null;
+  photo_url_2x: string | null;
+  photo_thumb_url: string | null;
+  photo_thumb_url_2x: string | null;
   created_at: string;
 };
 
