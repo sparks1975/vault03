@@ -87,9 +87,9 @@ export function buildPt130Descriptor(fields: {
     fields.year ? String(fields.year) : null,
     fields.set_name,
     fields.player_name,
-    includeCardNumber && fields.card_number ? `#${String(fields.card_number).replace(/^#/, "")}` : null,
     fields.is_autograph ? "auto" : null,
     parallel,
+    includeCardNumber && fields.card_number ? `#${String(fields.card_number).replace(/^#/, "")}` : null,
   ].filter(Boolean) as string[];
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
