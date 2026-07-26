@@ -786,8 +786,16 @@ function CardDetail({
   const [imgLoaded, setImgLoaded] = useState(!card.photo_url);
 
   useEffect(() => {
-    setImgLoaded(!card.photo_url);
-  }, [card.id, card.photo_url]);
+    if (!card.photo_url) {
+      setImgLoaded(true);
+    }
+  }, [card.photo_url]);
+
+  const imgRefCb = (el: HTMLImageElement | null) => {
+    if (el && el.complete && el.naturalWidth > 0) {
+      setImgLoaded(true);
+    }
+  };
 
   const stats = useQuery({
     queryKey: ["stats", card.mlb_player_id],
@@ -975,6 +983,7 @@ function CardDetail({
       <div className="w-full aspect-[2/3] bg-secondary mb-8 border border-border overflow-hidden grid place-items-center">
         {card.photo_url ? (
           <img
+            ref={imgRefCb}
             src={card.photo_url}
             alt={card.player_name}
             className="w-full h-full object-cover"
