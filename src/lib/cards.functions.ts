@@ -45,15 +45,28 @@ function dataUrlToBytes(dataUrl: string) {
 async function signPhoto(
   supabase: Awaited<ReturnType<typeof import("@supabase/supabase-js").createClient>>,
   path: string | null,
+  transform: { width: number; height: number; resize: "contain"; quality: number } = {
+    width: 640,
+    height: 896,
+    resize: "contain",
+    quality: 68,
+  },
 ): Promise<string | null> {
   if (!path) return null;
   if (path.startsWith("http") || path.startsWith("data:")) return path;
   const transformed = await supabase.storage.from("card-photos").createSignedUrl(path, SALE_TTL, {
-    transform: { width: 640, height: 896, resize: "contain", quality: 68 },
+    transform,
   });
   if (transformed.data?.signedUrl) return transformed.data.signedUrl;
   const { data } = await supabase.storage.from("card-photos").createSignedUrl(path, SALE_TTL);
   return data?.signedUrl ?? null;
+}
+
+async function signPhotoThumb(
+  supabase: Awaited<ReturnType<typeof import("@supabase/supabase-js").createClient>>,
+  path: string | null,
+): Promise<string | null> {
+  return signPhoto(supabase, path, { width: 160, height: 224, resize: "contain", quality: 52 });
 }
 
 export const uploadCardPhoto = createServerFn({ method: "POST" })
@@ -86,10 +99,14 @@ export const listCards = createServerFn({ method: "GET" })
       .order("created_at", { ascending: false });
     if (error) throw error;
     const withUrls = await Promise.all(
-      (cards ?? []).map(async (c) => ({
-        ...c,
-        photo_url: await signPhoto(supabase as never, c.photo_url),
-      })),
+      (cards ?? []).map(async (c) => {
+        const photoPath = c.photo_url;
+        const [photo_url, photo_thumb_url] = await Promise.all([
+          signPhoto(supabase as never, photoPath),
+          signPhotoThumb(supabase as never, photoPath),
+        ]);
+        return { ...c, photo_url, photo_thumb_url };
+      }),
     );
     return withUrls;
   });
@@ -129,6 +146,7 @@ export const createCard = createServerFn({ method: "POST" })
     return {
       ...row,
       photo_url: await signPhoto(supabase as never, row.photo_url),
+      photo_thumb_url: await signPhotoThumb(supabase as never, row.photo_url),
       sales: [],
       history: [],
     };
