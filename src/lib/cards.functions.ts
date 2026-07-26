@@ -455,7 +455,13 @@ async function recomputeCardValue(
     .map((r) => Number(r.price))
     .filter((p) => Number.isFinite(p) && p > 0)
     .sort((a, b) => a - b);
-  if (prices.length === 0) return;
+  if (prices.length === 0) {
+    await supabase
+      .from("cards")
+      .update({ current_value: null, last_valued_at: new Date().toISOString() } as never)
+      .eq("id", cardId);
+    return;
+  }
   const mid = Math.floor(prices.length / 2);
   const med = prices.length % 2 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
   await supabase
@@ -539,9 +545,9 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
 
     const { data: selected } = await supabase
       .from("card_sales")
-      .select("id, url, title, price, sold_at, source")
+      .select("id, url, title, price, sold_at, source, is_manual")
       .eq("card_id", data.card_id)
-      .eq("is_manual", true);
+      .eq("user_id", userId);
 
     return { candidates: deduped, selected: selected ?? [] };
   });
@@ -594,12 +600,13 @@ export const removeManualComp = createServerFn({ method: "POST" })
     z.object({ id: z.string().uuid(), card_id: z.string().uuid() }).parse(d),
   )
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
+    const { supabase, userId } = context;
     await supabase
       .from("card_sales")
       .delete()
       .eq("id", data.id)
-      .eq("is_manual", true);
+      .eq("card_id", data.card_id)
+      .eq("user_id", userId);
     await recomputeCardValue(supabase as never, data.card_id);
     return { ok: true };
   });
