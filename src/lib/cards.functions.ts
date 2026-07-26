@@ -218,8 +218,21 @@ async function applyValuation(
   });
   const validSalePrices = singleCardSales
     .map((s) => Number(s.price))
-    .filter((price) => Number.isFinite(price) && price > 0)
-    .sort((a, b) => a - b);
+    .filter((price) => Number.isFinite(price) && price > 0);
+  // Merge any preserved manual comps into the median so user picks influence value.
+  const { data: manualRows } = await supabase
+    .from("card_sales")
+    .select("price, title")
+    .eq("card_id", cardId)
+    .eq("is_manual", true);
+  const nonSingleRe = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
+  for (const m of manualRows ?? []) {
+    const p = Number(m.price);
+    if (Number.isFinite(p) && p > 0 && !nonSingleRe.test(String(m.title ?? ""))) {
+      validSalePrices.push(p);
+    }
+  }
+  validSalePrices.sort((a, b) => a - b);
   const medianSaleValue = (() => {
     if (validSalePrices.length === 0) return null;
     const mid = Math.floor(validSalePrices.length / 2);
