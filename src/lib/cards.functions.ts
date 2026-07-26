@@ -208,8 +208,14 @@ async function applyValuation(
     history: Array<{ recorded_at: string; value: number }>;
   },
 ) {
-  const { isNonSingleCardListing } = await import("./cardsight.server");
-  const singleCardSales = valuation.sales.filter((s) => !isNonSingleCardListing(s.title));
+  const nonSingleCardRe = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
+  const sealedWordsRe = /\b(factory|sealed|unopened|hobby|jumbo|blaster|retail|mega|hanger|value|cello|wax)\b/i;
+  const containerWordsRe = /\b(box|boxes|case|cases|pack|packs|product|wax)\b/i;
+  const singleCardSales = valuation.sales.filter((s) => {
+    const title = String(s.title ?? "").trim();
+    if (!title) return true;
+    return !(nonSingleCardRe.test(title) || (sealedWordsRe.test(title) && containerWordsRe.test(title)));
+  });
   const validSalePrices = singleCardSales
     .map((s) => Number(s.price))
     .filter((price) => Number.isFinite(price) && price > 0)
