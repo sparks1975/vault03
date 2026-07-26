@@ -1708,6 +1708,7 @@ function AddCardDialog({
   const uploadFn = useServerFn(uploadCardPhoto);
   const replaceValFn = useServerFn(replaceValuation);
   const updateFn = useServerFn(updateCardFields);
+  const qc = useQueryClient();
 
   const [step, setStep] = useState<"choose" | "form">("choose");
   const [scanning, setScanning] = useState(false);
@@ -1849,6 +1850,10 @@ function AddCardDialog({
         },
       });
 
+      qc.setQueryData(["cards"], (prev: Card[] | undefined) => {
+        const existing = prev ?? [];
+        return [created as Card, ...existing.filter((card) => card.id !== created.id)];
+      });
       onCreated(created.id);
       onClose();
       toast.success("Card added. Fetching valuation…");
