@@ -113,6 +113,7 @@ type Sale = {
   grade: string | null;
   price: number;
   source: string | null;
+  title: string | null;
   url: string | null;
 };
 
@@ -1248,6 +1249,7 @@ type SaleRow = {
   grade: string | null;
   price: number | string;
   source: string | null;
+  title?: string | null;
   url?: string | null;
 };
 
