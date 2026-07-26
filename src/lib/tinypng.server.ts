@@ -5,11 +5,14 @@ export async function compressBytes(
   bytes: Uint8Array,
   contentType: string,
 ): Promise<{ bytes: Uint8Array; contentType: string }> {
+  const TARGET_IMAGE_BYTES = 220_000;
+  const MAX_IMAGE_WIDTH = 640;
+  const MAX_IMAGE_HEIGHT = 896;
   const key = process.env.TINYPNG_API_KEY;
   if (!key) return { bytes, contentType };
-  // Locally resized card JPEGs are already small; avoid adding a remote API
-  // round-trip that can make saves feel stuck.
-  if (bytes.byteLength <= 500_000) return { bytes, contentType };
+  // Locally resized card JPEGs that are already below target do not need a
+  // remote round-trip. Anything larger gets recompressed and resized.
+  if (bytes.byteLength <= TARGET_IMAGE_BYTES) return { bytes, contentType };
   // TinyPNG only supports PNG/JPEG/WebP.
   if (!/^image\/(png|jpe?g|webp)$/i.test(contentType)) {
     return { bytes, contentType };
@@ -27,10 +30,16 @@ export async function compressBytes(
     }
     const location = shrink.headers.get("Location");
     if (!location) return { bytes, contentType };
-    const out = await fetch(location, { headers: { Authorization: auth } });
+    const resized = await fetch(location, {
+      method: "POST",
+      headers: { Authorization: auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ resize: { method: "fit", width: MAX_IMAGE_WIDTH, height: MAX_IMAGE_HEIGHT } }),
+    });
+    const out = resized.ok ? resized : await fetch(location, { headers: { Authorization: auth } });
     if (!out.ok) return { bytes, contentType };
     const buf = new Uint8Array(await out.arrayBuffer());
     const outType = out.headers.get("Content-Type") || contentType;
+    if (buf.byteLength >= bytes.byteLength) return { bytes, contentType };
     return { bytes: buf, contentType: outType };
   } catch (err) {
     console.error("TinyPNG compression error:", err);

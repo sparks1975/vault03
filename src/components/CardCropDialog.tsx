@@ -13,8 +13,14 @@ interface Props {
 
 // Standard trading card aspect ratio (2.5 x 3.5 inches).
 const CARD_ASPECT = 2.5 / 3.5;
-const MAX_CARD_IMAGE_WIDTH = 900;
-const MAX_CARD_IMAGE_HEIGHT = 1260;
+const TARGET_CARD_IMAGE_BYTES = 180_000;
+const OUTPUT_ATTEMPTS = [
+  { width: 640, height: 896, quality: 0.72 },
+  { width: 640, height: 896, quality: 0.64 },
+  { width: 580, height: 812, quality: 0.64 },
+  { width: 520, height: 728, quality: 0.6 },
+  { width: 480, height: 672, quality: 0.56 },
+];
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
@@ -42,35 +48,69 @@ async function getCroppedDataUrl(
   const rotCanvas = document.createElement("canvas");
   rotCanvas.width = bBoxW;
   rotCanvas.height = bBoxH;
-  const rctx = rotCanvas.getContext("2d")!;
+  const rctx = rotCanvas.getContext("2d");
+  if (!rctx) throw new Error("Couldn't prepare image canvas");
   rctx.translate(bBoxW / 2, bBoxH / 2);
   rctx.rotate(rad);
   rctx.drawImage(image, -image.width / 2, -image.height / 2);
 
   const sourceWidth = Math.max(1, Math.round(crop.width));
   const sourceHeight = Math.max(1, Math.round(crop.height));
-  const scale = Math.min(1, MAX_CARD_IMAGE_WIDTH / sourceWidth, MAX_CARD_IMAGE_HEIGHT / sourceHeight);
-  const outWidth = Math.max(1, Math.round(sourceWidth * scale));
-  const outHeight = Math.max(1, Math.round(sourceHeight * scale));
 
-  const out = document.createElement("canvas");
-  out.width = outWidth;
-  out.height = outHeight;
-  const octx = out.getContext("2d")!;
-  octx.imageSmoothingEnabled = true;
-  octx.imageSmoothingQuality = "high";
-  octx.drawImage(
-    rotCanvas,
-    Math.round(crop.x),
-    Math.round(crop.y),
-    sourceWidth,
-    sourceHeight,
-    0,
-    0,
-    outWidth,
-    outHeight,
-  );
-  return out.toDataURL("image/jpeg", 0.82);
+  let best: { dataUrl: string; bytes: number } | null = null;
+  for (const attempt of OUTPUT_ATTEMPTS) {
+    const scale = Math.min(1, attempt.width / sourceWidth, attempt.height / sourceHeight);
+    const outWidth = Math.max(1, Math.round(sourceWidth * scale));
+    const outHeight = Math.max(1, Math.round(sourceHeight * scale));
+    const out = document.createElement("canvas");
+    out.width = outWidth;
+    out.height = outHeight;
+    const octx = out.getContext("2d");
+    if (!octx) throw new Error("Couldn't prepare image canvas");
+    octx.imageSmoothingEnabled = true;
+    octx.imageSmoothingQuality = "high";
+    octx.drawImage(
+      rotCanvas,
+      Math.round(crop.x),
+      Math.round(crop.y),
+      sourceWidth,
+      sourceHeight,
+      0,
+      0,
+      outWidth,
+      outHeight,
+    );
+    const dataUrl = await canvasToJpegDataUrl(out, attempt.quality);
+    const bytes = dataUrlBytes(dataUrl);
+    best = !best || bytes < best.bytes ? { dataUrl, bytes } : best;
+    if (bytes <= TARGET_CARD_IMAGE_BYTES) return dataUrl;
+  }
+  if (!best) throw new Error("Couldn't compress image");
+  return best.dataUrl;
+}
+
+function canvasToJpegDataUrl(canvas: HTMLCanvasElement, quality: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Couldn't encode image"));
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Couldn't read compressed image"));
+        reader.readAsDataURL(blob);
+      },
+      "image/jpeg",
+      quality,
+    );
+  });
+}
+
+function dataUrlBytes(dataUrl: string) {
+  const base64 = dataUrl.split(",")[1] ?? "";
+  return Math.floor((base64.length * 3) / 4);
 }
 
 export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use photo", busy }: Props) {
