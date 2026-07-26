@@ -694,7 +694,7 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
             {!imgLoaded && <Skeleton className="absolute inset-0 rounded-none" />}
             <img
               ref={imgRef}
-              src={imgSrc}
+              src={imgSrc ?? undefined}
               srcSet={
                 card.photo_thumb_url
                   ? `${card.photo_thumb_url} 1x${card.photo_thumb_url_2x ? `, ${card.photo_thumb_url_2x} 2x` : ""}`
