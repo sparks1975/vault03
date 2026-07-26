@@ -786,8 +786,16 @@ function CardDetail({
   const [imgLoaded, setImgLoaded] = useState(!card.photo_url);
 
   useEffect(() => {
-    setImgLoaded(!card.photo_url);
-  }, [card.id, card.photo_url]);
+    if (!card.photo_url) {
+      setImgLoaded(true);
+    }
+  }, [card.photo_url]);
+
+  const imgRefCb = (el: HTMLImageElement | null) => {
+    if (el && el.complete && el.naturalWidth > 0) {
+      setImgLoaded(true);
+    }
+  };
 
   const stats = useQuery({
     queryKey: ["stats", card.mlb_player_id],
