@@ -40,6 +40,7 @@ import {
   addManualComps,
   removeManualComp,
 } from "@/lib/cards.functions";
+import { fetchCompPreviews } from "@/lib/comp-previews.functions";
 import { Button } from "@/components/ui/button";
 
 
