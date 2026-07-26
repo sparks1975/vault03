@@ -319,15 +319,20 @@ function strictSetTitleMatches(title: string, setName: string | null | undefined
   if (!approved) return true;
 
   const titleNorm = normalizeText(title);
+  const originalSetNorm = normalizeText(setName);
   const aliases: Record<string, string[]> = {
     "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
     "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
     "Contenders / Contenders Draft Picks": ["contenders", "contenders draft picks"],
-    "BBM Rookie Edition / Draft": ["bbm rookie edition", "bbm rookie", "bbm draft"],
     "BBM Premium / Genesis": ["bbm premium", "bbm genesis"],
     "BBM Special / Theme Sets": ["bbm special", "bbm theme"],
     "Epoch OB Club / Holographica": ["epoch ob club", "epoch holographica"],
   };
+  if (approved === "BBM Rookie Edition / Draft") {
+    if (originalSetNorm.includes("rookie")) return titleHasPhrase(titleNorm, "bbm rookie edition") || titleHasPhrase(titleNorm, "bbm rookie");
+    if (originalSetNorm.includes("draft")) return titleHasPhrase(titleNorm, "bbm draft");
+    return titleHasPhrase(titleNorm, "bbm rookie edition") || titleHasPhrase(titleNorm, "bbm rookie") || titleHasPhrase(titleNorm, "bbm draft");
+  }
   const exactAliases = aliases[approved];
   if (exactAliases) return exactAliases.some((phrase) => titleHasPhrase(titleNorm, phrase));
 
@@ -521,43 +526,27 @@ export function titleMatchesCard(
     softCardNumber?: boolean;
   },
 ): boolean {
-  if (!title.trim()) return false;
+  const rawTitle = compact(title);
+  if (!rawTitle) return false;
+  const titleNorm = normalizeText(rawTitle);
   if (lookup.player_name) {
-    const t = normalizeText(title);
     const tokens = normalizeText(lookup.player_name).split(" ").filter((x) => x.length > 1);
-    if (tokens.length > 0 && !tokens.every((x) => t.includes(x))) return false;
+    if (tokens.length > 0 && !tokens.every((x) => titleHasPhrase(titleNorm, x))) return false;
   }
-  if (lookup.year && !String(title).includes(String(lookup.year))) return false;
-  if (!setTitleMatches(title, lookup.set_name)) return false;
+  if (lookup.year && !new RegExp(`(^|[^0-9])${escapeRegex(compact(lookup.year))}($|[^0-9])`).test(rawTitle)) return false;
+  if (!strictSetTitleMatches(rawTitle, lookup.set_name)) return false;
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
   if (number && lookup.requireCardNumber !== false) {
     const explicitNumbers = extractMarketplaceCardNumbers(title);
     const wanted = normalizeCardNumber(number);
-    if (explicitNumbers.length > 0) {
-      if (!explicitNumbers.includes(wanted)) return false;
-    } else if (lookup.softCardNumber) {
-      // Soft mode: no explicit #XX in title — trust player+year+set match.
-      return true;
-    } else {
-      const numRe = new RegExp(`(^|[^a-z0-9])#?${escapeRegex(number)}($|[^a-z0-9])`, "i");
-      if (!numRe.test(title)) return false;
-    }
+    if (!explicitNumbers.includes(wanted)) return false;
   }
   return true;
 }
 
 
 function setTitleMatches(title: string, setName: string | null | undefined): boolean {
-  const terms = expandSetSearchTerms(setName)
-    .map((term) => normalizeText(term))
-    .filter(Boolean);
-  if (terms.length === 0) return true;
-  const titleNorm = normalizeText(title);
-  const stop = new Set(["base", "card", "cards", "insert", "set", "series"]);
-  return terms.some((term) => {
-    const tokens = term.split(" ").filter((t) => t.length > 1 && !stop.has(t));
-    return tokens.length === 0 || tokens.every((t) => titleNorm.includes(t));
-  });
+  return strictSetTitleMatches(title, setName);
 }
 
 function pricingRecordMatchesStructured(
