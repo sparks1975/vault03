@@ -1268,18 +1268,32 @@ function isNonSingleSaleTitle(title: string | null | undefined) {
   return nonSingle.test(raw) || (sealedWords.test(raw) && containers.test(raw));
 }
 
-function RecentComparables({ sales }: { sales: SaleRow[] }) {
+function RecentComparables({ sales, cardId }: { sales: SaleRow[]; cardId: string }) {
+  const [manageOpen, setManageOpen] = useState(false);
   const valid = (sales ?? []).filter((s) => Number.isFinite(Number(s.price)) && Number(s.price) > 0 && !isNonSingleSaleTitle(s.title));
+  const headerBtn = (
+    <button
+      onClick={() => setManageOpen(true)}
+      className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground hover:text-foreground border border-border px-2 py-1"
+    >
+      Manage comps
+    </button>
+  );
   if (valid.length === 0) {
     return (
       <div>
-        <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4 border-b border-border pb-2">Recent Comparables</h3>
+        <div className="flex items-center justify-between mb-4 border-b border-border pb-2">
+          <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground">Recent Comparables</h3>
+          {headerBtn}
+        </div>
         <p className="text-xs text-muted-foreground">
           No comparable sales found. The card value shown is an AI market estimate.
         </p>
+        {manageOpen && <ManageCompsDialog cardId={cardId} onClose={() => setManageOpen(false)} />}
       </div>
     );
   }
+
   const byDateDesc = [...valid].sort((a, b) => {
     const ta = a.sold_at ? new Date(a.sold_at).getTime() : 0;
     const tb = b.sold_at ? new Date(b.sold_at).getTime() : 0;
