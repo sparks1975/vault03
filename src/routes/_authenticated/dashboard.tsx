@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Plus, Trash2, Camera, Loader2, LogOut, Pencil, Check, X, ChevronLeft, RefreshCw, GripVertical } from "lucide-react";
 import {
@@ -784,15 +784,35 @@ function CardDetail({
   const [draft, setDraft] = useState<Partial<Card>>({});
   const [playerResults, setPlayerResults] = useState<Awaited<ReturnType<typeof searchMlbPlayer>>>([]);
   const [imgLoaded, setImgLoaded] = useState(!card.photo_url);
+  const [imgWaitExpired, setImgWaitExpired] = useState(false);
+
+  useLayoutEffect(() => {
+    setImgLoaded(!card.photo_url);
+    setImgWaitExpired(false);
+  }, [card.id, card.photo_url]);
 
   useEffect(() => {
-    if (!card.photo_url) {
-      setImgLoaded(true);
-    }
-  }, [card.photo_url]);
+    if (!card.photo_url) return;
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) setImgWaitExpired(true);
+    }, 900);
+    const img = new Image();
+    img.onload = () => {
+      if (!cancelled) setImgLoaded(true);
+    };
+    img.onerror = () => {
+      if (!cancelled) setImgLoaded(true);
+    };
+    img.src = card.photo_url;
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [card.id, card.photo_url]);
 
   const imgRefCb = (el: HTMLImageElement | null) => {
-    if (el && el.complete && el.naturalWidth > 0) {
+    if (el && el.complete && el.naturalWidth > 0 && (el.currentSrc === card.photo_url || el.src === card.photo_url)) {
       setImgLoaded(true);
     }
   };
@@ -803,9 +823,7 @@ function CardDetail({
     enabled: !!card.mlb_player_id,
   });
 
-  const contentReady =
-    editing ||
-    (imgLoaded && (!card.mlb_player_id || !stats.isLoading));
+  const contentReady = editing || imgLoaded || imgWaitExpired;
 
   function startEdit() {
     setDraft({
