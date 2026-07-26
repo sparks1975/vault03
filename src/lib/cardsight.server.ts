@@ -319,7 +319,6 @@ function strictSetTitleMatches(title: string, setName: string | null | undefined
   if (!approved) return true;
 
   const titleNorm = normalizeText(title);
-  const originalSetNorm = normalizeText(setName);
   const aliases: Record<string, string[]> = {
     "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
     "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
