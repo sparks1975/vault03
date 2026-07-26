@@ -35,6 +35,7 @@ import {
   deleteCard,
   replaceValuation,
   uploadCardPhoto,
+  compressExistingPhotos,
   reorderCards,
   fetchCompCandidates,
   addManualComps,
@@ -191,6 +192,7 @@ function Dashboard() {
   const deleteFn = useServerFn(deleteCard);
   const estimateFn = useServerFn(estimateCardValue);
   const replaceValFn = useServerFn(replaceValuation);
+  const compressPhotosFn = useServerFn(compressExistingPhotos);
   const qc = useQueryClient();
 
 
@@ -211,6 +213,17 @@ function Dashboard() {
     queryFn: () => listFn(),
   });
   const cardData = (cardsQ.data ?? []) as Card[];
+
+  const photoCompressionStartedRef = useRef(false);
+  useEffect(() => {
+    if (photoCompressionStartedRef.current || cardsQ.isLoading || cardData.length === 0) return;
+    photoCompressionStartedRef.current = true;
+    compressPhotosFn()
+      .then((result) => {
+        if (result.processed > 0) void qc.invalidateQueries({ queryKey: ["cards"] });
+      })
+      .catch((err) => console.error("Photo optimization failed", err));
+  }, [cardData.length, cardsQ.isLoading, compressPhotosFn, qc]);
 
   // Recalculate card values only if stale (>30 days since last valuation).
   const revaluedRef = useRef(false);
@@ -679,7 +692,7 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
     >
       <div className="w-16 h-24 bg-secondary shrink-0 border border-border overflow-hidden grid place-items-center">
         {card.photo_url ? (
-          <img src={card.photo_url} alt={card.player_name} className="w-full h-full object-cover" />
+          <img src={card.photo_url} alt={card.player_name} loading="lazy" decoding="async" className="w-full h-full object-cover" />
         ) : (
           <span className="text-[8px] uppercase tracking-tighter text-muted-foreground">Asset</span>
         )}
@@ -975,6 +988,8 @@ function CardDetail({
           <img
             src={card.photo_url}
             alt={card.player_name}
+            decoding="async"
+            fetchPriority="high"
             className="w-full h-full object-cover"
             onLoad={() => setImgLoaded(true)}
             onError={() => setImgLoaded(true)}

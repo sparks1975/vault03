@@ -150,8 +150,17 @@ export const getPublicCollection = createServerFn({ method: "GET" })
         if (path && !path.startsWith("http") && !path.startsWith("data:")) {
           const { data: signed } = await supabaseAdmin.storage
             .from("card-photos")
-            .createSignedUrl(path, SIGNED_URL_TTL);
-          photo_url = signed?.signedUrl ?? null;
+            .createSignedUrl(path, SIGNED_URL_TTL, {
+              transform: { width: 640, height: 896, resize: "contain", quality: 68 },
+            });
+          if (signed?.signedUrl) {
+            photo_url = signed.signedUrl;
+          } else {
+            const { data: fallback } = await supabaseAdmin.storage
+              .from("card-photos")
+              .createSignedUrl(path, SIGNED_URL_TTL);
+            photo_url = fallback?.signedUrl ?? null;
+          }
         } else if (typeof path === "string") {
           photo_url = path;
         }

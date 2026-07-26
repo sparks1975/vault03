@@ -48,6 +48,10 @@ async function signPhoto(
 ): Promise<string | null> {
   if (!path) return null;
   if (path.startsWith("http") || path.startsWith("data:")) return path;
+  const transformed = await supabase.storage.from("card-photos").createSignedUrl(path, SALE_TTL, {
+    transform: { width: 640, height: 896, resize: "contain", quality: 68 },
+  });
+  if (transformed.data?.signedUrl) return transformed.data.signedUrl;
   const { data } = await supabase.storage.from("card-photos").createSignedUrl(path, SALE_TTL);
   return data?.signedUrl ?? null;
 }
@@ -414,6 +418,11 @@ export const compressExistingPhotos = createServerFn({ method: "POST" })
         }
         const original = new Uint8Array(await file.arrayBuffer());
         bytesBefore += original.byteLength;
+        if (original.byteLength <= 220_000) {
+          bytesAfter += original.byteLength;
+          skipped++;
+          continue;
+        }
         const { bytes, contentType } = await compressBytes(original, type);
         if (bytes.byteLength >= original.byteLength) {
           bytesAfter += original.byteLength;
