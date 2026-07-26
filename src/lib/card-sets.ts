@@ -28,6 +28,7 @@ export const APPROVED_CARD_SETS = [
   "Topps Sterling",
   "Topps Now",
   "Topps Black and White",
+  "Topps Gold Label",
   "Topps NPB",
   "Topps NPB Chrome",
   "Topps NPB Stadium Club",
