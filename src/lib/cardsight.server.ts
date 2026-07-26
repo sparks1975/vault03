@@ -329,8 +329,10 @@ function strictSetTitleMatches(title: string, setName: string | null | undefined
     "Epoch OB Club / Holographica": ["epoch ob club", "epoch holographica"],
   };
   if (approved === "BBM Rookie Edition / Draft") {
-    if (originalSetNorm.includes("rookie")) return titleHasPhrase(titleNorm, "bbm rookie edition") || titleHasPhrase(titleNorm, "bbm rookie");
-    if (originalSetNorm.includes("draft")) return titleHasPhrase(titleNorm, "bbm draft");
+    const explicitlyRookie = originalSetNorm.includes("rookie") && !originalSetNorm.includes("draft");
+    const explicitlyDraft = originalSetNorm.includes("draft") && !originalSetNorm.includes("rookie");
+    if (explicitlyRookie) return titleHasPhrase(titleNorm, "bbm rookie edition") || titleHasPhrase(titleNorm, "bbm rookie");
+    if (explicitlyDraft) return titleHasPhrase(titleNorm, "bbm draft");
     return titleHasPhrase(titleNorm, "bbm rookie edition") || titleHasPhrase(titleNorm, "bbm rookie") || titleHasPhrase(titleNorm, "bbm draft");
   }
   const exactAliases = aliases[approved];
