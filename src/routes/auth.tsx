@@ -11,7 +11,14 @@ import { RouteLoading } from "@/components/RouteLoading";
 export const Route = createFileRoute("/auth")({
   ssr: false,
   head: () => ({
-    meta: [{ title: "Sign in — Vault.03" }],
+    meta: [
+      { title: "Sign in — Vault.03" },
+      { name: "description", content: "Sign in to Vault.03 to manage and value your sports card collection." },
+      { property: "og:title", content: "Sign in — Vault.03" },
+      { property: "og:description", content: "Sign in to Vault.03 to manage and value your sports card collection." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
   }),
   component: AuthPage,
 });

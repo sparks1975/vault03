@@ -537,7 +537,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     // so it keeps valuation fast while still showing comps we already have.
     if (!usedCardsight && data.card_id) {
       try {
-        const { titleMatchesCard, isVariantTitle, isNonSingleCardListing } = await import("./cardsight.server");
+        const { verifyCompTitle } = await import("./cardsight.server");
         const { data: cachedRows, error } = await context.supabase
           .from("pt130_comps")
           .select("title, price, sold_at, url")
@@ -550,22 +550,16 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             const price = Number(row.price);
             if (!Number.isFinite(price) || price <= 0) return false;
             const title = row.title ?? "";
-            if (!title) return true;
-            if (isNonSingleCardListing(title)) return false;
-            if (!titleMatchesCard(title, {
+            return verifyCompTitle(title, {
               player_name: valuationLookup.player_name,
               year: valuationLookup.year,
               set_name: valuationLookup.set_name,
               card_number: valuationLookup.card_number,
-              softCardNumber: true,
-            })) return false;
-            return !isVariantTitle(title, {
-              selectedParallelName: selectedParallelName,
-              set_name: valuationLookup.set_name,
+              selected_parallel_name: selectedParallelName,
               is_autograph: valuationLookup.is_autograph,
               serial_number: data.serial_number,
               is_first_bowman: valuationLookup.is_first_bowman,
-            });
+            }).verified;
           })
           .map((row) => ({
             sold_at: row.sold_at ?? null,

@@ -84,6 +84,16 @@ function StatGridSkeleton() {
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   ssr: false,
+  head: () => ({
+    meta: [
+      { title: "My Vault — Vault.03" },
+      { name: "description", content: "Manage your Vault.03 sports card portfolio, values, and comparable sales." },
+      { property: "og:title", content: "My Vault — Vault.03" },
+      { property: "og:description", content: "Manage your Vault.03 sports card portfolio, values, and comparable sales." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
+    ],
+  }),
   component: Dashboard,
 });
 
