@@ -324,7 +324,11 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     // When we have a canonical catalog ID, use the catalog's own year/set/card
     // number for matching. Editable/AI-extracted fields can be stale or wrong;
     // using them to filter title comps creates false "no sales" results.
-    if (resolvedCardId) {
+    // A card id that was already saved on the card was verified when it was
+    // first resolved. Re-verifying it on every re-value cost extra billed calls
+    // (catalog detail + a correction search + a parallel-name lookup) without
+    // changing the answer. Only canonicalize a *freshly* resolved id.
+    if (resolvedCardId && !data.cardsight_card_id) {
       try {
         const { getCatalogValuationLookup } = await import("./cardsight.server");
         const catalogLookup = await getCatalogValuationLookup(resolvedCardId);
@@ -338,31 +342,18 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             is_first_bowman: data.is_first_bowman,
           };
         } else if (catalogLookup) {
-          const { searchCatalogCardByFields } = await import("./cardsight.server");
-          const descriptorForCorrection = [
-            submittedLookup.year,
-            submittedLookup.set_name,
-            submittedLookup.player_name,
-            submittedLookup.card_number ? `#${submittedLookup.card_number}` : null,
-          ].filter(Boolean).join(" ");
-          const correctedId = await searchCatalogCardByFields({
-            ...submittedLookup,
-            descriptor: descriptorForCorrection,
-          });
-          resolvedCardId = correctedId && correctedId !== resolvedCardId ? correctedId : null;
+          // Identity conflict on a brand-new match: don't price it, and don't
+          // spend more calls hunting. The eBay-sold fallback handles it.
+          resolvedCardId = null;
         }
       } catch (err) {
         console.error("Cardsight valuation lookup failed:", err);
       }
-      if (resolvedCardId && data.cardsight_parallel_id) {
-        try {
-          const { getParallelNameForCard } = await import("./cardsight.server");
-          selectedParallelName = await getParallelNameForCard(resolvedCardId, data.cardsight_parallel_id);
-        } catch (err) {
-          console.error("Cardsight parallel lookup failed:", err);
-        }
-      }
     }
+    // Parallel filtering is done server-side by CardSight via parallel_id, so we
+    // no longer spend calls resolving the parallel's display name.
+    void selectedParallelName;
+
 
     const priceFromSlice = async (slice: Awaited<ReturnType<typeof import("./cardsight.server").fetchPricing>>) => {
       const { median, trimOutliersIQR } = await import("./cardsight.server");
