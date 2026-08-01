@@ -344,6 +344,24 @@ function normalizeCardNumber(value: string | number | null | undefined): string 
     .replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * True when the marketplace title states the wanted card number, either as an
+ * explicit "#112-SP" style token or as a delimited token elsewhere in the title
+ * ("112 SP", "no. 112-SP"). Used as mandatory evidence — sellers who omit the
+ * number can't be verified as the same card.
+ */
+function titleMentionsCardNumber(title: string, wantedNumber: string): boolean {
+  if (!wantedNumber) return true;
+  if (extractMarketplaceCardNumbers(title).includes(wantedNumber)) return true;
+  const squashed = title.toLowerCase().replace(/[^a-z0-9]+/g, " ");
+  const collapsed = ` ${squashed.replace(/\s+/g, "")} `;
+  // token-boundary check on the squashed title (handles "112 sp" -> "112sp")
+  return new RegExp(escapeRegex(wantedNumber)).test(collapsed.trim())
+    ? new RegExp(`(^|[^a-z0-9])${escapeRegex(wantedNumber)}([^a-z0-9]|$)`, "i").test(` ${squashed} `.replace(/\s+/g, " "))
+      || new RegExp(`(^|\\D)${escapeRegex(wantedNumber)}(\\D|$)`, "i").test(squashed.replace(/\s+/g, ""))
+    : false;
+}
+
 function titleHasPhrase(titleNorm: string, phrase: string): boolean {
   const normalizedPhrase = normalizeText(phrase);
   if (!normalizedPhrase) return false;
