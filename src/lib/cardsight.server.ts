@@ -26,7 +26,7 @@ function reserveSlot(): Promise<void> {
   return next;
 }
 
-async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function csFetchUncached<T>(path: string, init?: RequestInit): Promise<T> {
   let lastBody = "";
   let lastStatus = 0;
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -48,6 +48,42 @@ async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
     await new Promise((resolve) => setTimeout(resolve, backoff));
   }
   throw new Error(`Cardsight ${path} ${lastStatus}: ${lastBody.slice(0, 200)}`);
+}
+
+// GET responses are cached and de-duplicated. A single valuation (and a
+// "re-value all" pass) repeats the same catalog/pricing GETs many times —
+// resolve, verify, correct, retry, relaxed re-filter — which multiplied billed
+// API calls without changing the answer. Same URL within the TTL = one call.
+const GET_CACHE_TTL_MS = 15 * 60 * 1000;
+const GET_CACHE_MAX = 500;
+const getCache = new Map<string, { at: number; value: unknown }>();
+const inflight = new Map<string, Promise<unknown>>();
+
+async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (method !== "GET") return csFetchUncached<T>(path, init);
+
+  const hit = getCache.get(path);
+  if (hit && Date.now() - hit.at < GET_CACHE_TTL_MS) return hit.value as T;
+  if (hit) getCache.delete(path);
+
+  const pending = inflight.get(path);
+  if (pending) return pending as Promise<T>;
+
+  const promise = csFetchUncached<T>(path, init)
+    .then((value) => {
+      if (getCache.size >= GET_CACHE_MAX) {
+        const oldest = getCache.keys().next().value;
+        if (oldest) getCache.delete(oldest);
+      }
+      getCache.set(path, { at: Date.now(), value });
+      return value;
+    })
+    .finally(() => {
+      inflight.delete(path);
+    });
+  inflight.set(path, promise);
+  return promise;
 }
 
 // ---------- Types (subset of the OpenAPI schemas we actually use) ----------
