@@ -168,6 +168,10 @@ export async function refreshPt130ForCard(
       seen.add(key);
       sales.push(sale);
     }
+    // Search descriptors are ordered most-specific first. Once the exact query
+    // returns results, do not pay for a broader scrape that can only introduce
+    // noisier candidates.
+    if (sales.length > 0) break;
   }
   const del = await supabase.from("pt130_comps").delete().eq("card_id", args.card_id);
   if (del.error) throw del.error;

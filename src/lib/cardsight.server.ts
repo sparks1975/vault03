@@ -368,6 +368,7 @@ function titleHasPhrase(titleNorm: string, phrase: string): boolean {
 }
 
 const SET_TITLE_ALIASES: Record<string, string[]> = {
+  "Topps Black and White": ["topps black and white", "topps black white", "topps b w", "topps bw"],
   "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
   "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
   "Contenders / Contenders Draft Picks": ["contenders", "contenders draft picks"],
@@ -498,7 +499,19 @@ export function verifyCompTitle(
   const serial = serialSearchTerm(lookup.serial_number);
   if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) reasons.push("serial mismatch");
 
-  if (isVariantTitle(rawTitle, {
+  // Remove the exact card-number token before looking for variant words. A
+  // suffix such as 112-SP identifies the card itself; treating that SP as an
+  // unrelated short-print modifier rejects the exact listing we just matched.
+  const variantTitle = wantedNumber
+    ? rawTitle.replace(
+        new RegExp(
+          `(^|[^a-z0-9])${(wantedNumber.match(/\d+|[a-z]+/gi) ?? [wantedNumber]).map((g) => escapeRegex(g)).join("[^a-z0-9]?")}([^a-z0-9]|$)`,
+          "ig",
+        ),
+        " ",
+      )
+    : rawTitle;
+  if (isVariantTitle(variantTitle, {
     hasSelectedParallel: lookup.hasSelectedParallel,
     selectedParallelName: lookup.selected_parallel_name,
     set_name: lookup.set_name,

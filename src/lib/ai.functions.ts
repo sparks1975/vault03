@@ -570,18 +570,52 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       }
     }
 
-    // Fast fallback: use already-cached eBay sold comps when the structured
-    // pricing API returns too few/no records. This does NOT run the live scrape,
-    // so it keeps valuation fast while still showing comps we already have.
+    // Fallback to eBay sold results. Reuse a cache younger than 24 hours; when
+    // the cache is absent/stale, refresh this one card on demand. That avoids a
+    // permanent no-comps result between nightly jobs while bounding scraping to
+    // one successful, specific query per card per day.
     if (!usedCardsight && data.card_id) {
       try {
         const { verifyCompTitle } = await import("./cardsight.server");
-        const { data: cachedRows, error } = await context.supabase
+        let { data: cachedRows, error } = await context.supabase
           .from("pt130_comps")
-          .select("title, price, sold_at, url")
+          .select("title, price, sold_at, url, scraped_at")
           .eq("card_id", data.card_id)
           .order("sold_at", { ascending: false });
         if (error) throw error;
+
+        const newestScrape = (cachedRows ?? []).reduce((latest, row) => {
+          const time = new Date(row.scraped_at).getTime();
+          return Number.isFinite(time) && time > latest ? time : latest;
+        }, 0);
+        const cacheFresh = newestScrape > 0 && Date.now() - newestScrape < 24 * 60 * 60 * 1000;
+        if (!cacheFresh) {
+          const { buildPt130Descriptors, refreshPt130ForCard } = await import("./pt130.server");
+          const descriptors = buildPt130Descriptors({
+            player_name: valuationLookup.player_name,
+            year: valuationLookup.year,
+            set_name: valuationLookup.set_name,
+            card_number: valuationLookup.card_number,
+            is_autograph: valuationLookup.is_autograph,
+            selected_parallel_name: selectedParallelName,
+            grader: data.grader,
+            grade: data.grade,
+          });
+          if (descriptors.length > 0) {
+            await refreshPt130ForCard(context.supabase as never, {
+              card_id: data.card_id,
+              user_id: context.userId,
+              descriptor: descriptors,
+            });
+            const refreshed = await context.supabase
+              .from("pt130_comps")
+              .select("title, price, sold_at, url, scraped_at")
+              .eq("card_id", data.card_id)
+              .order("sold_at", { ascending: false });
+            if (refreshed.error) throw refreshed.error;
+            cachedRows = refreshed.data;
+          }
+        }
 
         const cachedSales = (cachedRows ?? [])
           .filter((row) => {
@@ -621,10 +655,6 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         console.error("Cached eBay sold fallback failed:", err);
       }
     }
-
-    // Live 130point scrape remains disabled — it was too slow during valuation.
-    // The fallback above only reads rows that are already cached in the database.
-
 
     if (!usedCardsight) {
       const saleMedian = await medianValueFromSales(sales);
