@@ -235,7 +235,6 @@ function Dashboard() {
     const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
     const now = Date.now();
     const stale = cardData.filter((c) => {
-      if ((c.sales ?? []).length === 0) return true;
       if (!c.last_valued_at) return true;
       const ts = new Date(c.last_valued_at).getTime();
       return !Number.isFinite(ts) || now - ts >= THIRTY_DAYS_MS;
