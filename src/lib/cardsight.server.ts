@@ -26,7 +26,7 @@ function reserveSlot(): Promise<void> {
   return next;
 }
 
-async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function csFetchUncached<T>(path: string, init?: RequestInit): Promise<T> {
   let lastBody = "";
   let lastStatus = 0;
   for (let attempt = 0; attempt < 6; attempt++) {
@@ -48,6 +48,42 @@ async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
     await new Promise((resolve) => setTimeout(resolve, backoff));
   }
   throw new Error(`Cardsight ${path} ${lastStatus}: ${lastBody.slice(0, 200)}`);
+}
+
+// GET responses are cached and de-duplicated. A single valuation (and a
+// "re-value all" pass) repeats the same catalog/pricing GETs many times —
+// resolve, verify, correct, retry, relaxed re-filter — which multiplied billed
+// API calls without changing the answer. Same URL within the TTL = one call.
+const GET_CACHE_TTL_MS = 15 * 60 * 1000;
+const GET_CACHE_MAX = 500;
+const getCache = new Map<string, { at: number; value: unknown }>();
+const inflight = new Map<string, Promise<unknown>>();
+
+async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (method !== "GET") return csFetchUncached<T>(path, init);
+
+  const hit = getCache.get(path);
+  if (hit && Date.now() - hit.at < GET_CACHE_TTL_MS) return hit.value as T;
+  if (hit) getCache.delete(path);
+
+  const pending = inflight.get(path);
+  if (pending) return pending as Promise<T>;
+
+  const promise = csFetchUncached<T>(path, init)
+    .then((value) => {
+      if (getCache.size >= GET_CACHE_MAX) {
+        const oldest = getCache.keys().next().value;
+        if (oldest) getCache.delete(oldest);
+      }
+      getCache.set(path, { at: Date.now(), value });
+      return value;
+    })
+    .finally(() => {
+      inflight.delete(path);
+    });
+  inflight.set(path, promise);
+  return promise;
 }
 
 // ---------- Types (subset of the OpenAPI schemas we actually use) ----------
@@ -784,7 +820,29 @@ function parseDescriptor(descriptor: string): CardLookup {
   return { descriptor: trimmed, year, card_number: cardNumber };
 }
 
+// Resolving a catalog card costs several requests. The valuation pipeline asks
+// for the same lookup more than once per card, so memoize by lookup identity.
+const catalogLookupCache = new Map<string, { at: number; card: CatalogCard | null }>();
+const CATALOG_LOOKUP_TTL_MS = 15 * 60 * 1000;
+
 export async function findCatalogCard(lookup: CardLookup): Promise<CatalogCard | null> {
+  const cacheKey = JSON.stringify([
+    lookup.player_name ?? null,
+    lookup.year ?? null,
+    lookup.set_name ?? null,
+    lookup.card_number ?? null,
+    lookup.descriptor ?? null,
+    lookup.is_autograph ?? null,
+  ]);
+  const cachedLookup = catalogLookupCache.get(cacheKey);
+  if (cachedLookup && Date.now() - cachedLookup.at < CATALOG_LOOKUP_TTL_MS) return cachedLookup.card;
+
+  const card = await findCatalogCardUncached(lookup);
+  catalogLookupCache.set(cacheKey, { at: Date.now(), card });
+  return card;
+}
+
+async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard | null> {
   const descriptorLookup = lookup.descriptor ? parseDescriptor(lookup.descriptor) : {};
   const merged: CardLookup = { ...descriptorLookup, ...lookup };
   const player = merged.player_name?.trim();
@@ -867,7 +925,10 @@ export async function findCatalogCard(lookup: CardLookup): Promise<CatalogCard |
 
   if (searchCandidates.size > 0) {
     const detailed: CatalogCard[] = [];
-    for (const result of [...searchCandidates.values()].slice(0, 10)) {
+    // Detail fetches are billed per call; the top-scored few are enough to
+    // verify identity. Rank by score first so the cap doesn't lose the match.
+    const ranked = [...searchCandidates.values()].sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged));
+    for (const result of ranked.slice(0, 3)) {
       try {
         detailed.push(await csFetch<CatalogCard>(`/v1/catalog/cards/${result.id}`));
       } catch {
@@ -1224,7 +1285,9 @@ export async function searchPricingComps(
   lookup: PricingSearchLookup,
   opts: { period?: string; limit?: number } = {},
 ): Promise<PricingSlice> {
-  const queries = uniquePricingQueries(lookup);
+  // Cap the fallback fan-out: the first queries are the most specific, and the
+  // looser tails rarely add verified comps while costing a call each.
+  const queries = uniquePricingQueries(lookup).slice(0, 3);
   const period = opts.period ?? "30d";
   const limit = opts.limit ?? 100;
   const all: PricingRecord[] = [];
