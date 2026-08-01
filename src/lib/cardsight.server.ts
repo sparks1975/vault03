@@ -636,11 +636,14 @@ export function titleMatchesCard(
   if (!strictSetTitleMatches(rawTitle, lookup.set_name)) return false;
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
   if (number && lookup.requireCardNumber !== false) {
-    const explicitNumbers = extractMarketplaceCardNumbers(title);
     const wanted = normalizeCardNumber(number);
-    if (explicitNumbers.length > 0 && !explicitNumbers.includes(wanted)) return false;
+    if (lookup.softCardNumber) {
+      const explicitNumbers = extractMarketplaceCardNumbers(title);
+      if (explicitNumbers.length > 0 && !explicitNumbers.includes(wanted)) return false;
+    } else if (!titleMentionsCardNumber(rawTitle, wanted)) {
+      return false;
+    }
   }
-  return true;
 }
 
 
