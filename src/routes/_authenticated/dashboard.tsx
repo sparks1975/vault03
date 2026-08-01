@@ -826,6 +826,27 @@ function CardDetail({
   const [draft, setDraft] = useState<Partial<Card>>({});
   const [playerResults, setPlayerResults] = useState<Awaited<ReturnType<typeof searchMlbPlayer>>>([]);
   const [imgLoaded, setImgLoaded] = useState(true);
+  const [editingValue, setEditingValue] = useState(false);
+  const [manualValue, setManualValue] = useState("");
+
+  useEffect(() => {
+    setEditingValue(false);
+  }, [card.id]);
+
+  function saveManualValue() {
+    const n = Number(manualValue.replace(/[^0-9.]/g, ""));
+    if (!Number.isFinite(n) || n <= 0) {
+      toast.error("Enter a valid dollar amount");
+      return;
+    }
+    const patch: Partial<Card> = { current_value: n, last_valued_at: new Date().toISOString() };
+    if (card.purchase_price != null && Number(card.purchase_price) > 0) {
+      patch.value_delta_pct = ((n - Number(card.purchase_price)) / Number(card.purchase_price)) * 100;
+    }
+    onUpdate(card.id, patch);
+    setEditingValue(false);
+    toast.success("Value updated");
+  }
 
   useEffect(() => {
     setImgLoaded(!card.photo_url);
@@ -1192,14 +1213,66 @@ function CardDetail({
               {card.grader} {card.grade} {card.team ? `• ${card.team}` : ""}
             </div>
             <div className="text-right">
-              <p className="text-2xl font-extrabold tracking-tight">{fmt(card.current_value)}</p>
-              {gainPct(card) != null && (
-                <p className={`text-[10px] font-mono ${Number(card.current_value) >= Number(card.purchase_price) ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
-                  {fmtPct(gainPct(card))} vs purchase
-                </p>
+              {editingValue ? (
+                <div className="flex items-center gap-1 justify-end">
+                  <span className="text-sm font-mono text-muted-foreground">$</span>
+                  <input
+                    autoFocus
+                    inputMode="decimal"
+                    value={manualValue}
+                    onChange={(e) => setManualValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveManualValue();
+                      if (e.key === "Escape") setEditingValue(false);
+                    }}
+                    placeholder="0.00"
+                    className="h-8 w-24 text-right font-mono bg-background border border-border px-2 text-sm"
+                  />
+                  <button
+                    onClick={saveManualValue}
+                    className="text-[10px] font-mono uppercase tracking-widest border border-accent text-accent px-2 py-1 hover:bg-accent hover:text-accent-foreground"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setEditingValue(false)}
+                    className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : card.current_value == null ? (
+                <button
+                  onClick={() => {
+                    setManualValue("");
+                    setEditingValue(true);
+                  }}
+                  className="text-[10px] font-mono uppercase tracking-widest border border-accent text-accent px-2 py-1 hover:bg-accent hover:text-accent-foreground"
+                >
+                  Enter value
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setManualValue(String(Number(card.current_value)));
+                      setEditingValue(true);
+                    }}
+                    className="text-2xl font-extrabold tracking-tight hover:text-accent"
+                    title="Edit value manually"
+                  >
+                    {fmt(card.current_value)}
+                  </button>
+                  {gainPct(card) != null && (
+                    <p className={`text-[10px] font-mono ${Number(card.current_value) >= Number(card.purchase_price) ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
+                      {fmtPct(gainPct(card))} vs purchase
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>
+
         </div>
       )}
 
