@@ -925,7 +925,10 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
 
   if (searchCandidates.size > 0) {
     const detailed: CatalogCard[] = [];
-    for (const result of [...searchCandidates.values()].slice(0, 10)) {
+    // Detail fetches are billed per call; the top-scored few are enough to
+    // verify identity. Rank by score first so the cap doesn't lose the match.
+    const ranked = [...searchCandidates.values()].sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged));
+    for (const result of ranked.slice(0, 3)) {
       try {
         detailed.push(await csFetch<CatalogCard>(`/v1/catalog/cards/${result.id}`));
       } catch {
