@@ -918,7 +918,6 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
   // differently in the catalog.
   addCardsAttempt({ name: player, number, year, releaseName: setName });
   addCardsAttempt({ name: player, number, year, setName });
-  addCardsAttempt({ name: player, number, year });
 
   const seen = new Set<string>();
   const candidates: CatalogCard[] = [];
@@ -972,7 +971,7 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
     // identity evidence.
     const ranked = [...searchCandidates.values()].sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged));
     const detailed: CatalogCard[] = [];
-    const batches = [ranked.slice(0, 2)];
+    const batches = [ranked.slice(0, 1)];
 
     for (const batch of batches) {
       if (batch.length === 0) continue;
