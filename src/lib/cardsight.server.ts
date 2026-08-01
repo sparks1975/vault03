@@ -222,17 +222,19 @@ export async function identifyCardRest(
   const det = j.detections?.[0];
   if (!det || !det.card) return null;
   const c = det.card;
-  const catalogLookup = c.id ? await getCatalogValuationLookup(c.id) : null;
-  const catalogYear = catalogLookup?.year == null ? null : Number(catalogLookup.year) || null;
+  // Identification is exactly one billed call. The identify response already
+  // carries the canonical card id, name, year, release/set and number, so we do
+  // NOT make a second catalog-detail request here.
   return {
     cardsight_card_id: c.id ?? null,
     cardsight_parallel_id: c.parallel?.id ?? null,
-    player_name: catalogLookup?.player_name ?? c.name ?? null,
+    player_name: c.name ?? null,
     team: null,
     position: null,
-    year: catalogYear ?? (c.year ? Number(c.year) || null : null),
-    set_name: catalogLookup?.set_name ?? sanitizeSetName(c.releaseName, c.setName),
-    card_number: catalogLookup?.card_number ?? c.number ?? null,
+    year: c.year ? Number(c.year) || null : null,
+    set_name: sanitizeSetName(c.releaseName, c.setName),
+    card_number: c.number ?? null,
+
     grade: null,
     grader: det.grading?.company?.name ?? null,
     confidence: (det.confidence?.toLowerCase() as "high" | "medium" | "low") ?? "medium",
