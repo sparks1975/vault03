@@ -924,30 +924,36 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
   }
 
   if (searchCandidates.size > 0) {
-    const detailed: CatalogCard[] = [];
-    // Detail fetches are billed per call; the top-scored few are enough to
-    // verify identity. Rank by score first so the cap doesn't lose the match.
+    // Detail fetches are billed per call, so try the top-scored few first and
+    // only escalate to the rest when none of them verify. Happy path stays
+    // cheap; hard cards still get full coverage.
     const ranked = [...searchCandidates.values()].sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged));
-    for (const result of ranked.slice(0, 3)) {
-      try {
-        detailed.push(await csFetch<CatalogCard>(`/v1/catalog/cards/${result.id}`));
-      } catch {
-        // Fall back to scoring the lightweight search result below.
+    const detailed: CatalogCard[] = [];
+    const batches = [ranked.slice(0, 3), ranked.slice(3, 10)];
+
+    for (const batch of batches) {
+      if (batch.length === 0) continue;
+      for (const result of batch) {
+        try {
+          detailed.push(await csFetch<CatalogCard>(`/v1/catalog/cards/${result.id}`));
+        } catch {
+          // Fall back to scoring the lightweight search result below.
+        }
       }
-    }
-    if (detailed.length > 0) {
       const matched = detailed.filter((c) => cardMatchesLookup(c, merged));
       if (matched.length > 0) return matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
-      const yearAgnosticMatched = year
-        ? detailed.filter((c) => cardMatchesLookup(c, { ...merged, year: null }))
-        : [];
-      if (yearAgnosticMatched.length > 0) {
-        return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
-      }
     }
-    const card = [...searchCandidates.values()].sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+
+    const yearAgnosticMatched = year
+      ? detailed.filter((c) => cardMatchesLookup(c, { ...merged, year: null }))
+      : [];
+    if (yearAgnosticMatched.length > 0) {
+      return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
+    }
+    const card = ranked[0];
     if (card) return await csFetch<CatalogCard>(`/v1/catalog/cards/${card.id}`);
   }
+
 
   return null;
 }
