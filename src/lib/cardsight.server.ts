@@ -344,6 +344,23 @@ function normalizeCardNumber(value: string | number | null | undefined): string 
     .replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * True when the marketplace title states the wanted card number, either as an
+ * explicit "#112-SP" style token or as a delimited token elsewhere in the title
+ * ("112 SP", "no. 112-SP"). Used as mandatory evidence — sellers who omit the
+ * number can't be verified as the same card.
+ */
+function titleMentionsCardNumber(title: string, wantedNumber: string): boolean {
+  if (!wantedNumber) return true;
+  if (extractMarketplaceCardNumbers(title).includes(wantedNumber)) return true;
+  // Flexible scan: allow any separator between digit/letter groups so a wanted
+  // number of "112sp" matches "112-SP", "112 SP" and "#112SP", while staying
+  // token-bounded so it never matches inside another number (e.g. 1120).
+  const groups = wantedNumber.match(/\d+|[a-z]+/gi) ?? [wantedNumber];
+  const pattern = groups.map((g) => escapeRegex(g)).join("[^a-z0-9]?");
+  return new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, "i").test(title);
+}
+
 function titleHasPhrase(titleNorm: string, phrase: string): boolean {
   const normalizedPhrase = normalizeText(phrase);
   if (!normalizedPhrase) return false;
@@ -454,8 +471,16 @@ export function verifyCompTitle(
   let explicitNumbers: string[] = [];
   if (wantedNumber) {
     explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
-    if (explicitNumbers.length > 0 && !explicitNumbers.includes(wantedNumber)) {
-      reasons.push(`card number #${compact(lookup.card_number).replace(/^#\s*/, "")} not explicit`);
+    // The card number is mandatory evidence: a comp from the right set but a
+    // different (or unstated) number is a different card. Reject both a
+    // conflicting number and a title that never states the number at all.
+    if (!titleMentionsCardNumber(rawTitle, wantedNumber)) {
+      const label = compact(lookup.card_number).replace(/^#\s*/, "");
+      reasons.push(
+        explicitNumbers.length > 0
+          ? `card number #${label} mismatch`
+          : `card number #${label} missing from title`,
+      );
     }
   }
 
@@ -611,9 +636,13 @@ export function titleMatchesCard(
   if (!strictSetTitleMatches(rawTitle, lookup.set_name)) return false;
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
   if (number && lookup.requireCardNumber !== false) {
-    const explicitNumbers = extractMarketplaceCardNumbers(title);
     const wanted = normalizeCardNumber(number);
-    if (explicitNumbers.length > 0 && !explicitNumbers.includes(wanted)) return false;
+    if (lookup.softCardNumber) {
+      const explicitNumbers = extractMarketplaceCardNumbers(title);
+      if (explicitNumbers.length > 0 && !explicitNumbers.includes(wanted)) return false;
+    } else if (!titleMentionsCardNumber(rawTitle, wanted)) {
+      return false;
+    }
   }
   return true;
 }
