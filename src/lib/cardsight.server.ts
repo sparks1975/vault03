@@ -1291,13 +1291,10 @@ export async function searchPricingComps(
   lookup: PricingSearchLookup,
   opts: { period?: string; limit?: number } = {},
 ): Promise<PricingSlice> {
-  // Cap the fallback fan-out: the first queries are the most specific, and the
-  // looser tails rarely add verified comps while costing a call each.
-  const queries = uniquePricingQueries(lookup).slice(0, 3);
-  const period = opts.period ?? "30d";
-  const limit = opts.limit ?? 100;
-  const all: PricingRecord[] = [];
-  let lastMeta: PricingSlice["rawResponseMeta"] = undefined;
+  // Try the most specific queries first (cheap happy path), then fall through
+  // to the looser ones only when nothing verified — never give up early.
+  const queries = uniquePricingQueries(lookup);
+
 
   for (const q of queries) {
     const params = new URLSearchParams({ q, period, limit: String(limit) });
