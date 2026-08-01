@@ -79,6 +79,10 @@ export const APPROVED_CARD_SETS = [
 export type ApprovedCardSet = (typeof APPROVED_CARD_SETS)[number];
 
 const SET_ALIASES: Record<string, ApprovedCardSet> = {
+  "topps black white": "Topps Black and White",
+  "topps black and white": "Topps Black and White",
+  "topps b w": "Topps Black and White",
+  "topps bw": "Topps Black and White",
   "topps complete set": "Topps Complete/Factory Sets",
   "topps complete sets": "Topps Complete/Factory Sets",
   "topps factory set": "Topps Complete/Factory Sets",
