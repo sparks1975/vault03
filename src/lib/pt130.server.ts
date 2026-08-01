@@ -1,6 +1,6 @@
 // 130point.com scraper via Firecrawl. 130point renders sold-listings search
 // entirely client-side, so we drive it with Firecrawl actions: type into the
-// #searchBar input, press Enter, wait for results, then parse the markdown.
+// current search input, submit, wait for results, then parse the markdown.
 //
 // SERVER-ONLY module — never import from client code.
 
@@ -115,8 +115,8 @@ export async function scrapePt130(descriptor: string): Promise<Pt130Sale[]> {
     waitFor: 5000,
     actions: [
       { type: "wait", milliseconds: 3000 },
-      { type: "write", selector: "#searchBar", text: descriptor },
-      { type: "press", key: "Enter" },
+      { type: "write", selector: 'input[placeholder="Search by player, set, year, etc"]', text: descriptor },
+      { type: "click", selector: 'button[aria-label="Search"]' },
       { type: "wait", milliseconds: 8000 },
     ],
   };

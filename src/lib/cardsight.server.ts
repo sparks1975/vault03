@@ -511,7 +511,13 @@ export function verifyCompTitle(
         " ",
       )
     : rawTitle;
-  if (isVariantTitle(variantTitle, {
+  // Some catalog card numbers encode the variation itself (112-SP/SSP). In
+  // that case seller phrases such as "image variation" and "short print" are
+  // confirming the exact card, not evidence of a different parallel.
+  const identityAwareVariantTitle = /(?:sp|ssp)$/i.test(wantedNumber)
+    ? variantTitle.replace(/\b(image|photo)\s+variations?\b|\bshort\s*prints?\b|\bss?p\b/gi, " ")
+    : variantTitle;
+  if (isVariantTitle(identityAwareVariantTitle, {
     hasSelectedParallel: lookup.hasSelectedParallel,
     selectedParallelName: lookup.selected_parallel_name,
     set_name: lookup.set_name,
