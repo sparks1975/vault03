@@ -353,12 +353,12 @@ function normalizeCardNumber(value: string | number | null | undefined): string 
 function titleMentionsCardNumber(title: string, wantedNumber: string): boolean {
   if (!wantedNumber) return true;
   if (extractMarketplaceCardNumbers(title).includes(wantedNumber)) return true;
-  // Fall back to a delimited scan of the squashed title so "112 SP" / "112-sp"
-  // both match a wanted number of "112sp".
-  const squashed = title.toLowerCase().replace(/[^a-z0-9]+/g, "");
-  const re = new RegExp(`(^|[^a-z0-9])${escapeRegex(wantedNumber)}([^a-z0-9]|$)`, "i");
-  const spaced = title.toLowerCase().replace(/[^a-z0-9]+/g, " ");
-  return re.test(spaced) || squashed.includes(wantedNumber);
+  // Flexible scan: allow any separator between digit/letter groups so a wanted
+  // number of "112sp" matches "112-SP", "112 SP" and "#112SP", while staying
+  // token-bounded so it never matches inside another number (e.g. 1120).
+  const groups = wantedNumber.match(/\d+|[a-z]+/gi) ?? [wantedNumber];
+  const pattern = groups.map((g) => escapeRegex(g)).join("[^a-z0-9]?");
+  return new RegExp(`(^|[^a-z0-9])${pattern}([^a-z0-9]|$)`, "i").test(title);
 }
 
 function titleHasPhrase(titleNorm: string, phrase: string): boolean {
