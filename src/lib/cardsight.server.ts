@@ -454,8 +454,16 @@ export function verifyCompTitle(
   let explicitNumbers: string[] = [];
   if (wantedNumber) {
     explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
-    if (explicitNumbers.length > 0 && !explicitNumbers.includes(wantedNumber)) {
-      reasons.push(`card number #${compact(lookup.card_number).replace(/^#\s*/, "")} not explicit`);
+    // The card number is mandatory evidence: a comp from the right set but a
+    // different (or unstated) number is a different card. Reject both a
+    // conflicting number and a title that never states the number at all.
+    if (!titleMentionsCardNumber(rawTitle, wantedNumber)) {
+      const label = compact(lookup.card_number).replace(/^#\s*/, "");
+      reasons.push(
+        explicitNumbers.length > 0
+          ? `card number #${label} mismatch`
+          : `card number #${label} missing from title`,
+      );
     }
   }
 
