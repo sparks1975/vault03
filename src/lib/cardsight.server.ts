@@ -29,7 +29,10 @@ function reserveSlot(): Promise<void> {
 async function csFetchUncached<T>(path: string, init?: RequestInit): Promise<T> {
   let lastBody = "";
   let lastStatus = 0;
-  for (let attempt = 0; attempt < 6; attempt++) {
+  // A failed provider request can still count against the account quota. One
+  // retry is enough to recover a transient 429/5xx without turning every
+  // logical lookup into six billed calls.
+  for (let attempt = 0; attempt < 2; attempt++) {
     await reserveSlot();
     const res = await fetch(`${REST_BASE}${path}`, {
       ...init,
@@ -44,7 +47,7 @@ async function csFetchUncached<T>(path: string, init?: RequestInit): Promise<T> 
     lastBody = await res.text().catch(() => "");
     if (res.status !== 429 && res.status < 500) break;
     const retryAfter = Number(res.headers.get("retry-after"));
-    const backoff = retryAfter > 0 ? retryAfter * 1000 : Math.min(8000, 800 * Math.pow(2, attempt));
+    const backoff = retryAfter > 0 ? retryAfter * 1000 : 800;
     await new Promise((resolve) => setTimeout(resolve, backoff));
   }
   throw new Error(`Cardsight ${path} ${lastStatus}: ${lastBody.slice(0, 200)}`);
@@ -910,17 +913,11 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
 
   // The structured cards endpoint handles exact number/year/release filters far
   // better than free-text search, especially when a descriptor contains "#28".
+  // Keep catalog resolution bounded. The old eight-query cascade was the main
+  // source of runaway API usage when a card was absent or described slightly
+  // differently in the catalog.
   addCardsAttempt({ name: player, number, year, releaseName: setName });
   addCardsAttempt({ name: player, number, year, setName });
-  addCardsAttempt({ number, year, releaseName: setName });
-  addCardsAttempt({ name: player, year, releaseName: setName });
-  // If the scanned/edited year is wrong, an exact-year lookup returns nothing
-  // even when player + set + card number uniquely identify the catalog card.
-  // Retry without year before falling back to loose text search.
-  addCardsAttempt({ name: player, number, releaseName: setName });
-  addCardsAttempt({ name: player, number, setName });
-  addCardsAttempt({ number, releaseName: setName });
-  addCardsAttempt({ name: player, releaseName: setName });
 
   const seen = new Set<string>();
   const candidates: CatalogCard[] = [];
@@ -948,12 +945,8 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
   }
 
   const searchQueries = new Set<string>();
-  for (const setTerm of expandSetSearchTerms(setName)) {
-    if (player) searchQueries.add([player, setTerm].filter(Boolean).join(" "));
-    if (year && player) searchQueries.add([year, player, setTerm].filter(Boolean).join(" "));
-  }
   if (merged.descriptor) searchQueries.add(merged.descriptor);
-  if (player && searchQueries.size === 0) searchQueries.add(player);
+  else if (player) searchQueries.add([year, setName, player, number ? `#${number}` : null].filter(Boolean).join(" "));
 
   const searchCandidates = new Map<string, SearchResult>();
   for (const textQuery of searchQueries) {
@@ -973,12 +966,12 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
   }
 
   if (searchCandidates.size > 0) {
-    // Detail fetches are billed per call, so try the top-scored few first and
-    // only escalate to the rest when none of them verify. Happy path stays
-    // cheap; hard cards still get full coverage.
+    // Detail fetches are billed per call. Inspect at most the top two results;
+    // a broad ten-result escalation costs more without providing dependable
+    // identity evidence.
     const ranked = [...searchCandidates.values()].sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged));
     const detailed: CatalogCard[] = [];
-    const batches = [ranked.slice(0, 3), ranked.slice(3, 10)];
+    const batches = [ranked.slice(0, 1)];
 
     for (const batch of batches) {
       if (batch.length === 0) continue;
@@ -999,8 +992,8 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
     if (yearAgnosticMatched.length > 0) {
       return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
     }
-    const card = ranked[0];
-    if (card) return await csFetch<CatalogCard>(`/v1/catalog/cards/${card.id}`);
+    // Never accept an unverified top result merely because it was returned by
+    // search; that both wastes a request and risks saving the wrong card ID.
   }
 
 
@@ -1350,7 +1343,9 @@ export async function searchPricingComps(
   const all: PricingRecord[] = [];
   let lastMeta: PricingSlice["rawResponseMeta"] = undefined;
 
-  for (const q of queries) {
+  // Search is a last-resort fallback. Two tightly scoped queries provide a
+  // bounded escape hatch without allowing one card to consume dozens of calls.
+  for (const q of queries.slice(0, 2)) {
     const params = new URLSearchParams({ q, period, listing_type: "auction", limit: String(Math.min(limit, 500)) });
     const resp = await csFetch<PricingSearchResponse>(`/v1/pricing/search?${params.toString()}`);
     lastMeta = { query: resp.query, messages: resp.messages };

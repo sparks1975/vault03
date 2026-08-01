@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
-import { estimateCardValue } from "./ai.functions";
 import { toApprovedCardSet } from "./card-sets";
 
 
@@ -359,65 +358,6 @@ export const replaceValuation = createServerFn({ method: "POST" })
     });
     return { ok: true };
   });
-
-export const revalueAllCards = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { supabase, userId } = context;
-    const { data: cards, error } = await supabase
-      .from("cards")
-      .select("id, player_name, year, set_name, card_number, grade, grader, is_autograph, is_first_bowman, serial_number, cardsight_card_id, cardsight_parallel_id, cardsight_grade_id, last_valued_at")
-      .eq("user_id", userId);
-    if (error) throw error;
-
-    let processed = 0;
-    let failed = 0;
-    for (const c of cards ?? []) {
-      try {
-        const est = await estimateCardValue({
-          data: {
-            player_name: c.player_name,
-            year: c.year,
-            set_name: c.set_name,
-            card_number: c.card_number,
-            grade: c.grade,
-            grader: c.grader,
-            is_autograph: c.is_autograph,
-            is_first_bowman: c.is_first_bowman,
-            serial_number: c.serial_number,
-            cardsight_card_id: c.cardsight_card_id,
-            cardsight_parallel_id: c.cardsight_parallel_id,
-            cardsight_grade_id: c.cardsight_grade_id,
-            card_id: c.id,
-          },
-        });
-        await applyValuation(supabase as never, userId, c.id, {
-          current_value: est.current_value,
-          value_delta_pct: est.value_delta_pct,
-          sales: est.sales,
-          history: est.history,
-        });
-        const idPatch: Record<string, string> = {};
-        if (!c.cardsight_card_id && est.resolved_cardsight_card_id) {
-          idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
-        }
-        if (!c.cardsight_grade_id && est.resolved_cardsight_grade_id) {
-          idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
-        }
-        if (Object.keys(idPatch).length > 0) {
-          await supabase.from("cards").update(idPatch as never).eq("id", c.id);
-        }
-
-
-        processed++;
-      } catch (err) {
-        console.error("Revalue failed for", c.player_name, err);
-        failed++;
-      }
-    }
-    return { processed, failed, total: cards?.length ?? 0 };
-  });
-
 
 // ---------- Compress existing stored images via TinyPNG ----------
 export const compressExistingPhotos = createServerFn({ method: "POST" })

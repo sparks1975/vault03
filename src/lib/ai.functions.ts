@@ -447,25 +447,6 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             period: "5y",
           });
           await priceFromSlice(slice);
-          if (!usedCardsight && sales.length === 0 && valuationLookup.card_number) {
-            const relaxedSlice = await fetchPricing(resolvedCardId, {
-              parallel_id: data.cardsight_parallel_id ?? null,
-              grade_id: resolvedGradeId,
-              player_name: valuationLookup.player_name,
-              year: valuationLookup.year,
-              set_name: valuationLookup.set_name,
-              card_number: valuationLookup.card_number,
-              grader: data.grader,
-              grade: data.grade,
-              is_autograph: valuationLookup.is_autograph,
-              is_first_bowman: valuationLookup.is_first_bowman,
-              serial_number: data.serial_number,
-              selected_parallel_name: selectedParallelName,
-              period: "5y",
-              relaxedSetMatch: true,
-            });
-            await priceFromSlice(relaxedSlice);
-          }
         }
       } catch (err) {
         console.error("Cardsight pricing failed:", err);
@@ -473,101 +454,14 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       }
     }
 
-    // Existing rows may have an older/wrong catalog ID saved from prior loose
-    // matching. If exact structured pricing returns too few sold comps, resolve
-    // the catalog card again from the editable fields and retry before using the
-    // broader pricing-search fallback.
-    if (!usedCardsight && resolvedCardId && !(data.grader && data.grade && !resolvedGradeId)) {
-      try {
-        const { fetchPricing, searchCatalogCardByFields } = await import("./cardsight.server");
-        const descriptorForRetry = [
-          valuationLookup.year,
-          valuationLookup.set_name,
-          valuationLookup.player_name,
-          valuationLookup.card_number ? `#${valuationLookup.card_number}` : null,
-        ]
-          .filter(Boolean)
-          .join(" ");
-        const retryCardId = await searchCatalogCardByFields({
-          player_name: valuationLookup.player_name,
-          year: valuationLookup.year,
-          set_name: valuationLookup.set_name,
-          card_number: valuationLookup.card_number,
-          descriptor: descriptorForRetry,
-          is_autograph: valuationLookup.is_autograph,
-          is_first_bowman: valuationLookup.is_first_bowman,
-        });
-        if (retryCardId && retryCardId !== resolvedCardId) {
-          const retrySlice = await fetchPricing(retryCardId, {
-            parallel_id: data.cardsight_parallel_id ?? null,
-            grade_id: resolvedGradeId,
-            player_name: valuationLookup.player_name,
-            year: valuationLookup.year,
-            set_name: valuationLookup.set_name,
-            card_number: valuationLookup.card_number,
-            grader: data.grader,
-            grade: data.grade,
-            is_autograph: valuationLookup.is_autograph,
-            is_first_bowman: valuationLookup.is_first_bowman,
-            serial_number: data.serial_number,
-            selected_parallel_name: selectedParallelName,
-            period: "5y",
-          });
-          await priceFromSlice(retrySlice);
-          if (usedCardsight) resolvedCardId = retryCardId;
-        }
-      } catch (err) {
-        console.error("Cardsight pricing retry failed:", err);
-      }
-    }
-
-    if (!usedCardsight) {
-      try {
-        const { searchPricingComps } = await import("./cardsight.server");
-        const searchSlice = await searchPricingComps(
-          {
-            player_name: valuationLookup.player_name,
-            year: valuationLookup.year,
-            set_name: valuationLookup.set_name,
-            card_number: valuationLookup.card_number,
-            is_autograph: valuationLookup.is_autograph,
-            is_first_bowman: valuationLookup.is_first_bowman,
-            serial_number: data.serial_number,
-            selected_parallel_name: selectedParallelName,
-            grader: data.grader,
-            grade: data.grade,
-          },
-          { period: "5y", limit: 100 },
-        );
-        await priceFromSlice(searchSlice);
-          if (!usedCardsight && sales.length === 0 && valuationLookup.card_number) {
-            const relaxedSearchSlice = await searchPricingComps(
-              {
-                player_name: valuationLookup.player_name,
-                year: valuationLookup.year,
-                set_name: valuationLookup.set_name,
-                card_number: valuationLookup.card_number,
-                is_autograph: valuationLookup.is_autograph,
-                is_first_bowman: valuationLookup.is_first_bowman,
-                serial_number: data.serial_number,
-                selected_parallel_name: selectedParallelName,
-                grader: data.grader,
-                grade: data.grade,
-                relaxedSetMatch: true,
-              },
-              { period: "5y", limit: 100 },
-            );
-            await priceFromSlice(relaxedSearchSlice);
-          }
-        if (!usedCardsight && !compsNote) {
-          compsNote = resolvedCardId
-            ? "Cardsight returned too few comps for this exact catalog card — using pricing search fallback."
-            : "Couldn't match this card to a catalog ID, and pricing search found too few comps — using AI estimate.";
-        }
-      } catch (err) {
-        console.error("Cardsight pricing search failed:", err);
-        if (!compsNote) compsNote = err instanceof Error ? err.message : String(err);
-      }
+    // Do not fan out into repeated catalog corrections and broad pricing
+    // searches. One canonical pricing request is the entire CardSight pricing
+    // budget for a saved card; if it has no verified sales, use the daily
+    // eBay-sold fallback below instead.
+    if (!usedCardsight && !compsNote) {
+      compsNote = resolvedCardId
+        ? "No verified sales for this catalog card — checking eBay sold."
+        : "Couldn't match this card to the catalog — checking eBay sold.";
     }
 
     // Fallback to eBay sold results. Reuse a cache younger than 24 hours; when

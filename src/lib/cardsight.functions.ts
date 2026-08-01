@@ -15,24 +15,12 @@ export const listCardsightParallels = createServerFn({ method: "POST" })
     }).parse(d),
   )
   .handler(async ({ data }) => {
-    const { listParallelsForCard, searchCatalogCardByFields } = await import("./cardsight.server");
+    const { listParallelsForCard } = await import("./cardsight.server");
     try {
-      const lookup = {
-        player_name: data.player_name,
-        year: data.year,
-        set_name: data.set_name,
-        card_number: data.card_number,
-        descriptor: data.descriptor,
-      };
-
-      if (data.card_id) {
-        const fromSavedId = await listParallelsForCard(data.card_id);
-        if (fromSavedId.length > 0) return fromSavedId;
-      }
-
-      const resolvedId = await searchCatalogCardByFields(lookup);
-      if (!resolvedId || resolvedId === data.card_id) return [];
-      return await listParallelsForCard(resolvedId);
+      // Never launch catalog searches from live form input. The picker only
+      // loads against the exact card ID established by identification.
+      if (!data.card_id) return [];
+      return await listParallelsForCard(data.card_id);
     } catch (err) {
       console.error("listParallelsForCard failed:", err);
       return [];

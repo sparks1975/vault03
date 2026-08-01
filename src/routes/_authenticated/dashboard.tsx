@@ -235,7 +235,6 @@ function Dashboard() {
     const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
     const now = Date.now();
     const stale = cardData.filter((c) => {
-      if ((c.sales ?? []).length === 0) return true;
       if (!c.last_valued_at) return true;
       const ts = new Date(c.last_valued_at).getTime();
       return !Number.isFinite(ts) || now - ts >= THIRTY_DAYS_MS;
@@ -2363,9 +2362,9 @@ function ParallelSelect({
 }) {
   const listFn = useServerFn(listCardsightParallels);
   const descriptor = cardDescriptor(lookup);
-  const canLookup = !!cardId || descriptor.trim().length > 2;
+  const canLookup = !!cardId;
   const q = useQuery({
-    queryKey: ["cardsight-parallels-v2", cardId, lookup.year, lookup.set_name, lookup.player_name, lookup.card_number],
+    queryKey: ["cardsight-parallels-v3", cardId],
     queryFn: () => listFn({
       data: {
         card_id: cardId,
@@ -2402,10 +2401,10 @@ function ParallelSelect({
       )}
       {!canLookup && (
         <span className="text-[9px] font-mono text-muted-foreground">
-          Enter the year, set, player, and card number to load options.
+          Identify the exact card first to load scoped options.
         </span>
       )}
-      {!q.isLoading && (q.data?.length ?? 0) === 0 && (
+      {canLookup && !q.isLoading && (q.data?.length ?? 0) === 0 && (
         <span className="text-[9px] font-mono text-muted-foreground">
           No scoped parallel/refractor options found for this set.
         </span>
