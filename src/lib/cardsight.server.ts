@@ -1285,7 +1285,9 @@ export async function searchPricingComps(
   lookup: PricingSearchLookup,
   opts: { period?: string; limit?: number } = {},
 ): Promise<PricingSlice> {
-  const queries = uniquePricingQueries(lookup);
+  // Cap the fallback fan-out: the first queries are the most specific, and the
+  // looser tails rarely add verified comps while costing a call each.
+  const queries = uniquePricingQueries(lookup).slice(0, 3);
   const period = opts.period ?? "30d";
   const limit = opts.limit ?? 100;
   const all: PricingRecord[] = [];
