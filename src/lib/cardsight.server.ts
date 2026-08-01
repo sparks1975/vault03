@@ -1294,7 +1294,10 @@ export async function searchPricingComps(
   // Try the most specific queries first (cheap happy path), then fall through
   // to the looser ones only when nothing verified — never give up early.
   const queries = uniquePricingQueries(lookup);
-
+  const period = opts.period ?? "30d";
+  const limit = opts.limit ?? 100;
+  const all: PricingRecord[] = [];
+  let lastMeta: PricingSlice["rawResponseMeta"] = undefined;
 
   for (const q of queries) {
     const params = new URLSearchParams({ q, period, limit: String(limit) });
