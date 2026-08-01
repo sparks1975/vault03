@@ -644,6 +644,7 @@ export function titleMatchesCard(
       return false;
     }
   }
+  return true;
 }
 
 
