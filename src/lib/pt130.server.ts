@@ -1,6 +1,6 @@
 // 130point.com scraper via Firecrawl. 130point renders sold-listings search
 // entirely client-side, so we drive it with Firecrawl actions: type into the
-// #searchBar input, press Enter, wait for results, then parse the markdown.
+// current search input, submit, wait for results, then parse the markdown.
 //
 // SERVER-ONLY module — never import from client code.
 
@@ -115,8 +115,8 @@ export async function scrapePt130(descriptor: string): Promise<Pt130Sale[]> {
     waitFor: 5000,
     actions: [
       { type: "wait", milliseconds: 3000 },
-      { type: "write", selector: "#searchBar", text: descriptor },
-      { type: "press", key: "Enter" },
+      { type: "write", selector: 'input[placeholder="Search by player, set, year, etc"]', text: descriptor },
+      { type: "click", selector: 'button[aria-label="Search"]' },
       { type: "wait", milliseconds: 8000 },
     ],
   };
@@ -168,6 +168,10 @@ export async function refreshPt130ForCard(
       seen.add(key);
       sales.push(sale);
     }
+    // Search descriptors are ordered most-specific first. Once the exact query
+    // returns results, do not pay for a broader scrape that can only introduce
+    // noisier candidates.
+    if (sales.length > 0) break;
   }
   const del = await supabase.from("pt130_comps").delete().eq("card_id", args.card_id);
   if (del.error) throw del.error;

@@ -4,7 +4,7 @@
 // doing any work.
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
-import { buildPt130Descriptor, refreshPt130ForCard } from "@/lib/pt130.server";
+import { buildPt130Descriptors, refreshPt130ForCard } from "@/lib/pt130.server";
 import type { Database } from "@/integrations/supabase/types";
 
 export const Route = createFileRoute("/api/public/hooks/refresh-130point")({
@@ -46,13 +46,13 @@ export const Route = createFileRoute("/api/public/hooks/refresh-130point")({
         let stored = 0;
         let failed = 0;
         for (const c of cards ?? []) {
-          const descriptor = buildPt130Descriptor(c);
-          if (!descriptor) continue;
+          const descriptors = buildPt130Descriptors(c);
+          if (descriptors.length === 0) continue;
           try {
             const r = await refreshPt130ForCard(admin as never, {
               card_id: c.id,
               user_id: c.user_id,
-              descriptor,
+              descriptor: descriptors,
             });
             processed++;
             stored += r.stored;

@@ -368,6 +368,7 @@ function titleHasPhrase(titleNorm: string, phrase: string): boolean {
 }
 
 const SET_TITLE_ALIASES: Record<string, string[]> = {
+  "Topps Black and White": ["topps black and white", "topps black white", "topps b w", "topps bw"],
   "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
   "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
   "Contenders / Contenders Draft Picks": ["contenders", "contenders draft picks"],
@@ -498,7 +499,25 @@ export function verifyCompTitle(
   const serial = serialSearchTerm(lookup.serial_number);
   if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) reasons.push("serial mismatch");
 
-  if (isVariantTitle(rawTitle, {
+  // Remove the exact card-number token before looking for variant words. A
+  // suffix such as 112-SP identifies the card itself; treating that SP as an
+  // unrelated short-print modifier rejects the exact listing we just matched.
+  const variantTitle = wantedNumber
+    ? rawTitle.replace(
+        new RegExp(
+          `(^|[^a-z0-9])${(wantedNumber.match(/\d+|[a-z]+/gi) ?? [wantedNumber]).map((g) => escapeRegex(g)).join("[^a-z0-9]?")}([^a-z0-9]|$)`,
+          "ig",
+        ),
+        " ",
+      )
+    : rawTitle;
+  // Some catalog card numbers encode the variation itself (112-SP/SSP). In
+  // that case seller phrases such as "image variation" and "short print" are
+  // confirming the exact card, not evidence of a different parallel.
+  const identityAwareVariantTitle = /(?:sp|ssp)$/i.test(wantedNumber)
+    ? variantTitle.replace(/\b(image|photo)\s+variations?\b|\bshort\s*prints?\b|\bss?p\b/gi, " ")
+    : variantTitle;
+  if (isVariantTitle(identityAwareVariantTitle, {
     hasSelectedParallel: lookup.hasSelectedParallel,
     selectedParallelName: lookup.selected_parallel_name,
     set_name: lookup.set_name,
@@ -668,17 +687,18 @@ function pricingRecordMatchesStructured(
   },
 ): boolean {
   if (!Number.isFinite(record.price) || record.price <= 0) return false;
+  if (record.listing_type !== "auction") return false;
+  if (isNonSingleCardListing(record.title)) return false;
 
-  const hasSelectedParallel = Boolean(lookup.parallel_id);
+  // This record came from /pricing/{canonical card_id}, with the requested
+  // parallel_id and grade_id applied by CardSight. Do not re-identify that same
+  // record from its seller-written title: titles are incomplete and card-number
+  // suffixes such as 112-SP look like parallel keywords to a regex. The API's
+  // canonical identity is the stronger evidence here.
   if (lookup.parallel_id) {
-    if (record.parallel_id && record.parallel_id !== lookup.parallel_id) return false;
+    return !record.parallel_id || record.parallel_id === lookup.parallel_id;
   }
-  // When no parallel is selected, don't blanket-reject records that carry a
-  // parallel tag. Cardsight often labels base/graded records with a parallel
-  // name (e.g. "Base"), which was wiping out every legitimate comp. Rely on
-  // title-based variant detection below to filter true parallel variants.
-
-  return verifyCompTitle(record.title, { ...lookup, hasSelectedParallel }).verified;
+  return !record.parallel_id;
 }
 
 function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): number {
@@ -1185,10 +1205,14 @@ export async function fetchPricing(
   // GET /v1/pricing/{card_id}?period=6m. Cardsight's /pricing endpoint only
   // returns completed transactions (both auction sales and fixed-price BIN
   // sales) — active/unsold listings are not included. We include both types.
-  params.set("period", opts.period ?? "5y");
-  if (opts.parallel_id) params.set("parallel_id", opts.parallel_id);
-  if (opts.grade_id) params.set("grade_id", opts.grade_id);
-  if (opts.limit) params.set("limit", String(opts.limit));
+  params.set("period", opts.period ?? "all");
+  params.set("listing_type", "auction");
+  // CardSight documents omission as "all variants/grades". An explicit null
+  // means base or raw only, which is what an unselected parallel/ungraded card
+  // represents in Vault.03.
+  params.set("parallel_id", opts.parallel_id ?? "null");
+  params.set("grade_id", opts.grade_id ?? "null");
+  params.set("limit", String(Math.min(opts.limit ?? 500, 500)));
   const resp = await csFetch<PricingResponse>(
     `/v1/pricing/${card_id}?${params.toString()}`,
   );
@@ -1277,18 +1301,16 @@ function uniquePricingQueries(lookup: PricingSearchLookup): string[] {
   const grade = compact([lookup.grader, lookup.grade].filter(Boolean).join(" ")) || null;
   const variants = [auto, parallel, serial, grade].filter(Boolean) as string[];
   const strictCandidates = [
-    [year, set, player, number, ...variants],
-    [player, year, set, number, ...variants],
-    [player, set, number, ...variants],
-    [player, set, ...variants],
+    [year, set, player, ...variants, number],
+    [player, year, set, ...variants, number],
+    [player, set, ...variants, number],
   ];
   const candidates = variants.length > 0
     ? strictCandidates
     : [
         ...strictCandidates,
+        [year, player, brand, number],
         [player, brand, number],
-        [player, brand],
-        [player, set],
       ];
   const seen = new Set<string>();
   return candidates
@@ -1329,7 +1351,7 @@ export async function searchPricingComps(
   let lastMeta: PricingSlice["rawResponseMeta"] = undefined;
 
   for (const q of queries) {
-    const params = new URLSearchParams({ q, period, limit: String(limit) });
+    const params = new URLSearchParams({ q, period, listing_type: "auction", limit: String(Math.min(limit, 500)) });
     const resp = await csFetch<PricingSearchResponse>(`/v1/pricing/search?${params.toString()}`);
     lastMeta = { query: resp.query, messages: resp.messages };
     const matches = (resp.results ?? []).filter(
