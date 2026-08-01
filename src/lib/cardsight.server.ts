@@ -820,7 +820,29 @@ function parseDescriptor(descriptor: string): CardLookup {
   return { descriptor: trimmed, year, card_number: cardNumber };
 }
 
+// Resolving a catalog card costs several requests. The valuation pipeline asks
+// for the same lookup more than once per card, so memoize by lookup identity.
+const catalogLookupCache = new Map<string, { at: number; card: CatalogCard | null }>();
+const CATALOG_LOOKUP_TTL_MS = 15 * 60 * 1000;
+
 export async function findCatalogCard(lookup: CardLookup): Promise<CatalogCard | null> {
+  const cacheKey = JSON.stringify([
+    lookup.player_name ?? null,
+    lookup.year ?? null,
+    lookup.set_name ?? null,
+    lookup.card_number ?? null,
+    lookup.descriptor ?? null,
+    lookup.is_autograph ?? null,
+  ]);
+  const cachedLookup = catalogLookupCache.get(cacheKey);
+  if (cachedLookup && Date.now() - cachedLookup.at < CATALOG_LOOKUP_TTL_MS) return cachedLookup.card;
+
+  const card = await findCatalogCardUncached(lookup);
+  catalogLookupCache.set(cacheKey, { at: Date.now(), card });
+  return card;
+}
+
+async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard | null> {
   const descriptorLookup = lookup.descriptor ? parseDescriptor(lookup.descriptor) : {};
   const merged: CardLookup = { ...descriptorLookup, ...lookup };
   const player = merged.player_name?.trim();
