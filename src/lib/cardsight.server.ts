@@ -353,13 +353,12 @@ function normalizeCardNumber(value: string | number | null | undefined): string 
 function titleMentionsCardNumber(title: string, wantedNumber: string): boolean {
   if (!wantedNumber) return true;
   if (extractMarketplaceCardNumbers(title).includes(wantedNumber)) return true;
-  const squashed = title.toLowerCase().replace(/[^a-z0-9]+/g, " ");
-  const collapsed = ` ${squashed.replace(/\s+/g, "")} `;
-  // token-boundary check on the squashed title (handles "112 sp" -> "112sp")
-  return new RegExp(escapeRegex(wantedNumber)).test(collapsed.trim())
-    ? new RegExp(`(^|[^a-z0-9])${escapeRegex(wantedNumber)}([^a-z0-9]|$)`, "i").test(` ${squashed} `.replace(/\s+/g, " "))
-      || new RegExp(`(^|\\D)${escapeRegex(wantedNumber)}(\\D|$)`, "i").test(squashed.replace(/\s+/g, ""))
-    : false;
+  // Fall back to a delimited scan of the squashed title so "112 SP" / "112-sp"
+  // both match a wanted number of "112sp".
+  const squashed = title.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const re = new RegExp(`(^|[^a-z0-9])${escapeRegex(wantedNumber)}([^a-z0-9]|$)`, "i");
+  const spaced = title.toLowerCase().replace(/[^a-z0-9]+/g, " ");
+  return re.test(spaced) || squashed.includes(wantedNumber);
 }
 
 function titleHasPhrase(titleNorm: string, phrase: string): boolean {
