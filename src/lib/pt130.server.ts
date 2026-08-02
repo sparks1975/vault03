@@ -141,6 +141,19 @@ export async function scrapePt130(descriptor: string): Promise<Pt130Sale[]> {
   }
   const json = (await res.json()) as { success?: boolean; data?: { markdown?: string } };
   const md = json?.data?.markdown ?? "";
+  // 130point's August 2026 redesign can leave browser automation on the
+  // homepage while still returning HTTP 200. Its featured auctions look like
+  // listing results, so parsing that page would attach unrelated cards. Never
+  // accept a scrape unless the submitted query survived in the rendered page.
+  const normalizedPage = md.replace(/[^a-z0-9]/gi, "").toLowerCase();
+  const requiredTokens = descriptor
+    .split(/\s+/)
+    .map((token) => token.replace(/[^a-z0-9]/gi, "").toLowerCase())
+    .filter((token) => token.length >= 2);
+  if (requiredTokens.length > 0 && !requiredTokens.every((token) => normalizedPage.includes(token))) {
+    console.error("130point search did not navigate to results; rejecting homepage listings");
+    return [];
+  }
   return parsePt130Markdown(md);
 }
 
