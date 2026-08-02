@@ -636,6 +636,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               card_id: data.card_id,
               user_id: context.userId,
               descriptor: descriptors,
+              card_number: valuationLookup.card_number,
             });
             const refreshed = await context.supabase
               .from("pt130_comps")
