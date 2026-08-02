@@ -537,24 +537,18 @@ export function verifyCompTitle(
   let explicitNumbers: string[] = [];
   if (wantedNumber) {
     explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
-    // An explicit, conflicting card number is strong evidence of a different
-    // card — reject that. A title that never states a number at all is common
-    // on real eBay listings and isn't evidence either way, so it no longer
-    // rejects the comp by itself; the other discriminators below still have
-    // to pass (player, year, set, autograph, serial, variant).
-    const numberStated =
-      titleMentionsCardNumber(rawTitle, wantedNumber) ||
-      // "#112-SP" cards are routinely listed as "#112" (the printed base
-      // number), so treat the base number as the same card.
-      explicitNumbers.some((n) => cardNumbersEquivalent(wantedNumber, n));
-    if (explicitNumbers.length > 0 && !numberStated) {
+    // Card number is identity, not a fuzzy hint. A comp must state the complete
+    // submitted number, including every prefix/suffix (112 is not 112-SP).
+    // Missing numbers are unverifiable and must never influence valuation.
+    const numberStated = titleMentionsCardNumber(rawTitle, wantedNumber);
+    if (!numberStated) {
       const label = compact(lookup.card_number).replace(/^#\s*/, "");
       reasons.push(`card number #${label} mismatch`);
     }
   }
 
   if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
-    const hasExactCardNumber = wantedNumber && explicitNumbers.some((n) => cardNumbersEquivalent(wantedNumber, n));
+    const hasExactCardNumber = wantedNumber && titleMentionsCardNumber(rawTitle, wantedNumber);
 
     if (!lookup.relaxedSetMatch || !hasExactCardNumber || hasConflictingKnownSetAlias(titleNorm, lookup.set_name)) {
       reasons.push("set mismatch");
@@ -766,15 +760,12 @@ function pricingRecordMatchesStructured(
   if (!Number.isFinite(record.price) || record.price <= 0) return false;
   if (isNonSingleCardListing(record.title)) return false;
 
-  // This record came from /pricing/{canonical card_id}, with the requested
-  // parallel_id and grade_id applied by CardSight. Do not re-identify that same
-  // record from its seller-written title: titles are incomplete and card-number
-  // suffixes such as 112-SP look like parallel keywords to a regex. The API's
-  // canonical identity is the stronger evidence here.
-  if (lookup.parallel_id) {
-    return !record.parallel_id || record.parallel_id === lookup.parallel_id;
-  }
-  return !record.parallel_id;
+  if (lookup.parallel_id && record.parallel_id && record.parallel_id !== lookup.parallel_id) return false;
+  if (!lookup.parallel_id && record.parallel_id) return false;
+  // A stale or incorrectly resolved catalog UUID can return valid sales for a
+  // different card. Every sale must independently prove the full submitted
+  // card number before it can affect value.
+  return verifyCompTitle(record.title, lookup).verified;
 }
 
 function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): number {
@@ -802,14 +793,9 @@ function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): n
   return score;
 }
 
-// A collector writes the number the way it's printed on the card ("112-SP");
-// the catalog often stores only the base number ("112") and encodes the
-// variation in the subset. Accept that as the same number.
 function cardNumbersEquivalent(wanted: string, candidate: string): boolean {
   if (!wanted || !candidate) return false;
-  if (wanted === candidate) return true;
-  const stripVariantSuffix = (v: string) => v.replace(/(sp|ssp|var|a|b)$/i, "");
-  return stripVariantSuffix(wanted) === candidate || wanted === stripVariantSuffix(candidate);
+  return wanted === candidate;
 }
 
 function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean {
