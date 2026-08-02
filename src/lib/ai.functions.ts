@@ -739,7 +739,10 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       };
     }
 
-    // AI narrative fallback + history spark data.
+    // No verified sold data means there is no defensible automatic value.
+    // Keep the existing card value untouched (applyValuation treats zero as a
+    // failed attempt) and let the user enter a manual value instead of showing
+    // a confident but invented AI price.
     const variantBits = [
       data.is_autograph ? "autograph" : null,
       data.serial_number ? `#/${data.serial_number.replace(/^.*\//, "")}` : null,
@@ -755,57 +758,13 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       .filter(Boolean)
       .join(" ");
 
-    const prompt = `Give a realistic current secondary-market value estimate (USD) for this baseball card: "${descriptor}". Also give a plausible 30-day percent change and 6 monthly historical value data points ending today. Return JSON ONLY:
-{
-  "current_value": number,
-  "value_delta_pct": number,
-  "history": [{"recorded_at": "YYYY-MM-DDTHH:mm:ssZ", "value": number}]
-}
-If unable to value, return current_value: 0.`;
-
-    const text = await callAI({
-      model: MODEL,
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are an experienced sports card market analyst. Provide realistic market value estimates. Reply ONLY with JSON — no prose.",
-        },
-        { role: "user", content: prompt },
-      ],
-    });
-
-    const ai = extractJson<{
-      current_value: number;
-      value_delta_pct: number;
-      history: Array<{ recorded_at: string; value: number }>;
-    }>(text);
-
-    // Guarantee a non-zero value: retry once with a stronger prompt if AI returned 0.
-    let aiValue = Number(ai.current_value) || 0;
-    if (aiValue <= 0) {
-      try {
-        const retry = await callAI({
-          model: MODEL,
-          messages: [
-            { role: "system", content: "You are a sports card market analyst. Always return a positive USD estimate even with limited data — never zero. Reply ONLY with JSON." },
-            { role: "user", content: `Estimate current secondary-market value in USD for: "${descriptor}". Return JSON: {"current_value": number}. current_value must be > 0.` },
-          ],
-        });
-        const parsed = extractJson<{ current_value: number }>(retry);
-        aiValue = Number(parsed.current_value) || 0;
-      } catch (err) {
-        console.error("AI value retry failed:", err);
-      }
-    }
-
     return {
-      current_value: aiValue,
-      value_delta_pct: ai.value_delta_pct,
+      current_value: 0,
+      value_delta_pct: 0,
       sales,
-      history: ai.history?.length ? ai.history : fallbackHistory(aiValue),
+      history: [],
       source: "ai" as const,
-      note: compsNote ?? (sales.length === 0 ? "No sold comps found — value is an AI market estimate." : compsNote),
+      note: compsNote ?? `No verified sold comps found for ${descriptor}. Enter a value manually.`,
       resolved_cardsight_card_id: resolvedCardId,
       resolved_cardsight_grade_id: resolvedGradeId,
     };

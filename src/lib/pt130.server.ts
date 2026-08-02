@@ -46,11 +46,18 @@ function parseSoldDate(raw: string): string | null {
 
 export function parsePt130Markdown(markdown: string): Pt130Sale[] {
   const out: Pt130Sale[] = [];
+  const soldSectionStart = markdown.indexOf("\nSold date\n");
+  if (soldSectionStart < 0) return out;
+  const soldMarkdown = markdown.slice(soldSectionStart);
   const pattern =
-    /\[!\[([^\]]*)\][\s\S]*?\$([\d,]+(?:\.\d+)?)\s*USD[\s\S]*?(Fixed Price|Auction|Best Offer)[\s\S]*?(\d{1,2}\s+[A-Za-z]{3}\s+\d{2,4}(?:\s+\d{1,2}:\d{2}:\d{2})?)\]\((https?:\/\/[^)]+)\)/g;
+    /\[!\[([^\]]*)\]([\s\S]*?)(Fixed Price|Auction|Best Offer)(?: Accepted)?[\s\S]*?(\d{1,2}\s+[A-Za-z]{3}\s+\d{2,4}(?:\s+\d{1,2}:\d{2}:\d{2})?)\]\((https?:\/\/[^)]+)\)/g;
   let m: RegExpExecArray | null;
-  while ((m = pattern.exec(markdown)) !== null) {
-    const [, title, priceStr, typeStr, dateStr, url] = m;
+  while ((m = pattern.exec(soldMarkdown)) !== null) {
+    const [, title, listingBody, typeStr, dateStr, url] = m;
+    const priceMatches = [...listingBody.matchAll(/\$([\d,]+(?:\.\d+)?)\s*USD/g)];
+    // Best-offer rows show the original asking price first and the accepted
+    // sale price second. The last amount is the actual completed-sale value.
+    const priceStr = priceMatches.at(-1)?.[1] ?? "";
     const price = Number(priceStr.replace(/,/g, ""));
     if (!Number.isFinite(price) || price <= 0) continue;
     out.push({
@@ -114,15 +121,16 @@ export async function scrapePt130(descriptor: string): Promise<Pt130Sale[]> {
   if (!descriptor.trim()) return [];
 
   const body = {
-    url: "https://130point.com/sales/",
+    url: "https://130point.com/search",
     formats: ["markdown"],
     onlyMainContent: true,
-    waitFor: 5000,
+    waitFor: 4000,
     actions: [
-      { type: "wait", milliseconds: 3000 },
-      { type: "write", selector: 'input[placeholder="Search by player, set, year, etc"]', text: descriptor },
-      { type: "click", selector: 'button[aria-label="Search"]' },
-      { type: "wait", milliseconds: 8000 },
+      { type: "wait", milliseconds: 2500 },
+      { type: "click", selector: 'input[placeholder="Search by player, set, year, etc"]' },
+      { type: "write", text: descriptor },
+      { type: "press", key: "Enter" },
+      { type: "wait", milliseconds: 6000 },
     ],
   };
 
@@ -139,8 +147,21 @@ export async function scrapePt130(descriptor: string): Promise<Pt130Sale[]> {
     const text = await res.text();
     throw new Error(`Firecrawl 130point scrape failed [${res.status}]: ${text}`);
   }
-  const json = (await res.json()) as { success?: boolean; data?: { markdown?: string } };
+  const json = (await res.json()) as {
+    success?: boolean;
+    data?: { markdown?: string; metadata?: { url?: string } };
+  };
   const md = json?.data?.markdown ?? "";
+  // The retired /sales route redirects to the homepage with HTTP 200, whose
+  // featured auctions resemble search results. Reject that page and the new
+  // /search empty state so unrelated listings can never enter the comp cache.
+  const renderedUrl = json?.data?.metadata?.url ?? "";
+  const isSearchPage = renderedUrl ? new URL(renderedUrl).pathname === "/search" : true;
+  const isEmptySearch = md.includes("Try searching for a collectible!");
+  if (!isSearchPage || isEmptySearch) {
+    console.error("130point search did not submit; rejecting non-result listings");
+    return [];
+  }
   return parsePt130Markdown(md);
 }
 
