@@ -422,7 +422,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         if (data.grader && data.grade && !resolvedGradeId) {
           compsNote = `Couldn't match grade "${data.grader} ${data.grade}" in Cardsight — using AI estimate.`;
         } else {
-          const slice = await fetchPricing(resolvedCardId, {
+          let slice = await fetchPricing(resolvedCardId, {
             parallel_id: data.cardsight_parallel_id ?? null,
             grade_id: resolvedGradeId,
             player_name: valuationLookup.player_name,
@@ -437,6 +437,50 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             selected_parallel_name: selectedParallelName,
             period: "5y",
           });
+          const submittedPlayerTokens = usefulTokens(data.player_name);
+          const pricedPlayer = normalizeLookupText(slice.cardIdentity?.name);
+          const pricedWrongPlayer = submittedPlayerTokens.length > 0 &&
+            !submittedPlayerTokens.every((token) => pricedPlayer.includes(token));
+          if (pricedWrongPlayer) {
+            // The saved UUID came from an incorrect scan. The pricing response
+            // itself tells us the player, so detect this without a routine
+            // catalog-detail call. Only stale cards pay the one-time correction
+            // lookup and second pricing request.
+            const { findCatalogCard } = await import("./cardsight.server");
+            const corrected = await findCatalogCard({
+              player_name: data.player_name,
+              year: data.year,
+              set_name: data.set_name,
+              card_number: data.card_number,
+              is_autograph: data.is_autograph,
+              is_first_bowman: data.is_first_bowman,
+            });
+            if (!corrected?.id || corrected.id === resolvedCardId) {
+              resolvedCardId = null;
+              compsNote = `The saved catalog match was for a different player — checking eBay sold.`;
+            } else {
+              resolvedCardId = corrected.id;
+              resolvedGradeId = null;
+              slice = await fetchPricing(resolvedCardId, {
+                parallel_id: null,
+                grade_id: null,
+                player_name: data.player_name,
+                year: data.year,
+                set_name: data.set_name,
+                card_number: data.card_number,
+                grader: data.grader,
+                grade: data.grade,
+                is_autograph: data.is_autograph,
+                is_first_bowman: data.is_first_bowman,
+                serial_number: data.serial_number,
+                selected_parallel_name: null,
+                period: "5y",
+              });
+            }
+          }
+          if (!resolvedCardId) {
+            slice = { auctionSales: [], askListings: [], gradeLabel: null, cardIdentity: null };
+          }
           await priceFromSlice(slice);
         }
       } catch (err) {
