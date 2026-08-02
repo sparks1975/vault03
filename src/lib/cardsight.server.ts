@@ -988,24 +988,40 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
   // differently in the catalog.
   addCardsAttempt({ name: player, number, year, releaseName: setName });
   addCardsAttempt({ name: player, number, year, setName });
+  // The catalog frequently stores the base number ("112") for cards printed as
+  // "112-SP", and names releases differently than collectors do ("Topps Black &
+  // White" vs "Topps Black and White"). Those two mismatches made the filtered
+  // queries above return zero rows and pushed perfectly common cards to an AI
+  // guess. Sweeping the player's year once and matching locally fixes both, in
+  // a single extra request.
+  const baseNumber = number ? number.replace(/[^a-z0-9]*(sp|ssp)$/i, "") : null;
+  if (baseNumber && baseNumber !== number) {
+    addCardsAttempt({ name: player, number: baseNumber, year, releaseName: setName });
+  }
+  if (player && year) addCardsAttempt({ name: player, year, take: "100" });
 
   const seen = new Set<string>();
   const candidates: CatalogCard[] = [];
+  let resolved: CatalogCard | null = null;
   for (const path of attempts) {
     if (seen.has(path)) continue;
     seen.add(path);
     try {
       const resp = await csFetch<{ cards: CatalogCard[] }>(path);
       candidates.push(...(resp.cards ?? []));
-      if (candidates.length > 0) break;
     } catch (err) {
       console.error("Cardsight cards lookup failed:", err);
     }
+    if (candidates.length === 0) continue;
+    const matched = candidates.filter((c) => cardMatchesLookup(c, merged));
+    if (matched.length > 0) {
+      resolved = matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+      break;
+    }
   }
+  if (resolved) return resolved;
 
   if (candidates.length > 0) {
-    const matched = candidates.filter((c) => cardMatchesLookup(c, merged));
-    if (matched.length > 0) return matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
     const yearAgnosticMatched = year
       ? candidates.filter((c) => cardMatchesLookup(c, { ...merged, year: null }))
       : [];
@@ -1013,6 +1029,7 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
       return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
     }
   }
+
 
   const searchQueries = new Set<string>();
   if (merged.descriptor) searchQueries.add(merged.descriptor);
