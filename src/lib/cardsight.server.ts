@@ -788,6 +788,16 @@ function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): n
   return score;
 }
 
+// A collector writes the number the way it's printed on the card ("112-SP");
+// the catalog often stores only the base number ("112") and encodes the
+// variation in the subset. Accept that as the same number.
+function cardNumbersEquivalent(wanted: string, candidate: string): boolean {
+  if (!wanted || !candidate) return false;
+  if (wanted === candidate) return true;
+  const stripVariantSuffix = (v: string) => v.replace(/(sp|ssp|var|a|b)$/i, "");
+  return stripVariantSuffix(wanted) === candidate || wanted === stripVariantSuffix(candidate);
+}
+
 function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean {
   const playerTokens = normalizeText(lookup.player_name)
     .split(" ")
@@ -799,7 +809,7 @@ function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean 
   if (year && compact(candidate.releaseYear) !== year) return false;
 
   const wantedNumber = normalizeCardNumber(lookup.card_number);
-  if (wantedNumber && normalizeCardNumber(candidate.number) !== wantedNumber) return false;
+  if (wantedNumber && !cardNumbersEquivalent(wantedNumber, normalizeCardNumber(candidate.number))) return false;
 
   const candidateSet = sanitizeSetName(candidate.releaseName, candidate.setName);
   if (!candidateSet) return false;
@@ -808,6 +818,7 @@ function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean 
 
   return true;
 }
+
 
 function setCandidateFromCard(card: CatalogCard, lookup: CardLookup): SetCandidate | null {
   const setName = sanitizeSetName(card.releaseName, card.setName);
