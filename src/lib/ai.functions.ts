@@ -296,7 +296,10 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         // When the catalog resolution cascade last failed for this card, so we
         // can skip re-running it on every trigger while it's still recent.
         cardsight_lookup_failed_at: z.string().optional().nullable(),
+        // Bypass the 24h sold-comp cache and the 7-day lookup cooldown.
+        force_refresh: z.boolean().optional().nullable(),
       })
+
       .parse(d),
   )
   .handler(async ({ data, context }) => {
