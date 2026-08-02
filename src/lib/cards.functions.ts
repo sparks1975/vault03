@@ -502,12 +502,22 @@ async function recomputeCardValue(
   supabase: Awaited<ReturnType<typeof import("@supabase/supabase-js").createClient<Database>>>,
   cardId: string,
 ) {
+  const { data: card } = await supabase
+    .from("cards")
+    .select("player_name, year, set_name, card_number, is_autograph, serial_number, is_first_bowman")
+    .eq("id", cardId)
+    .maybeSingle();
+  if (!card) throw new Error("Card not found");
+  const { verifyCompTitle } = await import("./cardsight.server");
   const { data: rows } = await supabase
     .from("card_sales")
     .select("price, title")
     .eq("card_id", cardId);
   const prices = (rows ?? [])
-    .filter((r) => !NON_SINGLE_RE_LOCAL.test(String(r.title ?? "")))
+    .filter((r) => {
+      const title = String(r.title ?? "");
+      return !NON_SINGLE_RE_LOCAL.test(title) && verifyCompTitle(title, card).verified;
+    })
     .map((r) => Number(r.price))
     .filter((p) => Number.isFinite(p) && p > 0)
     .sort((a, b) => a - b);
