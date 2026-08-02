@@ -316,16 +316,22 @@ async function applyValuation(
   // Merge any preserved manual comps into the median so user picks influence value.
   const { data: manualRows } = await supabase
     .from("card_sales")
-    .select("price, title")
+    .select("id, price, title")
     .eq("card_id", cardId)
     .eq("is_manual", true);
   const nonSingleRe = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
+  const invalidManualIds: string[] = [];
   for (const m of manualRows ?? []) {
     const p = Number(m.price);
     const title = String(m.title ?? "");
     if (Number.isFinite(p) && p > 0 && !nonSingleRe.test(title) && verifyCompTitle(title, cardIdentity).verified) {
       validSalePrices.push(p);
+    } else {
+      invalidManualIds.push(m.id);
     }
+  }
+  if (invalidManualIds.length > 0) {
+    await supabase.from("card_sales").delete().in("id", invalidManualIds).eq("card_id", cardId);
   }
   validSalePrices.sort((a, b) => a - b);
   const medianSaleValue = (() => {
@@ -713,9 +719,22 @@ export const addManualComps = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    if (data.comps.length > 0) {
+    const { data: card, error: cardError } = await supabase
+      .from("cards")
+      .select("player_name, year, set_name, card_number, is_autograph, serial_number, is_first_bowman")
+      .eq("id", data.card_id)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (cardError) throw cardError;
+    if (!card) throw new Error("Card not found");
+    const { verifyCompTitle } = await import("./cardsight.server");
+    const verifiedComps = data.comps.filter((comp) => verifyCompTitle(comp.title, card).verified);
+    if (verifiedComps.length !== data.comps.length) {
+      throw new Error("A selected sale does not show this card's exact full card number.");
+    }
+    if (verifiedComps.length > 0) {
       const { error } = await supabase.from("card_sales").insert(
-        data.comps.map((c) => ({
+        verifiedComps.map((c) => ({
           card_id: data.card_id,
           user_id: userId,
           sold_at: c.sold_at ? c.sold_at.slice(0, 10) : new Date().toISOString().slice(0, 10),
