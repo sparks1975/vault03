@@ -221,7 +221,7 @@ const allowed = [
     let identityReset = false;
     const identityKeys = ["player_name", "year", "set_name", "card_number"] as const;
     const touchesIdentity = identityKeys.some((k) => k in clean);
-    const explicitIds = "cardsight_card_id" in data.patch;
+    const explicitIds = data.patch["cardsight_card_id"] != null;
     if (touchesIdentity && !explicitIds) {
       const { data: existing } = await supabase
         .from("cards")
