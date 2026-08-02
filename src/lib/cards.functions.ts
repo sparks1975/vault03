@@ -213,10 +213,48 @@ const allowed = [
       if (!(k in data.patch)) continue;
       clean[k] = k === "set_name" ? toApprovedCardSet(data.patch[k] as string | null | undefined) : data.patch[k];
     }
+
+    // If the user corrected the card's identity (player / year / set / card #),
+    // the CardSight ids resolved from the original scan are no longer valid.
+    // Clear them and purge stale auto comps so the next valuation re-resolves
+    // from the corrected details.
+    let identityReset = false;
+    const identityKeys = ["player_name", "year", "set_name", "card_number"] as const;
+    const touchesIdentity = identityKeys.some((k) => k in clean);
+    const explicitIds = data.patch["cardsight_card_id"] != null;
+    if (touchesIdentity && !explicitIds) {
+      const { data: existing } = await supabase
+        .from("cards")
+        .select("player_name, year, set_name, card_number, cardsight_card_id")
+        .eq("id", data.id)
+        .maybeSingle();
+      if (existing) {
+        const norm = (v: unknown) => (v == null ? "" : String(v).trim().toLowerCase());
+        const changed = identityKeys.some(
+          (k) => k in clean && norm(clean[k]) !== norm((existing as Record<string, unknown>)[k]),
+        );
+        if (changed && existing.cardsight_card_id) {
+          identityReset = true;
+          clean["cardsight_card_id"] = null;
+          clean["cardsight_parallel_id"] = null;
+          clean["cardsight_grade_id"] = null;
+          clean["current_value"] = null;
+          clean["value_delta_pct"] = null;
+          clean["last_valued_at"] = null;
+        }
+      }
+    }
+
     const { error } = await supabase.from("cards").update(clean as never).eq("id", data.id);
     if (error) throw error;
-    return { ok: true };
+
+    if (identityReset) {
+      await supabase.from("card_sales").delete().eq("card_id", data.id).eq("is_manual", false);
+      await supabase.from("pt130_comps").delete().eq("card_id", data.id);
+    }
+    return { ok: true, identity_reset: identityReset };
   });
+
 
 export const deleteCard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -466,7 +504,9 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const { data: card, error } = await supabase
       .from("cards")
-      .select("id, cardsight_card_id")
+      .select(
+        "id, cardsight_card_id, player_name, year, set_name, card_number, is_autograph, is_first_bowman",
+      )
       .eq("id", data.card_id)
       .eq("user_id", userId)
       .maybeSingle();
@@ -480,10 +520,38 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       url: string | null;
     }> = [];
 
-    if (card?.cardsight_card_id) {
+    // If the identity was corrected after a bad scan the stored CardSight id is
+    // cleared — resolve a fresh one from the current card details.
+    let cardsightId = card?.cardsight_card_id ?? null;
+    if (!cardsightId && card) {
+      try {
+        const { findCatalogCard } = await import("./cardsight.server");
+        const match = await findCatalogCard({
+          player_name: card.player_name,
+          year: card.year,
+          set_name: card.set_name,
+          card_number: card.card_number,
+          is_autograph: card.is_autograph,
+          is_first_bowman: card.is_first_bowman,
+        });
+        if (match?.id) {
+          cardsightId = match.id;
+
+          await supabase
+            .from("cards")
+            .update({ cardsight_card_id: cardsightId } as never)
+            .eq("id", card.id);
+        }
+      } catch (err) {
+        console.error("fetchCompCandidates catalog resolve failed", err);
+      }
+    }
+
+    if (cardsightId) {
       try {
         const { fetchAllCompCandidates } = await import("./cardsight.server");
-        const rows = await fetchAllCompCandidates(card.cardsight_card_id);
+        const rows = await fetchAllCompCandidates(cardsightId);
+
         for (const r of rows) {
           const price = Number(r.price);
           if (!Number.isFinite(price) || price <= 0) continue;

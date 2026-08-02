@@ -296,8 +296,14 @@ function Dashboard() {
   const updateMut = useMutation({
     mutationFn: (v: { id: string; patch: Partial<Card> }) =>
       updateFn({ data: { id: v.id, patch: v.patch as Record<string, unknown> } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cards"] }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["cards"] });
+      if ((res as { identity_reset?: boolean } | undefined)?.identity_reset) {
+        toast.warning("Card details changed — old comps cleared. Re-value to pull comps for the corrected card.");
+      }
+    },
   });
+
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteFn({ data: { id } }),
@@ -876,8 +882,8 @@ function CardDetail({
       purchase_price: card.purchase_price,
       notes: card.notes,
       mlb_player_id: card.mlb_player_id,
-      cardsight_card_id: card.cardsight_card_id,
       cardsight_parallel_id: card.cardsight_parallel_id,
+
     });
     setPlayerResults([]);
     setEditing(true);
