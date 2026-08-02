@@ -296,7 +296,10 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         // When the catalog resolution cascade last failed for this card, so we
         // can skip re-running it on every trigger while it's still recent.
         cardsight_lookup_failed_at: z.string().optional().nullable(),
+        // Bypass the 24h sold-comp cache and the 7-day lookup cooldown.
+        force_refresh: z.boolean().optional().nullable(),
       })
+
       .parse(d),
   )
   .handler(async ({ data, context }) => {
@@ -354,7 +357,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     // If a resolution attempt failed recently, don't re-run the cascade yet —
     // go straight to the eBay/AI fallback below instead.
     const lookupFailedRecently = (() => {
+      if (data.force_refresh) return false;
       if (!data.cardsight_lookup_failed_at) return false;
+
       const t = new Date(data.cardsight_lookup_failed_at).getTime();
       return Number.isFinite(t) && Date.now() - t < LOOKUP_RETRY_COOLDOWN_MS;
     })();
@@ -611,7 +616,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           const time = new Date(row.scraped_at).getTime();
           return Number.isFinite(time) && time > latest ? time : latest;
         }, 0);
-        const cacheFresh = newestScrape > 0 && Date.now() - newestScrape < 24 * 60 * 60 * 1000;
+        const cacheFresh =
+          !data.force_refresh && newestScrape > 0 && Date.now() - newestScrape < 24 * 60 * 60 * 1000;
+
         if (!cacheFresh) {
           const { buildPt130Descriptors, refreshPt130ForCard } = await import("./pt130.server");
           const descriptors = buildPt130Descriptors({
