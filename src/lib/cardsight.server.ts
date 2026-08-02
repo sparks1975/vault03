@@ -542,14 +542,20 @@ export function verifyCompTitle(
     // on real eBay listings and isn't evidence either way, so it no longer
     // rejects the comp by itself; the other discriminators below still have
     // to pass (player, year, set, autograph, serial, variant).
-    if (explicitNumbers.length > 0 && !titleMentionsCardNumber(rawTitle, wantedNumber)) {
+    const numberStated =
+      titleMentionsCardNumber(rawTitle, wantedNumber) ||
+      // "#112-SP" cards are routinely listed as "#112" (the printed base
+      // number), so treat the base number as the same card.
+      explicitNumbers.some((n) => cardNumbersEquivalent(wantedNumber, n));
+    if (explicitNumbers.length > 0 && !numberStated) {
       const label = compact(lookup.card_number).replace(/^#\s*/, "");
       reasons.push(`card number #${label} mismatch`);
     }
   }
 
   if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
-    const hasExactCardNumber = wantedNumber && explicitNumbers.includes(wantedNumber);
+    const hasExactCardNumber = wantedNumber && explicitNumbers.some((n) => cardNumbersEquivalent(wantedNumber, n));
+
     if (!lookup.relaxedSetMatch || !hasExactCardNumber || hasConflictingKnownSetAlias(titleNorm, lookup.set_name)) {
       reasons.push("set mismatch");
     }
@@ -667,12 +673,20 @@ export function isVariantTitle(
 ): boolean {
   if (!title) return false;
   if (isNonSingleCardListing(title)) return true;
-  let variantTitle = title;
+  // Sellers write "&" where the catalog/app writes "and" (Black & White, Allen
+  // & Ginter). Normalize first so the set name below is actually stripped out —
+  // otherwise words like "Black" survive and look like a parallel color.
+  let variantTitle = title.replace(/\s*&\s*/g, " and ");
   for (const setTerm of expandSetSearchTerms(opts.set_name)) {
-    const compactTerm = compact(setTerm);
-    if (compactTerm.length < 4) continue;
-    variantTitle = variantTitle.replace(new RegExp(escapeRegex(compactTerm), "gi"), " ");
+    const normalizedTerm = setTerm.replace(/\s*&\s*/g, " and ").trim();
+    if (compact(normalizedTerm).length < 4) continue;
+    const pattern = normalizedTerm
+      .split(/\s+/)
+      .map((word) => escapeRegex(word))
+      .join("[^a-z0-9]*");
+    variantTitle = variantTitle.replace(new RegExp(pattern, "gi"), " ");
   }
+
   variantTitle = variantTitle
     // Product/framing language, not a parallel color.
     .replace(/\btopps\s+gold\s+label\b/gi, "Topps Label")
@@ -788,6 +802,16 @@ function scoreCard(candidate: CatalogCard | SearchResult, lookup: CardLookup): n
   return score;
 }
 
+// A collector writes the number the way it's printed on the card ("112-SP");
+// the catalog often stores only the base number ("112") and encodes the
+// variation in the subset. Accept that as the same number.
+function cardNumbersEquivalent(wanted: string, candidate: string): boolean {
+  if (!wanted || !candidate) return false;
+  if (wanted === candidate) return true;
+  const stripVariantSuffix = (v: string) => v.replace(/(sp|ssp|var|a|b)$/i, "");
+  return stripVariantSuffix(wanted) === candidate || wanted === stripVariantSuffix(candidate);
+}
+
 function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean {
   const playerTokens = normalizeText(lookup.player_name)
     .split(" ")
@@ -799,7 +823,7 @@ function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean 
   if (year && compact(candidate.releaseYear) !== year) return false;
 
   const wantedNumber = normalizeCardNumber(lookup.card_number);
-  if (wantedNumber && normalizeCardNumber(candidate.number) !== wantedNumber) return false;
+  if (wantedNumber && !cardNumbersEquivalent(wantedNumber, normalizeCardNumber(candidate.number))) return false;
 
   const candidateSet = sanitizeSetName(candidate.releaseName, candidate.setName);
   if (!candidateSet) return false;
@@ -808,6 +832,7 @@ function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean 
 
   return true;
 }
+
 
 function setCandidateFromCard(card: CatalogCard, lookup: CardLookup): SetCandidate | null {
   const setName = sanitizeSetName(card.releaseName, card.setName);
@@ -977,24 +1002,45 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
   // differently in the catalog.
   addCardsAttempt({ name: player, number, year, releaseName: setName });
   addCardsAttempt({ name: player, number, year, setName });
+  // The catalog frequently stores the base number ("112") for cards printed as
+  // "112-SP", and names releases differently than collectors do ("Topps Black &
+  // White" vs "Topps Black and White"). Those two mismatches made the filtered
+  // queries above return zero rows and pushed perfectly common cards to an AI
+  // guess. Sweeping the player's year once and matching locally fixes both, in
+  // a single extra request.
+  const baseNumber = number ? number.replace(/[^a-z0-9]*(sp|ssp)$/i, "") : null;
+  if (baseNumber && baseNumber !== number) {
+    addCardsAttempt({ name: player, number: baseNumber, year, releaseName: setName });
+  }
+  if (player && year) {
+    for (const skip of ["0", "100", "200"]) {
+      addCardsAttempt({ name: player, year, take: "100", skip });
+    }
+  }
+
 
   const seen = new Set<string>();
   const candidates: CatalogCard[] = [];
+  let resolved: CatalogCard | null = null;
   for (const path of attempts) {
     if (seen.has(path)) continue;
     seen.add(path);
     try {
       const resp = await csFetch<{ cards: CatalogCard[] }>(path);
       candidates.push(...(resp.cards ?? []));
-      if (candidates.length > 0) break;
     } catch (err) {
       console.error("Cardsight cards lookup failed:", err);
     }
+    if (candidates.length === 0) continue;
+    const matched = candidates.filter((c) => cardMatchesLookup(c, merged));
+    if (matched.length > 0) {
+      resolved = matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+      break;
+    }
   }
+  if (resolved) return resolved;
 
   if (candidates.length > 0) {
-    const matched = candidates.filter((c) => cardMatchesLookup(c, merged));
-    if (matched.length > 0) return matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
     const yearAgnosticMatched = year
       ? candidates.filter((c) => cardMatchesLookup(c, { ...merged, year: null }))
       : [];
@@ -1002,6 +1048,7 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
       return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
     }
   }
+
 
   const searchQueries = new Set<string>();
   if (merged.descriptor) searchQueries.add(merged.descriptor);

@@ -465,9 +465,13 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         });
       }
 
-      if (auctions.length >= 3) {
-        const trimmed = trimOutliersIQR(auctions.map((r) => r.price));
-        currentValue = median(trimmed);
+      if (auctions.length >= 1) {
+        // Any verified sold comp is real market data — far better than an AI
+        // guess. Only trim outliers once there are enough points for IQR to be
+        // meaningful.
+        const prices = auctions.map((r) => r.price);
+        currentValue = median(auctions.length >= 4 ? trimOutliersIQR(prices) : prices);
+
 
         // 30-day vs prior-30-day delta on the same stream.
         const now = Date.now();
@@ -491,8 +495,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         usedCardsight = true;
         compsNote = null;
       } else {
-        compsNote = `Only ${auctions.length} recent sold comp${auctions.length === 1 ? "" : "s"} — using AI estimate.`;
+        compsNote = "No verified sold comps for this catalog card — checking eBay sold.";
       }
+
     };
 
     if (resolvedCardId) {
@@ -632,12 +637,13 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           }
         }
 
-        const cachedSales = (cachedRows ?? [])
-          .filter((row) => {
-            const price = Number(row.price);
-            if (!Number.isFinite(price) || price <= 0) return false;
-            const title = row.title ?? "";
-            return verifyCompTitle(title, {
+        const usableRows = (cachedRows ?? []).filter((row) => {
+          const price = Number(row.price);
+          return Number.isFinite(price) && price > 0;
+        });
+        const passes = (relaxedSetMatch: boolean) =>
+          usableRows.filter((row) =>
+            verifyCompTitle(row.title ?? "", {
               player_name: valuationLookup.player_name,
               year: valuationLookup.year,
               set_name: valuationLookup.set_name,
@@ -646,16 +652,24 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               is_autograph: valuationLookup.is_autograph,
               serial_number: data.serial_number,
               is_first_bowman: valuationLookup.is_first_bowman,
-            }).verified;
-          })
-          .map((row) => ({
-            sold_at: row.sold_at ?? null,
-            grade: data.grader && data.grade ? `${data.grader} ${data.grade}` : null,
-            price: Number(row.price),
-            source: "eBay sold",
-            url: row.url ?? null,
-            title: row.title ?? null,
-          }));
+              relaxedSetMatch,
+            }).verified,
+          );
+        // Strict first. If nothing survives, retry once allowing a looser set
+        // match — the listing still has to match player, year, card number,
+        // autograph, serial and parallel, so this recovers real comps whose
+        // seller wrote the set name differently instead of falling to AI.
+        let matchedRows = passes(false);
+        if (matchedRows.length === 0) matchedRows = passes(true);
+
+        const cachedSales = matchedRows.map((row) => ({
+          sold_at: row.sold_at ?? null,
+          grade: data.grader && data.grade ? `${data.grader} ${data.grade}` : null,
+          price: Number(row.price),
+          source: "eBay sold",
+          url: row.url ?? null,
+          title: row.title ?? null,
+        }));
 
         if (cachedSales.length > 0) {
           sales = cachedSales;
@@ -666,6 +680,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             compsNote = null;
           }
         }
+
       } catch (err) {
         console.error("Cached eBay sold fallback failed:", err);
       }
