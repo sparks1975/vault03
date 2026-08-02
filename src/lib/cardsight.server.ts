@@ -673,12 +673,20 @@ export function isVariantTitle(
 ): boolean {
   if (!title) return false;
   if (isNonSingleCardListing(title)) return true;
-  let variantTitle = title;
+  // Sellers write "&" where the catalog/app writes "and" (Black & White, Allen
+  // & Ginter). Normalize first so the set name below is actually stripped out —
+  // otherwise words like "Black" survive and look like a parallel color.
+  let variantTitle = title.replace(/\s*&\s*/g, " and ");
   for (const setTerm of expandSetSearchTerms(opts.set_name)) {
-    const compactTerm = compact(setTerm);
-    if (compactTerm.length < 4) continue;
-    variantTitle = variantTitle.replace(new RegExp(escapeRegex(compactTerm), "gi"), " ");
+    const normalizedTerm = setTerm.replace(/\s*&\s*/g, " and ").trim();
+    if (compact(normalizedTerm).length < 4) continue;
+    const pattern = normalizedTerm
+      .split(/\s+/)
+      .map((word) => escapeRegex(word))
+      .join("[^a-z0-9]*");
+    variantTitle = variantTitle.replace(new RegExp(pattern, "gi"), " ");
   }
+
   variantTitle = variantTitle
     // Product/framing language, not a parallel color.
     .replace(/\btopps\s+gold\s+label\b/gi, "Topps Label")
