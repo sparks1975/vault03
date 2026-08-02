@@ -998,7 +998,12 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
   if (baseNumber && baseNumber !== number) {
     addCardsAttempt({ name: player, number: baseNumber, year, releaseName: setName });
   }
-  if (player && year) addCardsAttempt({ name: player, year, take: "100" });
+  if (player && year) {
+    for (const skip of ["0", "100", "200"]) {
+      addCardsAttempt({ name: player, year, take: "100", skip });
+    }
+  }
+
 
   const seen = new Set<string>();
   const candidates: CatalogCard[] = [];
