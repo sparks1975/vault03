@@ -950,7 +950,11 @@ function CardDetail({
           cardsight_parallel_id: card.cardsight_parallel_id,
           cardsight_grade_id: card.cardsight_grade_id,
           card_id: card.id,
+          // Manual per-card refresh always re-scrapes: ignore the 24h comp
+          // cache and the 7-day failed-lookup cooldown.
+          force_refresh: true,
         },
+
       });
       await replaceValFn({
         data: {
