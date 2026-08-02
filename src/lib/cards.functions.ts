@@ -213,10 +213,48 @@ const allowed = [
       if (!(k in data.patch)) continue;
       clean[k] = k === "set_name" ? toApprovedCardSet(data.patch[k] as string | null | undefined) : data.patch[k];
     }
+
+    // If the user corrected the card's identity (player / year / set / card #),
+    // the CardSight ids resolved from the original scan are no longer valid.
+    // Clear them and purge stale auto comps so the next valuation re-resolves
+    // from the corrected details.
+    let identityReset = false;
+    const identityKeys = ["player_name", "year", "set_name", "card_number"] as const;
+    const touchesIdentity = identityKeys.some((k) => k in clean);
+    const explicitIds = "cardsight_card_id" in data.patch;
+    if (touchesIdentity && !explicitIds) {
+      const { data: existing } = await supabase
+        .from("cards")
+        .select("player_name, year, set_name, card_number, cardsight_card_id")
+        .eq("id", data.id)
+        .maybeSingle();
+      if (existing) {
+        const norm = (v: unknown) => (v == null ? "" : String(v).trim().toLowerCase());
+        const changed = identityKeys.some(
+          (k) => k in clean && norm(clean[k]) !== norm((existing as Record<string, unknown>)[k]),
+        );
+        if (changed && existing.cardsight_card_id) {
+          identityReset = true;
+          clean["cardsight_card_id"] = null;
+          clean["cardsight_parallel_id"] = null;
+          clean["cardsight_grade_id"] = null;
+          clean["current_value"] = null;
+          clean["value_delta_pct"] = null;
+          clean["last_valued_at"] = null;
+        }
+      }
+    }
+
     const { error } = await supabase.from("cards").update(clean as never).eq("id", data.id);
     if (error) throw error;
-    return { ok: true };
+
+    if (identityReset) {
+      await supabase.from("card_sales").delete().eq("card_id", data.id).eq("is_manual", false);
+      await supabase.from("pt130_comps").delete().eq("card_id", data.id);
+    }
+    return { ok: true, identity_reset: identityReset };
   });
+
 
 export const deleteCard = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
