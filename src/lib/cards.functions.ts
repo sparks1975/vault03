@@ -216,7 +216,7 @@ const allowed = [
 
     // If the user corrected the card's identity (player / year / set / card #),
     // the CardSight ids resolved from the original scan are no longer valid.
-    // Clear them and purge stale auto comps so the next valuation re-resolves
+    // Clear them and purge every stale comp so the next valuation re-resolves
     // from the corrected details.
     let identityReset = false;
     const identityKeys = ["player_name", "year", "set_name", "card_number"] as const;
@@ -249,7 +249,7 @@ const allowed = [
     if (error) throw error;
 
     if (identityReset) {
-      await supabase.from("card_sales").delete().eq("card_id", data.id).eq("is_manual", false);
+      await supabase.from("card_sales").delete().eq("card_id", data.id);
       await supabase.from("pt130_comps").delete().eq("card_id", data.id);
     }
     return { ok: true, identity_reset: identityReset };
@@ -549,7 +549,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
                 last_valued_at: null,
               } as never)
               .eq("id", card.id);
-            await supabase.from("card_sales").delete().eq("card_id", card.id).eq("is_manual", false);
+            await supabase.from("card_sales").delete().eq("card_id", card.id);
             await supabase.from("pt130_comps").delete().eq("card_id", card.id);
           }
         } else if (card.cardsight_card_id) {
@@ -566,7 +566,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
               last_valued_at: null,
             } as never)
             .eq("id", card.id);
-          await supabase.from("card_sales").delete().eq("card_id", card.id).eq("is_manual", false);
+          await supabase.from("card_sales").delete().eq("card_id", card.id);
           await supabase.from("pt130_comps").delete().eq("card_id", card.id);
         }
       } catch (err) {
