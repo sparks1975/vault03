@@ -14,24 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      cardsight_cache: {
-        Row: {
-          cache_key: string
-          expires_at: string
-          payload: Json
-        }
-        Insert: {
-          cache_key: string
-          expires_at: string
-          payload: Json
-        }
-        Update: {
-          cache_key?: string
-          expires_at?: string
-          payload?: Json
-        }
-        Relationships: []
-      }
       card_sales: {
         Row: {
           card_id: string
@@ -119,7 +101,6 @@ export type Database = {
           card_number: string | null
           cardsight_card_id: string | null
           cardsight_grade_id: string | null
-          cardsight_lookup_failed_at: string | null
           cardsight_parallel_id: string | null
           created_at: string
           current_value: number | null
@@ -129,7 +110,6 @@ export type Database = {
           is_autograph: boolean
           is_first_bowman: boolean
           is_rookie: boolean
-          last_valuation_failed_at: string | null
           last_valued_at: string | null
           mlb_player_id: number | null
           notes: string | null
@@ -151,7 +131,6 @@ export type Database = {
           card_number?: string | null
           cardsight_card_id?: string | null
           cardsight_grade_id?: string | null
-          cardsight_lookup_failed_at?: string | null
           cardsight_parallel_id?: string | null
           created_at?: string
           current_value?: number | null
@@ -161,7 +140,6 @@ export type Database = {
           is_autograph?: boolean
           is_first_bowman?: boolean
           is_rookie?: boolean
-          last_valuation_failed_at?: string | null
           last_valued_at?: string | null
           mlb_player_id?: number | null
           notes?: string | null
@@ -183,7 +161,6 @@ export type Database = {
           card_number?: string | null
           cardsight_card_id?: string | null
           cardsight_grade_id?: string | null
-          cardsight_lookup_failed_at?: string | null
           cardsight_parallel_id?: string | null
           created_at?: string
           current_value?: number | null
@@ -193,7 +170,6 @@ export type Database = {
           is_autograph?: boolean
           is_first_bowman?: boolean
           is_rookie?: boolean
-          last_valuation_failed_at?: string | null
           last_valued_at?: string | null
           mlb_player_id?: number | null
           notes?: string | null
