@@ -360,6 +360,20 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     })();
 
     // If we don't yet have a cardsight card id, resolve one via catalog search.
+    const normalizeSource = (raw: string) => {
+      const lower = String(raw ?? "").toLowerCase();
+      if (lower.includes("130") || lower.includes("ebay")) return "eBay sold";
+      return raw || "eBay sold";
+    };
+
+    const medianValueFromSales = async (rows: typeof sales) => {
+      const prices = rows.map((r) => Number(r.price)).filter((p) => Number.isFinite(p) && p > 0);
+      if (prices.length === 0) return null;
+      const { median } = await import("./cardsight.server");
+      return median(prices);
+    };
+
+    const cardsightPass = async () => {
     if (!resolvedCardId && !lookupFailedRecently) {
       try {
         const { searchCatalogCardByFields } = await import("./cardsight.server");
@@ -394,18 +408,6 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       }
     }
 
-    const normalizeSource = (raw: string) => {
-      const lower = String(raw ?? "").toLowerCase();
-      if (lower.includes("130") || lower.includes("ebay")) return "eBay sold";
-      return raw || "eBay sold";
-    };
-
-    const medianValueFromSales = async (rows: typeof sales) => {
-      const prices = rows.map((r) => Number(r.price)).filter((p) => Number.isFinite(p) && p > 0);
-      if (prices.length === 0) return null;
-      const { median } = await import("./cardsight.server");
-      return median(prices);
-    };
 
     // When we have a canonical catalog ID, use the catalog's own year/set/card
     // number for matching. Editable/AI-extracted fields can be stale or wrong;
@@ -586,15 +588,16 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     // eBay-sold fallback below instead.
     if (!usedCardsight && !compsNote) {
       compsNote = resolvedCardId
-        ? "No verified sales for this catalog card — checking eBay sold."
-        : "Couldn't match this card to the catalog — checking eBay sold.";
+        ? "No verified sales for this catalog card."
+        : "Couldn't match this card to the catalog.";
     }
+    };
 
-    // Fallback to eBay sold results. Reuse a cache younger than 24 hours; when
-    // the cache is absent/stale, refresh this one card on demand. That avoids a
-    // permanent no-comps result between nightly jobs while bounding scraping to
-    // one successful, specific query per card per day.
-    if (!usedCardsight && data.card_id) {
+    // eBay sold data (via the 24h-cached 130point completed-sales index) is the
+    // PRIMARY source: it is real completed sales, costs no CardSight calls, and
+    // in practice has comps for cards CardSight's catalog can't price.
+    const ebaySoldPass = async () => {
+      if (usedCardsight || !data.card_id) return;
       try {
         const { verifyCompTitle } = await import("./cardsight.server");
         let { data: cachedRows, error } = await context.supabase
@@ -679,12 +682,20 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             usedCardsight = true;
             compsNote = null;
           }
+        } else if (usableRows.length > 0) {
+          compsNote =
+            "Found sold listings but none matched this exact card — open Manage Comps to pick the right ones.";
         }
 
       } catch (err) {
-        console.error("Cached eBay sold fallback failed:", err);
+        console.error("eBay sold pass failed:", err);
       }
-    }
+    };
+
+    // Real sold data first, CardSight catalog pricing only as a backstop.
+    await ebaySoldPass();
+    if (!usedCardsight) await cardsightPass();
+
 
     if (!usedCardsight) {
       const saleMedian = await medianValueFromSales(sales);
