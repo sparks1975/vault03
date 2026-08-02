@@ -89,7 +89,12 @@ export function buildPt130Descriptor(fields: {
     fields.player_name,
     fields.is_autograph ? "auto" : null,
     parallel,
-    includeCardNumber && fields.card_number ? `#${String(fields.card_number).replace(/^#/, "")}` : null,
+    // Hyphens are treated as an exclusion operator by the eBay-backed search
+    // behind 130point ("112-SP" => 112 NOT SP), which silently drops every
+    // legitimate short-print listing. Render the number with spaces instead.
+    includeCardNumber && fields.card_number
+      ? `#${String(fields.card_number).replace(/^#/, "").replace(/[-/]+/g, " ").replace(/\s+/g, " ").trim()}`
+      : null,
   ].filter(Boolean) as string[];
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
