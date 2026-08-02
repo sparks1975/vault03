@@ -616,7 +616,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           const time = new Date(row.scraped_at).getTime();
           return Number.isFinite(time) && time > latest ? time : latest;
         }, 0);
-        const cacheFresh = newestScrape > 0 && Date.now() - newestScrape < 24 * 60 * 60 * 1000;
+        const cacheFresh =
+          !data.force_refresh && newestScrape > 0 && Date.now() - newestScrape < 24 * 60 * 60 * 1000;
+
         if (!cacheFresh) {
           const { buildPt130Descriptors, refreshPt130ForCard } = await import("./pt130.server");
           const descriptors = buildPt130Descriptors({
