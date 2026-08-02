@@ -542,14 +542,20 @@ export function verifyCompTitle(
     // on real eBay listings and isn't evidence either way, so it no longer
     // rejects the comp by itself; the other discriminators below still have
     // to pass (player, year, set, autograph, serial, variant).
-    if (explicitNumbers.length > 0 && !titleMentionsCardNumber(rawTitle, wantedNumber)) {
+    const numberStated =
+      titleMentionsCardNumber(rawTitle, wantedNumber) ||
+      // "#112-SP" cards are routinely listed as "#112" (the printed base
+      // number), so treat the base number as the same card.
+      explicitNumbers.some((n) => cardNumbersEquivalent(wantedNumber, n));
+    if (explicitNumbers.length > 0 && !numberStated) {
       const label = compact(lookup.card_number).replace(/^#\s*/, "");
       reasons.push(`card number #${label} mismatch`);
     }
   }
 
   if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
-    const hasExactCardNumber = wantedNumber && explicitNumbers.includes(wantedNumber);
+    const hasExactCardNumber = wantedNumber && explicitNumbers.some((n) => cardNumbersEquivalent(wantedNumber, n));
+
     if (!lookup.relaxedSetMatch || !hasExactCardNumber || hasConflictingKnownSetAlias(titleNorm, lookup.set_name)) {
       reasons.push("set mismatch");
     }
