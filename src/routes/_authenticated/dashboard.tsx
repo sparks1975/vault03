@@ -163,9 +163,11 @@ type Card = {
   photo_url: string | null;
   mlb_player_id: number | null;
   last_valued_at: string | null;
+  last_valuation_failed_at: string | null;
   cardsight_card_id: string | null;
   cardsight_parallel_id: string | null;
   cardsight_grade_id: string | null;
+  cardsight_lookup_failed_at: string | null;
   created_at: string;
   sort_order: number | null;
   sales: Sale[];
@@ -233,9 +235,18 @@ function Dashboard() {
     if (cardsQ.isLoading || cardData.length === 0) return;
     revaluedRef.current = true;
     const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+    const FAILED_RETRY_MS = 3 * 24 * 60 * 60 * 1000;
     const now = Date.now();
     const stale = cardData.filter((c) => {
-      if (!c.last_valued_at) return true;
+      if (!c.last_valued_at) {
+        // Never successfully valued. If a recent attempt failed, wait out the
+        // retry cooldown instead of re-attempting on every page load.
+        if (c.last_valuation_failed_at) {
+          const failedTs = new Date(c.last_valuation_failed_at).getTime();
+          if (Number.isFinite(failedTs) && now - failedTs < FAILED_RETRY_MS) return false;
+        }
+        return true;
+      }
       const ts = new Date(c.last_valued_at).getTime();
       return !Number.isFinite(ts) || now - ts >= THIRTY_DAYS_MS;
     });
@@ -257,6 +268,7 @@ function Dashboard() {
               cardsight_card_id: c.cardsight_card_id,
               cardsight_parallel_id: c.cardsight_parallel_id,
               cardsight_grade_id: c.cardsight_grade_id,
+              cardsight_lookup_failed_at: c.cardsight_lookup_failed_at,
               card_id: c.id,
             },
           });
@@ -275,6 +287,7 @@ function Dashboard() {
           // an earlier mismatched match.
           if (est.resolved_cardsight_card_id && est.resolved_cardsight_card_id !== c.cardsight_card_id) {
             idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
+            idPatch.cardsight_lookup_failed_at = null;
           }
           if (est.resolved_cardsight_grade_id && est.resolved_cardsight_grade_id !== c.cardsight_grade_id) {
             idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
@@ -332,6 +345,7 @@ function Dashboard() {
             cardsight_card_id: c.cardsight_card_id,
             cardsight_parallel_id: c.cardsight_parallel_id,
             cardsight_grade_id: c.cardsight_grade_id,
+            cardsight_lookup_failed_at: c.cardsight_lookup_failed_at,
             card_id: c.id,
           },
         });
@@ -347,6 +361,7 @@ function Dashboard() {
         const idPatch: Partial<Card> = {};
         if (est.resolved_cardsight_card_id && est.resolved_cardsight_card_id !== c.cardsight_card_id) {
           idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
+          idPatch.cardsight_lookup_failed_at = null;
         }
         if (est.resolved_cardsight_grade_id && est.resolved_cardsight_grade_id !== c.cardsight_grade_id) {
           idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
@@ -949,6 +964,7 @@ function CardDetail({
       const idPatch: Partial<Card> = {};
       if (est.resolved_cardsight_card_id && est.resolved_cardsight_card_id !== card.cardsight_card_id) {
         idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
+        idPatch.cardsight_lookup_failed_at = null;
       }
       if (est.resolved_cardsight_grade_id && est.resolved_cardsight_grade_id !== card.cardsight_grade_id) {
         idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;

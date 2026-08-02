@@ -149,7 +149,23 @@ export function isApprovedCardSet(value: string | null | undefined): value is Ap
   return APPROVED_CARD_SETS.includes(value as ApprovedCardSet);
 }
 
-export function toApprovedCardSet(...parts: Array<string | number | null | undefined>): ApprovedCardSet | null {
+function titleCase(normalized: string): string {
+  return normalized
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word[0].toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+// Brands outside this curated list (Upper Deck, Fleer, Ultra, Score, Leaf,
+// etc.) used to be dropped entirely — toApprovedCardSet returned null and
+// callers persisted that null, wiping set_name on save even though the
+// pricing query builder (setBrand() below) still expects those brands to be
+// present. Falling back to a normalized version of the raw text instead of
+// null keeps the set filter alive for uncatalogued brands and degrades
+// gracefully as new brands appear, instead of requiring this whitelist to be
+// kept in lockstep with Cardsight's catalog.
+export function toApprovedCardSet(...parts: Array<string | number | null | undefined>): string | null {
   const raw = parts.filter(Boolean).join(" ");
   const normalized = normalizeSetText(raw);
   if (!normalized) return null;
@@ -163,5 +179,5 @@ export function toApprovedCardSet(...parts: Array<string | number | null | undef
     if (normalized.includes(setNorm)) return set;
   }
 
-  return null;
+  return titleCase(normalized);
 }

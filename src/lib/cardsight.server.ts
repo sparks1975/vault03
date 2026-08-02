@@ -1,8 +1,28 @@
 // Server-only Cardsight REST client. Do not import from client-reachable modules
 // at top level. See https://cardsight.ai/documentation/api-reference.
+import { createClient } from "@supabase/supabase-js";
 import { toApprovedCardSet } from "./card-sets";
+import type { Database } from "@/integrations/supabase/types";
 
 const REST_BASE = "https://api.cardsight.ai";
+
+// The app deploys to an edge/Workers-style runtime where module-level state
+// (below) isn't guaranteed to survive across requests/isolates. Back the GET
+// cache with Supabase so a cold isolate doesn't re-bill a lookup a warm one
+// just made. Uses the service role directly (this table has no RLS policies,
+// isn't user data, and isn't reachable from any client-exposed function) so
+// callers don't need to thread a request-scoped Supabase client through every
+// Cardsight helper.
+let cacheDb: ReturnType<typeof createClient<Database>> | null | undefined;
+function getCacheDb(): ReturnType<typeof createClient<Database>> | null {
+  if (cacheDb !== undefined) return cacheDb;
+  const url = process.env.SUPABASE_URL;
+  const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  cacheDb = url && serviceRole
+    ? createClient<Database>(url, serviceRole, { auth: { autoRefreshToken: false, persistSession: false } })
+    : null;
+  return cacheDb;
+}
 
 function apiKey(): string {
   const k = process.env.CARDSIGHT_API_KEY;
@@ -57,10 +77,44 @@ async function csFetchUncached<T>(path: string, init?: RequestInit): Promise<T> 
 // "re-value all" pass) repeats the same catalog/pricing GETs many times —
 // resolve, verify, correct, retry, relaxed re-filter — which multiplied billed
 // API calls without changing the answer. Same URL within the TTL = one call.
+//
+// Two layers: an in-memory Map as a same-isolate fast path (no network round
+// trip), and the `cardsight_cache` Supabase table as the layer correctness
+// actually depends on, since isolates are not guaranteed to be warm.
 const GET_CACHE_TTL_MS = 15 * 60 * 1000;
 const GET_CACHE_MAX = 500;
 const getCache = new Map<string, { at: number; value: unknown }>();
 const inflight = new Map<string, Promise<unknown>>();
+
+async function readDurableCache<T>(path: string): Promise<T | undefined> {
+  const db = getCacheDb();
+  if (!db) return undefined;
+  try {
+    const { data } = await db
+      .from("cardsight_cache")
+      .select("payload, expires_at")
+      .eq("cache_key", path)
+      .maybeSingle();
+    if (!data || new Date(data.expires_at).getTime() <= Date.now()) return undefined;
+    return data.payload as T;
+  } catch (err) {
+    console.error("cardsight_cache read failed:", err);
+    return undefined;
+  }
+}
+
+async function writeDurableCache(path: string, value: unknown): Promise<void> {
+  const db = getCacheDb();
+  if (!db) return;
+  try {
+    await db.from("cardsight_cache").upsert(
+      { cache_key: path, payload: value as never, expires_at: new Date(Date.now() + GET_CACHE_TTL_MS).toISOString() },
+      { onConflict: "cache_key" },
+    );
+  } catch (err) {
+    console.error("cardsight_cache write failed:", err);
+  }
+}
 
 async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const method = (init?.method ?? "GET").toUpperCase();
@@ -73,7 +127,13 @@ async function csFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const pending = inflight.get(path);
   if (pending) return pending as Promise<T>;
 
-  const promise = csFetchUncached<T>(path, init)
+  const promise = (async () => {
+    const durableHit = await readDurableCache<T>(path);
+    if (durableHit !== undefined) return durableHit;
+    const value = await csFetchUncached<T>(path, init);
+    await writeDurableCache(path, value);
+    return value;
+  })()
     .then((value) => {
       if (getCache.size >= GET_CACHE_MAX) {
         const oldest = getCache.keys().next().value;
@@ -477,16 +537,14 @@ export function verifyCompTitle(
   let explicitNumbers: string[] = [];
   if (wantedNumber) {
     explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
-    // The card number is mandatory evidence: a comp from the right set but a
-    // different (or unstated) number is a different card. Reject both a
-    // conflicting number and a title that never states the number at all.
-    if (!titleMentionsCardNumber(rawTitle, wantedNumber)) {
+    // An explicit, conflicting card number is strong evidence of a different
+    // card — reject that. A title that never states a number at all is common
+    // on real eBay listings and isn't evidence either way, so it no longer
+    // rejects the comp by itself; the other discriminators below still have
+    // to pass (player, year, set, autograph, serial, variant).
+    if (explicitNumbers.length > 0 && !titleMentionsCardNumber(rawTitle, wantedNumber)) {
       const label = compact(lookup.card_number).replace(/^#\s*/, "");
-      reasons.push(
-        explicitNumbers.length > 0
-          ? `card number #${label} mismatch`
-          : `card number #${label} missing from title`,
-      );
+      reasons.push(`card number #${label} mismatch`);
     }
   }
 
@@ -692,7 +750,6 @@ function pricingRecordMatchesStructured(
   },
 ): boolean {
   if (!Number.isFinite(record.price) || record.price <= 0) return false;
-  if (record.listing_type !== "auction") return false;
   if (isNonSingleCardListing(record.title)) return false;
 
   // This record came from /pricing/{canonical card_id}, with the requested
@@ -1200,9 +1257,9 @@ export async function fetchPricing(
   // Keep the default request aligned with our valuation window:
   // GET /v1/pricing/{card_id}?period=6m. Cardsight's /pricing endpoint only
   // returns completed transactions (both auction sales and fixed-price BIN
-  // sales) — active/unsold listings are not included. We include both types.
+  // sales) — active/unsold listings are not included. Omit listing_type so we
+  // get both; passing "auction" here would filter out BIN sales entirely.
   params.set("period", opts.period ?? "all");
-  params.set("listing_type", "auction");
   // CardSight documents omission as "all variants/grades". An explicit null
   // means base or raw only, which is what an unselected parallel/ungraded card
   // represents in Vault.03.
@@ -1350,7 +1407,7 @@ export async function searchPricingComps(
   // Search is a last-resort fallback. Two tightly scoped queries provide a
   // bounded escape hatch without allowing one card to consume dozens of calls.
   for (const q of queries.slice(0, 2)) {
-    const params = new URLSearchParams({ q, period, listing_type: "auction", limit: String(Math.min(limit, 500)) });
+    const params = new URLSearchParams({ q, period, limit: String(Math.min(limit, 500)) });
     const resp = await csFetch<PricingSearchResponse>(`/v1/pricing/search?${params.toString()}`);
     lastMeta = { query: resp.query, messages: resp.messages };
     const matches = (resp.results ?? []).filter(

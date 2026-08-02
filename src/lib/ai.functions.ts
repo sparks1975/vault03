@@ -6,6 +6,12 @@ import { APPROVED_CARD_SETS, toApprovedCardSet } from "./card-sets";
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3.5-flash";
 
+// A card that failed catalog resolution will very likely fail again. Skip
+// re-running the multi-request resolution cascade until this cooldown
+// elapses, so repeated triggers (auto-revalue, "Re-value all", Manage Comps)
+// don't re-pay the full cost for a card that isn't in the catalog.
+const LOOKUP_RETRY_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
 async function callAI(body: unknown): Promise<string> {
   const apiKey = process.env.LOVABLE_API_KEY;
   if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
@@ -228,6 +234,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         cardsight_grade_id: z.string().uuid().optional().nullable(),
         // Optional card_id enables merging cached 130point comps into the pool.
         card_id: z.string().uuid().optional().nullable(),
+        // When the catalog resolution cascade last failed for this card, so we
+        // can skip re-running it on every trigger while it's still recent.
+        cardsight_lookup_failed_at: z.string().optional().nullable(),
       })
       .parse(d),
   )
@@ -283,8 +292,16 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       return true;
     };
 
+    // If a resolution attempt failed recently, don't re-run the cascade yet —
+    // go straight to the eBay/AI fallback below instead.
+    const lookupFailedRecently = (() => {
+      if (!data.cardsight_lookup_failed_at) return false;
+      const t = new Date(data.cardsight_lookup_failed_at).getTime();
+      return Number.isFinite(t) && Date.now() - t < LOOKUP_RETRY_COOLDOWN_MS;
+    })();
+
     // If we don't yet have a cardsight card id, resolve one via catalog search.
-    if (!resolvedCardId) {
+    if (!resolvedCardId && !lookupFailedRecently) {
       try {
         const { searchCatalogCardByFields } = await import("./cardsight.server");
         const descriptorForSearch = [
@@ -305,6 +322,16 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         });
       } catch (err) {
         console.error("Cardsight search failed:", err);
+      }
+      if (!resolvedCardId && data.card_id) {
+        try {
+          await context.supabase
+            .from("cards")
+            .update({ cardsight_lookup_failed_at: new Date().toISOString() } as never)
+            .eq("id", data.card_id);
+        } catch (err) {
+          console.error("Failed to persist cardsight_lookup_failed_at:", err);
+        }
       }
     }
 

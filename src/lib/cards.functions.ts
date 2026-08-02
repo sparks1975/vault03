@@ -207,6 +207,8 @@ const allowed = [
       "cardsight_card_id",
       "cardsight_parallel_id",
       "cardsight_grade_id",
+      "cardsight_lookup_failed_at",
+      "last_valuation_failed_at",
     ];
     const clean: Record<string, unknown> = {};
     for (const k of allowed) {
@@ -241,6 +243,8 @@ const allowed = [
           clean["current_value"] = null;
           clean["value_delta_pct"] = null;
           clean["last_valued_at"] = null;
+          clean["cardsight_lookup_failed_at"] = null;
+          clean["last_valuation_failed_at"] = null;
         }
       }
     }
@@ -322,9 +326,15 @@ async function applyValuation(
       : (validSalePrices[mid - 1] + validSalePrices[mid]) / 2;
   })();
   const currentValue = medianSaleValue ?? valuation.current_value;
+  // A value of 0 means every pricing source failed (the AI fallback's
+  // last-resort failure value) — not a real $0 valuation. Treat it as a
+  // failed attempt rather than a fresh, successful one: don't overwrite the
+  // card's existing value/last_valued_at, so the UI keeps showing the last
+  // known-good value (or "—" if there never was one) instead of masking the
+  // failure as "$0.00, freshly valued" and suppressing retry for 30 days.
+  const valuationSucceeded = Number.isFinite(currentValue) && currentValue > 0;
 
   await supabase.from("card_sales").delete().eq("card_id", cardId).eq("is_manual", false);
-  await supabase.from("card_value_history").delete().eq("card_id", cardId);
   if (singleCardSales.length) {
     const { error } = await supabase.from("card_sales").insert(
       singleCardSales.map((s) => ({
@@ -340,25 +350,34 @@ async function applyValuation(
     );
     if (error) throw error;
   }
-  if (valuation.history.length) {
-    const { error } = await supabase.from("card_value_history").insert(
-      valuation.history.map((h) => ({
-        card_id: cardId,
-        user_id: userId,
-        recorded_at: h.recorded_at,
-        value: h.value,
-      })),
-    );
-    if (error) throw error;
+  if (valuationSucceeded) {
+    await supabase.from("card_value_history").delete().eq("card_id", cardId);
+    if (valuation.history.length) {
+      const { error } = await supabase.from("card_value_history").insert(
+        valuation.history.map((h) => ({
+          card_id: cardId,
+          user_id: userId,
+          recorded_at: h.recorded_at,
+          value: h.value,
+        })),
+      );
+      if (error) throw error;
+    }
+    await supabase
+      .from("cards")
+      .update({
+        current_value: currentValue,
+        value_delta_pct: valuation.value_delta_pct,
+        last_valued_at: new Date().toISOString(),
+        last_valuation_failed_at: null,
+      })
+      .eq("id", cardId);
+  } else {
+    await supabase
+      .from("cards")
+      .update({ last_valuation_failed_at: new Date().toISOString() })
+      .eq("id", cardId);
   }
-  await supabase
-    .from("cards")
-    .update({
-      current_value: currentValue,
-      value_delta_pct: valuation.value_delta_pct,
-      last_valued_at: new Date().toISOString(),
-    })
-    .eq("id", cardId);
 }
 
 
@@ -497,6 +516,11 @@ async function recomputeCardValue(
     .eq("id", cardId);
 }
 
+// A card with no saved catalog id that failed resolution recently will very
+// likely fail again — skip re-running the resolution cascade until this
+// cooldown elapses (mirrors the same cooldown in ai.functions.ts).
+const LOOKUP_RETRY_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
+
 export const fetchCompCandidates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => z.object({ card_id: z.string().uuid() }).parse(d))
@@ -505,7 +529,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
     const { data: card, error } = await supabase
       .from("cards")
       .select(
-        "id, cardsight_card_id, player_name, year, set_name, card_number, is_autograph, is_first_bowman",
+        "id, cardsight_card_id, cardsight_lookup_failed_at, player_name, year, set_name, card_number, is_autograph, is_first_bowman",
       )
       .eq("id", data.card_id)
       .eq("user_id", userId)
@@ -523,8 +547,12 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
     // Always resolve Manage Comps from the card's current editable identity.
     // A legacy/bad scan can leave a valid UUID pointing at a completely
     // different player, so merely checking that an id exists is not enough.
+    // Exception: a card with no saved id that recently failed to resolve
+    // skips straight to cached comps instead of re-paying the cascade.
     let cardsightId: string | null = null;
-    if (card) {
+    const skipResolution = !!card && !card.cardsight_card_id && !!card.cardsight_lookup_failed_at &&
+      Date.now() - new Date(card.cardsight_lookup_failed_at).getTime() < LOOKUP_RETRY_COOLDOWN_MS;
+    if (card && !skipResolution) {
       try {
         const { findCatalogCard } = await import("./cardsight.server");
         const match = await findCatalogCard({
@@ -547,6 +575,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
                 current_value: null,
                 value_delta_pct: null,
                 last_valued_at: null,
+                cardsight_lookup_failed_at: null,
               } as never)
               .eq("id", card.id);
             await supabase.from("card_sales").delete().eq("card_id", card.id);
@@ -564,10 +593,16 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
               current_value: null,
               value_delta_pct: null,
               last_valued_at: null,
+              cardsight_lookup_failed_at: new Date().toISOString(),
             } as never)
             .eq("id", card.id);
           await supabase.from("card_sales").delete().eq("card_id", card.id);
           await supabase.from("pt130_comps").delete().eq("card_id", card.id);
+        } else {
+          await supabase
+            .from("cards")
+            .update({ cardsight_lookup_failed_at: new Date().toISOString() } as never)
+            .eq("id", card.id);
         }
       } catch (err) {
         console.error("fetchCompCandidates catalog resolve failed", err);
