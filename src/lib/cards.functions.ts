@@ -235,7 +235,7 @@ const allowed = [
         const changed = identityKeys.some(
           (k) => k in clean && norm(clean[k]) !== norm((existing as Record<string, unknown>)[k]),
         );
-        if (changed && existing.cardsight_card_id) {
+        if (changed) {
           identityReset = true;
           clean["cardsight_card_id"] = null;
           clean["cardsight_parallel_id"] = null;
@@ -555,12 +555,14 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
     const { data: card, error } = await supabase
       .from("cards")
       .select(
-        "id, cardsight_card_id, cardsight_lookup_failed_at, player_name, year, set_name, card_number, is_autograph, is_first_bowman",
+        "id, cardsight_card_id, cardsight_lookup_failed_at, player_name, year, set_name, card_number, is_autograph, serial_number, is_first_bowman",
       )
       .eq("id", data.card_id)
       .eq("user_id", userId)
       .maybeSingle();
     if (error) throw error;
+    if (!card) throw new Error("Card not found");
+    const { verifyCompTitle } = await import("./cardsight.server");
 
     const candidates: Array<{
       title: string | null;
@@ -642,7 +644,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
 
         for (const r of rows) {
           const price = Number(r.price);
-          if (!Number.isFinite(price) || price <= 0) continue;
+          if (!Number.isFinite(price) || price <= 0 || !verifyCompTitle(r.title, card).verified) continue;
           candidates.push({
             title: r.title ?? null,
             price,
@@ -664,7 +666,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       .eq("user_id", userId);
     for (const r of pt ?? []) {
       const price = Number(r.price);
-      if (!Number.isFinite(price) || price <= 0) continue;
+      if (!Number.isFinite(price) || price <= 0 || !verifyCompTitle(r.title, card).verified) continue;
       candidates.push({
         title: r.title ?? null,
         price,
