@@ -156,6 +156,7 @@ export async function refreshPt130ForCard(
     card_id: string;
     user_id: string;
     descriptor: string | string[];
+    card_number?: string | null;
   },
 ): Promise<{ stored: number; scraped: number }> {
   const descriptors = Array.isArray(args.descriptor) ? args.descriptor : [args.descriptor];
