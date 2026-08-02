@@ -296,8 +296,14 @@ function Dashboard() {
   const updateMut = useMutation({
     mutationFn: (v: { id: string; patch: Partial<Card> }) =>
       updateFn({ data: { id: v.id, patch: v.patch as Record<string, unknown> } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cards"] }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["cards"] });
+      if ((res as { identity_reset?: boolean } | undefined)?.identity_reset) {
+        toast.warning("Card details changed — old comps cleared. Re-value to pull comps for the corrected card.");
+      }
+    },
   });
+
 
   const deleteMut = useMutation({
     mutationFn: (id: string) => deleteFn({ data: { id } }),
