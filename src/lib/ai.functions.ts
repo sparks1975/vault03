@@ -357,7 +357,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     // If a resolution attempt failed recently, don't re-run the cascade yet —
     // go straight to the eBay/AI fallback below instead.
     const lookupFailedRecently = (() => {
+      if (data.force_refresh) return false;
       if (!data.cardsight_lookup_failed_at) return false;
+
       const t = new Date(data.cardsight_lookup_failed_at).getTime();
       return Number.isFinite(t) && Date.now() - t < LOOKUP_RETRY_COOLDOWN_MS;
     })();
