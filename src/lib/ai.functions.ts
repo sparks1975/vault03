@@ -682,12 +682,20 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             usedCardsight = true;
             compsNote = null;
           }
+        } else if (usableRows.length > 0) {
+          compsNote =
+            "Found sold listings but none matched this exact card — open Manage Comps to pick the right ones.";
         }
 
       } catch (err) {
-        console.error("Cached eBay sold fallback failed:", err);
+        console.error("eBay sold pass failed:", err);
       }
-    }
+    };
+
+    // Real sold data first, CardSight catalog pricing only as a backstop.
+    await ebaySoldPass();
+    if (!usedCardsight) await cardsightPass();
+
 
     if (!usedCardsight) {
       const saleMedian = await medianValueFromSales(sales);
