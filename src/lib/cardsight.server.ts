@@ -1172,6 +1172,7 @@ export type PricingSlice = {
   auctionSales: PricingRecord[];
   askListings: PricingRecord[];  // kept for API-shape compatibility (unused)
   gradeLabel: string | null;
+  cardIdentity: { card_id: string; name: string } | null;
   rawResponseMeta?: { query?: Record<string, unknown>; messages?: Array<{ code?: string; message?: string }> };
 };
 
@@ -1243,6 +1244,7 @@ export async function fetchPricing(
     auctionSales: records,
     askListings: [],
     gradeLabel,
+    cardIdentity: resp.card ?? null,
     rawResponseMeta: { query: resp.query, messages: resp.messages },
   };
 }
@@ -1365,6 +1367,7 @@ export async function searchPricingComps(
     auctionSales: dedupePricingRecords(all),
     askListings: [],
     gradeLabel: compact([lookup.grader, lookup.grade].filter(Boolean).join(" ")) || null,
+    cardIdentity: null,
     rawResponseMeta: lastMeta,
   };
 }

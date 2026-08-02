@@ -216,7 +216,7 @@ const allowed = [
 
     // If the user corrected the card's identity (player / year / set / card #),
     // the CardSight ids resolved from the original scan are no longer valid.
-    // Clear them and purge stale auto comps so the next valuation re-resolves
+    // Clear them and purge every stale comp so the next valuation re-resolves
     // from the corrected details.
     let identityReset = false;
     const identityKeys = ["player_name", "year", "set_name", "card_number"] as const;
@@ -249,7 +249,7 @@ const allowed = [
     if (error) throw error;
 
     if (identityReset) {
-      await supabase.from("card_sales").delete().eq("card_id", data.id).eq("is_manual", false);
+      await supabase.from("card_sales").delete().eq("card_id", data.id);
       await supabase.from("pt130_comps").delete().eq("card_id", data.id);
     }
     return { ok: true, identity_reset: identityReset };
@@ -520,10 +520,11 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       url: string | null;
     }> = [];
 
-    // If the identity was corrected after a bad scan the stored CardSight id is
-    // cleared — resolve a fresh one from the current card details.
-    let cardsightId = card?.cardsight_card_id ?? null;
-    if (!cardsightId && card) {
+    // Always resolve Manage Comps from the card's current editable identity.
+    // A legacy/bad scan can leave a valid UUID pointing at a completely
+    // different player, so merely checking that an id exists is not enough.
+    let cardsightId: string | null = null;
+    if (card) {
       try {
         const { findCatalogCard } = await import("./cardsight.server");
         const match = await findCatalogCard({
@@ -536,11 +537,37 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
         });
         if (match?.id) {
           cardsightId = match.id;
-
+          if (cardsightId !== card.cardsight_card_id) {
+            await supabase
+              .from("cards")
+              .update({
+                cardsight_card_id: cardsightId,
+                cardsight_parallel_id: null,
+                cardsight_grade_id: null,
+                current_value: null,
+                value_delta_pct: null,
+                last_valued_at: null,
+              } as never)
+              .eq("id", card.id);
+            await supabase.from("card_sales").delete().eq("card_id", card.id);
+            await supabase.from("pt130_comps").delete().eq("card_id", card.id);
+          }
+        } else if (card.cardsight_card_id) {
+          // Never fall back to a stored id that cannot be verified against the
+          // corrected player/year/set/card number.
           await supabase
             .from("cards")
-            .update({ cardsight_card_id: cardsightId } as never)
+            .update({
+              cardsight_card_id: null,
+              cardsight_parallel_id: null,
+              cardsight_grade_id: null,
+              current_value: null,
+              value_delta_pct: null,
+              last_valued_at: null,
+            } as never)
             .eq("id", card.id);
+          await supabase.from("card_sales").delete().eq("card_id", card.id);
+          await supabase.from("pt130_comps").delete().eq("card_id", card.id);
         }
       } catch (err) {
         console.error("fetchCompCandidates catalog resolve failed", err);
