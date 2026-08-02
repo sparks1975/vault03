@@ -114,15 +114,16 @@ export async function scrapePt130(descriptor: string): Promise<Pt130Sale[]> {
   if (!descriptor.trim()) return [];
 
   const body = {
-    url: "https://130point.com/sales/",
+    url: "https://130point.com/search",
     formats: ["markdown"],
     onlyMainContent: true,
-    waitFor: 5000,
+    waitFor: 4000,
     actions: [
-      { type: "wait", milliseconds: 3000 },
-      { type: "write", selector: 'input[placeholder="Search by player, set, year, etc"]', text: descriptor },
-      { type: "click", selector: 'button[aria-label="Search"]' },
-      { type: "wait", milliseconds: 8000 },
+      { type: "wait", milliseconds: 2500 },
+      { type: "click", selector: 'input[placeholder="Search by player, set, year, etc"]' },
+      { type: "write", text: descriptor },
+      { type: "press", key: "Enter" },
+      { type: "wait", milliseconds: 6000 },
     ],
   };
 
@@ -139,19 +140,19 @@ export async function scrapePt130(descriptor: string): Promise<Pt130Sale[]> {
     const text = await res.text();
     throw new Error(`Firecrawl 130point scrape failed [${res.status}]: ${text}`);
   }
-  const json = (await res.json()) as { success?: boolean; data?: { markdown?: string } };
+  const json = (await res.json()) as {
+    success?: boolean;
+    data?: { markdown?: string; metadata?: { url?: string } };
+  };
   const md = json?.data?.markdown ?? "";
-  // 130point's August 2026 redesign can leave browser automation on the
-  // homepage while still returning HTTP 200. Its featured auctions look like
-  // listing results, so parsing that page would attach unrelated cards. Never
-  // accept a scrape unless the submitted query survived in the rendered page.
-  const normalizedPage = md.replace(/[^a-z0-9]/gi, "").toLowerCase();
-  const requiredTokens = descriptor
-    .split(/\s+/)
-    .map((token) => token.replace(/[^a-z0-9]/gi, "").toLowerCase())
-    .filter((token) => token.length >= 2);
-  if (requiredTokens.length > 0 && !requiredTokens.every((token) => normalizedPage.includes(token))) {
-    console.error("130point search did not navigate to results; rejecting homepage listings");
+  // The retired /sales route redirects to the homepage with HTTP 200, whose
+  // featured auctions resemble search results. Reject that page and the new
+  // /search empty state so unrelated listings can never enter the comp cache.
+  const renderedUrl = json?.data?.metadata?.url ?? "";
+  const isSearchPage = renderedUrl ? new URL(renderedUrl).pathname === "/search" : true;
+  const isEmptySearch = md.includes("Try searching for a collectible!");
+  if (!isSearchPage || isEmptySearch) {
+    console.error("130point search did not submit; rejecting non-result listings");
     return [];
   }
   return parsePt130Markdown(md);
