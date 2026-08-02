@@ -89,7 +89,12 @@ export function buildPt130Descriptor(fields: {
     fields.player_name,
     fields.is_autograph ? "auto" : null,
     parallel,
-    includeCardNumber && fields.card_number ? `#${String(fields.card_number).replace(/^#/, "")}` : null,
+    // Hyphens are treated as an exclusion operator by the eBay-backed search
+    // behind 130point ("112-SP" => 112 NOT SP), which silently drops every
+    // legitimate short-print listing. Render the number with spaces instead.
+    includeCardNumber && fields.card_number
+      ? `#${String(fields.card_number).replace(/^#/, "").replace(/[-/]+/g, " ").replace(/\s+/g, " ").trim()}`
+      : null,
   ].filter(Boolean) as string[];
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
@@ -151,6 +156,7 @@ export async function refreshPt130ForCard(
     card_id: string;
     user_id: string;
     descriptor: string | string[];
+    card_number?: string | null;
   },
 ): Promise<{ stored: number; scraped: number }> {
   const descriptors = Array.isArray(args.descriptor) ? args.descriptor : [args.descriptor];
@@ -168,10 +174,16 @@ export async function refreshPt130ForCard(
       seen.add(key);
       sales.push(sale);
     }
-    // Search descriptors are ordered most-specific first. Once the exact query
-    // returns results, do not pay for a broader scrape that can only introduce
-    // noisier candidates.
-    if (sales.length > 0) break;
+    // Search descriptors are ordered most-specific first. Only stop early when
+    // the specific query actually produced listings carrying this card number —
+    // otherwise fall through to the broader descriptor.
+    const numberToken = args.card_number
+      ? String(args.card_number).replace(/[^a-z0-9]/gi, "").toLowerCase()
+      : "";
+    const hasNumberMatch = !numberToken
+      ? sales.length > 0
+      : sales.some((s) => String(s.title ?? "").replace(/[^a-z0-9]/gi, "").toLowerCase().includes(numberToken));
+    if (hasNumberMatch) break;
   }
   const del = await supabase.from("pt130_comps").delete().eq("card_id", args.card_id);
   if (del.error) throw del.error;

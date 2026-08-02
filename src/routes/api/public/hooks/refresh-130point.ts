@@ -53,6 +53,7 @@ export const Route = createFileRoute("/api/public/hooks/refresh-130point")({
               card_id: c.id,
               user_id: c.user_id,
               descriptor: descriptors,
+              card_number: c.card_number,
             });
             processed++;
             stored += r.stored;
