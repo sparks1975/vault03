@@ -465,9 +465,13 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         });
       }
 
-      if (auctions.length >= 3) {
-        const trimmed = trimOutliersIQR(auctions.map((r) => r.price));
-        currentValue = median(trimmed);
+      if (auctions.length >= 1) {
+        // Any verified sold comp is real market data — far better than an AI
+        // guess. Only trim outliers once there are enough points for IQR to be
+        // meaningful.
+        const prices = auctions.map((r) => r.price);
+        currentValue = median(auctions.length >= 4 ? trimOutliersIQR(prices) : prices);
+
 
         // 30-day vs prior-30-day delta on the same stream.
         const now = Date.now();
