@@ -495,8 +495,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         usedCardsight = true;
         compsNote = null;
       } else {
-        compsNote = `Only ${auctions.length} recent sold comp${auctions.length === 1 ? "" : "s"} — using AI estimate.`;
+        compsNote = "No verified sold comps for this catalog card — checking eBay sold.";
       }
+
     };
 
     if (resolvedCardId) {
