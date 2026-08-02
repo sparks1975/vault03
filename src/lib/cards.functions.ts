@@ -504,7 +504,9 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const { data: card, error } = await supabase
       .from("cards")
-      .select("id, cardsight_card_id")
+      .select(
+        "id, cardsight_card_id, player_name, year, set_name, card_number, is_autograph, is_first_bowman",
+      )
       .eq("id", data.card_id)
       .eq("user_id", userId)
       .maybeSingle();
@@ -518,10 +520,37 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       url: string | null;
     }> = [];
 
-    if (card?.cardsight_card_id) {
+    // If the identity was corrected after a bad scan the stored CardSight id is
+    // cleared — resolve a fresh one from the current card details.
+    let cardsightId = card?.cardsight_card_id ?? null;
+    if (!cardsightId && card) {
+      try {
+        const { findCatalogCard } = await import("./cardsight.server");
+        const match = await findCatalogCard({
+          player_name: card.player_name,
+          year: card.year,
+          set_name: card.set_name,
+          card_number: card.card_number,
+          is_autograph: card.is_autograph,
+          is_first_bowman: card.is_first_bowman,
+        });
+        if (match?.cardsight_card_id) {
+          cardsightId = match.cardsight_card_id;
+          await supabase
+            .from("cards")
+            .update({ cardsight_card_id: cardsightId } as never)
+            .eq("id", card.id);
+        }
+      } catch (err) {
+        console.error("fetchCompCandidates catalog resolve failed", err);
+      }
+    }
+
+    if (cardsightId) {
       try {
         const { fetchAllCompCandidates } = await import("./cardsight.server");
-        const rows = await fetchAllCompCandidates(card.cardsight_card_id);
+        const rows = await fetchAllCompCandidates(cardsightId);
+
         for (const r of rows) {
           const price = Number(r.price);
           if (!Number.isFinite(price) || price <= 0) continue;
