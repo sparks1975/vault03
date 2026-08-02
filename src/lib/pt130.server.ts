@@ -46,10 +46,13 @@ function parseSoldDate(raw: string): string | null {
 
 export function parsePt130Markdown(markdown: string): Pt130Sale[] {
   const out: Pt130Sale[] = [];
+  const soldSectionStart = markdown.indexOf("\nSold date\n");
+  if (soldSectionStart < 0) return out;
+  const soldMarkdown = markdown.slice(soldSectionStart);
   const pattern =
     /\[!\[([^\]]*)\]([\s\S]*?)(Fixed Price|Auction|Best Offer)(?: Accepted)?[\s\S]*?(\d{1,2}\s+[A-Za-z]{3}\s+\d{2,4}(?:\s+\d{1,2}:\d{2}:\d{2})?)\]\((https?:\/\/[^)]+)\)/g;
   let m: RegExpExecArray | null;
-  while ((m = pattern.exec(markdown)) !== null) {
+  while ((m = pattern.exec(soldMarkdown)) !== null) {
     const [, title, listingBody, typeStr, dateStr, url] = m;
     const priceMatches = [...listingBody.matchAll(/\$([\d,]+(?:\.\d+)?)\s*USD/g)];
     // Best-offer rows show the original asking price first and the accepted
