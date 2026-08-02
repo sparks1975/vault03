@@ -360,6 +360,20 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     })();
 
     // If we don't yet have a cardsight card id, resolve one via catalog search.
+    const normalizeSource = (raw: string) => {
+      const lower = String(raw ?? "").toLowerCase();
+      if (lower.includes("130") || lower.includes("ebay")) return "eBay sold";
+      return raw || "eBay sold";
+    };
+
+    const medianValueFromSales = async (rows: typeof sales) => {
+      const prices = rows.map((r) => Number(r.price)).filter((p) => Number.isFinite(p) && p > 0);
+      if (prices.length === 0) return null;
+      const { median } = await import("./cardsight.server");
+      return median(prices);
+    };
+
+    const cardsightPass = async () => {
     if (!resolvedCardId && !lookupFailedRecently) {
       try {
         const { searchCatalogCardByFields } = await import("./cardsight.server");
