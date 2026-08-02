@@ -6,7 +6,11 @@ import { Loader2 } from "lucide-react";
 interface Props {
   image: string;
   onCancel: () => void;
-  onConfirm: (croppedDataUrl: string) => void;
+  // displayDataUrl is a small, storage-optimized crop; identifyDataUrl is a
+  // separate, higher-resolution/quality encode of the same crop meant for
+  // card identification (small print like card numbers and serials survives
+  // better at higher quality than what's worth storing/downloading for display).
+  onConfirm: (displayDataUrl: string, identifyDataUrl: string) => void;
   confirmLabel?: string;
   busy?: boolean;
 }
@@ -21,6 +25,12 @@ const OUTPUT_ATTEMPTS = [
   { width: 520, height: 728, quality: 0.6 },
   { width: 480, height: 672, quality: 0.56 },
 ];
+// Identification only happens once per card (not in a loop like valuation),
+// so it's worth spending more bytes on legibility: bigger frame, higher
+// quality, no iterative shrink-to-fit — small printed text (card number,
+// subset name, serial) is the first casualty of the aggressive display-size
+// compression above.
+const IDENTIFY_OUTPUT = { width: 1400, height: 1960, quality: 0.88 };
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((res, rej) => {
@@ -31,11 +41,11 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-async function getCroppedDataUrl(
+async function buildCroppedCanvas(
   imageSrc: string,
   crop: Area,
   rotation: number,
-): Promise<string> {
+): Promise<{ rotCanvas: HTMLCanvasElement; sourceWidth: number; sourceHeight: number }> {
   const image = await loadImage(imageSrc);
   const rad = (rotation * Math.PI) / 180;
 
@@ -54,32 +64,54 @@ async function getCroppedDataUrl(
   rctx.rotate(rad);
   rctx.drawImage(image, -image.width / 2, -image.height / 2);
 
-  const sourceWidth = Math.max(1, Math.round(crop.width));
-  const sourceHeight = Math.max(1, Math.round(crop.height));
+  return {
+    rotCanvas,
+    sourceWidth: Math.max(1, Math.round(crop.width)),
+    sourceHeight: Math.max(1, Math.round(crop.height)),
+  };
+}
 
+function drawCropAtSize(
+  rotCanvas: HTMLCanvasElement,
+  crop: Area,
+  sourceWidth: number,
+  sourceHeight: number,
+  targetWidth: number,
+  targetHeight: number,
+): HTMLCanvasElement {
+  const scale = Math.min(1, targetWidth / sourceWidth, targetHeight / sourceHeight);
+  const outWidth = Math.max(1, Math.round(sourceWidth * scale));
+  const outHeight = Math.max(1, Math.round(sourceHeight * scale));
+  const out = document.createElement("canvas");
+  out.width = outWidth;
+  out.height = outHeight;
+  const octx = out.getContext("2d");
+  if (!octx) throw new Error("Couldn't prepare image canvas");
+  octx.imageSmoothingEnabled = true;
+  octx.imageSmoothingQuality = "high";
+  octx.drawImage(
+    rotCanvas,
+    Math.round(crop.x),
+    Math.round(crop.y),
+    sourceWidth,
+    sourceHeight,
+    0,
+    0,
+    outWidth,
+    outHeight,
+  );
+  return out;
+}
+
+async function getCroppedDataUrl(
+  rotCanvas: HTMLCanvasElement,
+  crop: Area,
+  sourceWidth: number,
+  sourceHeight: number,
+): Promise<string> {
   let best: { dataUrl: string; bytes: number } | null = null;
   for (const attempt of OUTPUT_ATTEMPTS) {
-    const scale = Math.min(1, attempt.width / sourceWidth, attempt.height / sourceHeight);
-    const outWidth = Math.max(1, Math.round(sourceWidth * scale));
-    const outHeight = Math.max(1, Math.round(sourceHeight * scale));
-    const out = document.createElement("canvas");
-    out.width = outWidth;
-    out.height = outHeight;
-    const octx = out.getContext("2d");
-    if (!octx) throw new Error("Couldn't prepare image canvas");
-    octx.imageSmoothingEnabled = true;
-    octx.imageSmoothingQuality = "high";
-    octx.drawImage(
-      rotCanvas,
-      Math.round(crop.x),
-      Math.round(crop.y),
-      sourceWidth,
-      sourceHeight,
-      0,
-      0,
-      outWidth,
-      outHeight,
-    );
+    const out = drawCropAtSize(rotCanvas, crop, sourceWidth, sourceHeight, attempt.width, attempt.height);
     const dataUrl = await canvasToJpegDataUrl(out, attempt.quality);
     const bytes = dataUrlBytes(dataUrl);
     best = !best || bytes < best.bytes ? { dataUrl, bytes } : best;
@@ -87,6 +119,16 @@ async function getCroppedDataUrl(
   }
   if (!best) throw new Error("Couldn't compress image");
   return best.dataUrl;
+}
+
+async function getIdentifyDataUrl(
+  rotCanvas: HTMLCanvasElement,
+  crop: Area,
+  sourceWidth: number,
+  sourceHeight: number,
+): Promise<string> {
+  const out = drawCropAtSize(rotCanvas, crop, sourceWidth, sourceHeight, IDENTIFY_OUTPUT.width, IDENTIFY_OUTPUT.height);
+  return canvasToJpegDataUrl(out, IDENTIFY_OUTPUT.quality);
 }
 
 function canvasToJpegDataUrl(canvas: HTMLCanvasElement, quality: number): Promise<string> {
@@ -128,8 +170,12 @@ export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use
     if (!pixels) return;
     setWorking(true);
     try {
-      const url = await getCroppedDataUrl(image, pixels, rotation);
-      onConfirm(url);
+      const { rotCanvas, sourceWidth, sourceHeight } = await buildCroppedCanvas(image, pixels, rotation);
+      const [displayUrl, identifyUrl] = await Promise.all([
+        getCroppedDataUrl(rotCanvas, pixels, sourceWidth, sourceHeight),
+        getIdentifyDataUrl(rotCanvas, pixels, sourceWidth, sourceHeight),
+      ]);
+      onConfirm(displayUrl, identifyUrl);
     } finally {
       setWorking(false);
     }

@@ -130,6 +130,62 @@ function stripParallelFromSetName(raw: string | null | undefined): string | null
   return s;
 }
 
+function normalizeNameTokens(name: string | null | undefined): string[] {
+  return String(name ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter((t) => t.length > 1);
+}
+
+// True when the two names plausibly refer to the same person — every token in
+// the shorter name appears in the longer one. Used to corroborate a
+// low/medium-confidence Cardsight identify against an independent AI read
+// rather than trusting either one alone.
+function namesLikelyMatch(a: string | null | undefined, b: string | null | undefined): boolean {
+  const ta = normalizeNameTokens(a);
+  const tb = normalizeNameTokens(b);
+  if (ta.length === 0 || tb.length === 0) return false;
+  const [shorter, longer] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  return shorter.every((t) => longer.includes(t));
+}
+
+// AI vision identify + best-effort Cardsight catalog link, so pricing and
+// parallels work off the AI's read too. Used both as the fallback when
+// Cardsight identify fails outright, and to corroborate a low/medium
+// confidence Cardsight identify.
+async function scanViaAIVisionLinked(imageDataUrl: string): Promise<ScanResult> {
+  const result = await scanViaAIVision(imageDataUrl);
+  const enriched = await enrichWithMlb(result);
+  try {
+    const { getCatalogValuationLookup, searchCatalogCardByFields } = await import("./cardsight.server");
+    const desc = [enriched.year, enriched.set_name, enriched.player_name, enriched.card_number ? `#${enriched.card_number}` : null]
+      .filter(Boolean)
+      .join(" ");
+    if (desc) {
+      const id = await searchCatalogCardByFields({
+        player_name: enriched.player_name,
+        year: enriched.year,
+        set_name: enriched.set_name,
+        card_number: enriched.card_number,
+        descriptor: desc,
+      });
+      if (id) {
+        enriched.cardsight_card_id = id;
+        const canonical = await getCatalogValuationLookup(id);
+        if (canonical?.set_name) enriched.set_name = String(canonical.set_name);
+        if (canonical?.year != null) enriched.year = Number(canonical.year) || enriched.year;
+        if (canonical?.card_number) enriched.card_number = String(canonical.card_number);
+        if (canonical?.player_name) enriched.player_name = String(canonical.player_name);
+      }
+    }
+  } catch (err) {
+    console.error("Cardsight search (post-scan) failed:", err);
+  }
+  return enriched;
+}
+
 // ---------- Photo scan: Cardsight REST identify, AI fallback ----------
 export const scanCardPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -140,48 +196,38 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
     const { bytes, contentType } = dataUrlToBytes(data.imageDataUrl);
 
     // 1) Cardsight structured identify (returns canonical card_id + slab data).
+    let ident: ScanResult | null = null;
     try {
       const { identifyCardRest } = await import("./cardsight.server");
       const { compressBytes } = await import("./tinypng.server");
       const compressed = await compressBytes(bytes, contentType);
-      const ident = await identifyCardRest(compressed.bytes, compressed.contentType);
-      if (ident?.player_name) {
-        return enrichWithMlb(ident as ScanResult);
-      }
+      ident = (await identifyCardRest(compressed.bytes, compressed.contentType)) as ScanResult | null;
     } catch (err) {
       console.error("Cardsight identify failed:", err);
     }
 
-    // 2) Fallback: direct AI vision on the original data URL.
-    const result = await scanViaAIVision(data.imageDataUrl);
-    const enriched = await enrichWithMlb(result);
-    // Try to link a Cardsight card id via free-text search so pricing + parallels work.
-    try {
-      const { getCatalogValuationLookup, searchCatalogCardByFields } = await import("./cardsight.server");
-      const desc = [enriched.year, enriched.set_name, enriched.player_name, enriched.card_number ? `#${enriched.card_number}` : null]
-        .filter(Boolean)
-        .join(" ");
-      if (desc) {
-        const id = await searchCatalogCardByFields({
-          player_name: enriched.player_name,
-          year: enriched.year,
-          set_name: enriched.set_name,
-          card_number: enriched.card_number,
-          descriptor: desc,
-        });
-        if (id) {
-          enriched.cardsight_card_id = id;
-          const canonical = await getCatalogValuationLookup(id);
-          if (canonical?.set_name) enriched.set_name = String(canonical.set_name);
-          if (canonical?.year != null) enriched.year = Number(canonical.year) || enriched.year;
-          if (canonical?.card_number) enriched.card_number = String(canonical.card_number);
-          if (canonical?.player_name) enriched.player_name = String(canonical.player_name);
-        }
+    if (ident?.player_name) {
+      // A high-confidence structured match is trusted directly — the common,
+      // cheap, fast path.
+      if (ident.confidence === "high") {
+        return enrichWithMlb(ident);
       }
-    } catch (err) {
-      console.error("Cardsight search (post-scan) failed:", err);
+      // Medium/low confidence: a wrong guess here reads as "identification
+      // returned the wrong player/team/number" with nothing to catch it, so
+      // corroborate with an independent AI vision read before trusting it.
+      const aiChecked = await scanViaAIVisionLinked(data.imageDataUrl);
+      if (namesLikelyMatch(ident.player_name, aiChecked.player_name)) {
+        return enrichWithMlb(ident);
+      }
+      // The two independent reads disagree on the player — neither is
+      // trustworthy alone. Prefer the AI read (already catalog-linked) but
+      // make sure the confidence stays low so the UI's existing "verify the
+      // details" prompt reflects the real uncertainty here.
+      return { ...aiChecked, confidence: "low" };
     }
-    return enriched;
+
+    // 2) Fallback: direct AI vision (Cardsight identify failed outright).
+    return scanViaAIVisionLinked(data.imageDataUrl);
   });
 
 // If team/position are missing, look them up from the free MLB Stats API.
@@ -199,7 +245,20 @@ async function enrichWithMlb(result: ScanResult): Promise<ScanResult> {
       active?: boolean;
     }>;
     if (people.length === 0) return result;
-    const pick = people.find((p) => p.active) ?? people[0];
+    // The name search is fuzzy and common surnames match multiple people.
+    // Blindly picking the first active result (or just the first result)
+    // silently attaches the wrong team/position when there's more than one
+    // plausible person — prefer an exact full-name match, then require the
+    // remaining candidate pool to be unambiguous before auto-filling
+    // anything. Leaving team/position null is safer than guessing wrong,
+    // since a blank field prompts the user to check it and a wrong-looking-
+    // plausible one doesn't.
+    const wanted = result.player_name.trim().toLowerCase();
+    const exact = people.filter((p) => p.fullName?.trim().toLowerCase() === wanted);
+    const pool = exact.length > 0 ? exact : people;
+    const activeInPool = pool.filter((p) => p.active);
+    const pick = activeInPool.length === 1 ? activeInPool[0] : pool.length === 1 ? pool[0] : null;
+    if (!pick) return result;
     return {
       ...result,
       team: result.team ?? pick.currentTeam?.name ?? null,

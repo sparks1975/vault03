@@ -1962,12 +1962,12 @@ function AddCardDialog({
     }
   }
 
-  async function handleCropConfirm(croppedDataUrl: string) {
+  async function handleCropConfirm(displayDataUrl: string, identifyDataUrl: string) {
     setCropSource(null);
-    setImageDataUrl(croppedDataUrl);
+    setImageDataUrl(displayDataUrl);
     setScanning(true);
     try {
-      const result = await scanFn({ data: { imageDataUrl: croppedDataUrl } });
+      const result = await scanFn({ data: { imageDataUrl: identifyDataUrl } });
       setForm((f) => ({
         ...f,
         player_name: result.player_name ?? f.player_name,
