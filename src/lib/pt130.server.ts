@@ -47,10 +47,14 @@ function parseSoldDate(raw: string): string | null {
 export function parsePt130Markdown(markdown: string): Pt130Sale[] {
   const out: Pt130Sale[] = [];
   const pattern =
-    /\[!\[([^\]]*)\][\s\S]*?\$([\d,]+(?:\.\d+)?)\s*USD[\s\S]*?(Fixed Price|Auction|Best Offer)[\s\S]*?(\d{1,2}\s+[A-Za-z]{3}\s+\d{2,4}(?:\s+\d{1,2}:\d{2}:\d{2})?)\]\((https?:\/\/[^)]+)\)/g;
+    /\[!\[([^\]]*)\]([\s\S]*?)(Fixed Price|Auction|Best Offer)(?: Accepted)?[\s\S]*?(\d{1,2}\s+[A-Za-z]{3}\s+\d{2,4}(?:\s+\d{1,2}:\d{2}:\d{2})?)\]\((https?:\/\/[^)]+)\)/g;
   let m: RegExpExecArray | null;
   while ((m = pattern.exec(markdown)) !== null) {
-    const [, title, priceStr, typeStr, dateStr, url] = m;
+    const [, title, listingBody, typeStr, dateStr, url] = m;
+    const priceMatches = [...listingBody.matchAll(/\$([\d,]+(?:\.\d+)?)\s*USD/g)];
+    // Best-offer rows show the original asking price first and the accepted
+    // sale price second. The last amount is the actual completed-sale value.
+    const priceStr = priceMatches.at(-1)?.[1] ?? "";
     const price = Number(priceStr.replace(/,/g, ""));
     if (!Number.isFinite(price) || price <= 0) continue;
     out.push({
