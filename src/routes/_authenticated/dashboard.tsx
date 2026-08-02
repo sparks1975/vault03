@@ -882,8 +882,8 @@ function CardDetail({
       purchase_price: card.purchase_price,
       notes: card.notes,
       mlb_player_id: card.mlb_player_id,
-      cardsight_card_id: card.cardsight_card_id,
       cardsight_parallel_id: card.cardsight_parallel_id,
+
     });
     setPlayerResults([]);
     setEditing(true);
