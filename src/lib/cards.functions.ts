@@ -534,8 +534,9 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
           is_autograph: card.is_autograph,
           is_first_bowman: card.is_first_bowman,
         });
-        if (match?.cardsight_card_id) {
-          cardsightId = match.cardsight_card_id;
+        if (match?.id) {
+          cardsightId = match.id;
+
           await supabase
             .from("cards")
             .update({ cardsight_card_id: cardsightId } as never)
