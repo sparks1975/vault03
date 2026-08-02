@@ -588,15 +588,16 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     // eBay-sold fallback below instead.
     if (!usedCardsight && !compsNote) {
       compsNote = resolvedCardId
-        ? "No verified sales for this catalog card — checking eBay sold."
-        : "Couldn't match this card to the catalog — checking eBay sold.";
+        ? "No verified sales for this catalog card."
+        : "Couldn't match this card to the catalog.";
     }
+    };
 
-    // Fallback to eBay sold results. Reuse a cache younger than 24 hours; when
-    // the cache is absent/stale, refresh this one card on demand. That avoids a
-    // permanent no-comps result between nightly jobs while bounding scraping to
-    // one successful, specific query per card per day.
-    if (!usedCardsight && data.card_id) {
+    // eBay sold data (via the 24h-cached 130point completed-sales index) is the
+    // PRIMARY source: it is real completed sales, costs no CardSight calls, and
+    // in practice has comps for cards CardSight's catalog can't price.
+    const ebaySoldPass = async () => {
+      if (usedCardsight || !data.card_id) return;
       try {
         const { verifyCompTitle } = await import("./cardsight.server");
         let { data: cachedRows, error } = await context.supabase
