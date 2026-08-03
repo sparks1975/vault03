@@ -14,9 +14,11 @@ export type LeaderboardRow = {
 
 export const getCurrentShowdown = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const { ensureCurrentContest } = await import("@/lib/showdown.server");
+  const { ensureCurrentContest, ensureEntryContest } = await import("@/lib/showdown.server");
 
   const contest = await ensureCurrentContest(supabaseAdmin as never);
+  const entryContest = await ensureEntryContest(supabaseAdmin as never, contest);
+
 
   const { data: entries, error } = await supabaseAdmin
     .from("contest_entries")
