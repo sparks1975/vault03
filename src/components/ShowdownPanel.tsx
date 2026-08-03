@@ -336,7 +336,7 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
               <div className="max-h-80 overflow-y-auto divide-y divide-border">
                 {savedCards.map((c) => {
                   const mult = cardMultiplier(c);
-                  const scored = pointsByCard.get(c.id);
+                  const scored = entryPointsByCard.get(c.id);
                   return (
                     <div
                       key={c.id}
