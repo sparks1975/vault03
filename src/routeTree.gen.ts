@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as AuthenticatedVaultRouteImport } from './routes/_authenticated/vault'
+import { Route as AuthenticatedShowdownRouteImport } from './routes/_authenticated/showdown'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as ApiPublicHooksScoreShowdownRouteImport } from './routes/api/public/hooks/score-showdown'
 import { Route as ApiPublicHooksRefresh130pointRouteImport } from './routes/api/public/hooks/refresh-130point'
@@ -42,6 +43,11 @@ const AuthenticatedVaultRoute = AuthenticatedVaultRouteImport.update({
   path: '/vault',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedShowdownRoute = AuthenticatedShowdownRouteImport.update({
+  id: '/showdown',
+  path: '/showdown',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/showdown': typeof AuthenticatedShowdownRoute
   '/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
   '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/showdown': typeof AuthenticatedShowdownRoute
   '/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
   '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/showdown': typeof AuthenticatedShowdownRoute
   '/_authenticated/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
   '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/dashboard'
+    | '/showdown'
     | '/vault'
     | '/s/$slug'
     | '/api/public/hooks/refresh-130point'
@@ -104,6 +114,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/dashboard'
+    | '/showdown'
     | '/vault'
     | '/s/$slug'
     | '/api/public/hooks/refresh-130point'
@@ -114,6 +125,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/dashboard'
+    | '/_authenticated/showdown'
     | '/_authenticated/vault'
     | '/s/$slug'
     | '/api/public/hooks/refresh-130point'
@@ -166,6 +178,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedVaultRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/showdown': {
+      id: '/_authenticated/showdown'
+      path: '/showdown'
+      fullPath: '/showdown'
+      preLoaderRoute: typeof AuthenticatedShowdownRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
       path: '/dashboard'
@@ -192,11 +211,13 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedShowdownRoute: typeof AuthenticatedShowdownRoute
   AuthenticatedVaultRoute: typeof AuthenticatedVaultRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedShowdownRoute: AuthenticatedShowdownRoute,
   AuthenticatedVaultRoute: AuthenticatedVaultRoute,
 }
 
