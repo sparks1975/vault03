@@ -65,7 +65,7 @@ export function AppNav({ actions, leading }: { actions?: ReactNode; leading?: Re
 
 export function MobileNavTabs() {
   return (
-    <div className="md:hidden flex gap-px bg-border border border-border text-[10px] font-mono uppercase tracking-widest">
+    <div className="md:hidden flex gap-px bg-border border border-border text-[10px] font-black uppercase tracking-widest">
       {links.map((l) => (
         <Link
           key={l.to}
