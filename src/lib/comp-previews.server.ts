@@ -192,9 +192,21 @@ export async function fetchCompPreviewsImpl(urls: string[]): Promise<CompPreview
       const idx = i++;
       const u = need[idx];
       const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), 5000);
+      const timer = setTimeout(() => ac.abort(), 8000);
       try {
-        const preview = await fetchOne(u, ac.signal);
+        const legacyId = /ebay\./i.test(u) ? ebayLegacyId(u) : null;
+        let preview: CompPreview | null = legacyId ? await fetchEbayItem(u, legacyId) : null;
+        if (!preview || !preview.image) {
+          const scraped = await fetchOne(u, ac.signal);
+          preview = preview
+            ? {
+                url: u,
+                image: preview.image ?? scraped.image,
+                title: preview.title ?? scraped.title,
+                description: preview.description ?? scraped.description,
+              }
+            : scraped;
+        }
         previewCache.set(u, { at: Date.now(), value: preview });
         results.set(u, preview);
       } finally {
