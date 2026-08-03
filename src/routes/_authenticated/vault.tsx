@@ -180,7 +180,7 @@ function gainPct(card: { purchase_price: number | null; current_value: number | 
   return ((v - p) / p) * 100;
 }
 
-function Dashboard() {
+function VaultPage() {
   const listFn = useServerFn(listCards);
   const updateFn = useServerFn(updateCardFields);
   const deleteFn = useServerFn(deleteCard);
