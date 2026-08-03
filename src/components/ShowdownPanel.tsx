@@ -2,7 +2,14 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Trophy, Lock, ChevronDown } from "lucide-react";
+import { Loader2, Trophy, Lock, ChevronDown, HelpCircle } from "lucide-react";
+
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+
 
 import {
   getCurrentShowdown,
