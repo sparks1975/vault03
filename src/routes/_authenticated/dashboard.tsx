@@ -583,6 +583,12 @@ function Dashboard() {
           </header>
         )}
 
+        {!mobileDetail && (
+          <div className="mt-8 md:mt-12 animate-in-up [animation-delay:80ms]">
+            <ShowdownPanel cards={cardData as unknown as ShowdownCard[]} />
+          </div>
+        )}
+
         <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
           <section className={`lg:col-span-7 animate-in-up [animation-delay:100ms] ${mobileDetail ? "hidden lg:block" : ""}`}>
             <div className="flex flex-wrap items-center justify-between mb-6 gap-3">
