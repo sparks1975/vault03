@@ -122,28 +122,40 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
 
   return (
     <section className="border border-border">
-      <header className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-border">
-        <div className="flex items-center gap-2 min-w-0">
-          <Trophy className="w-4 h-4 text-accent shrink-0" />
-          <h3 className="text-sm font-mono uppercase tracking-widest truncate">Weekly Showdown</h3>
-        </div>
-        {contestQ.isLoading ? (
-          <Skeleton className="h-4 w-40" />
-        ) : contest ? (
-          <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-            <span>Week of {formatWeekLabel(contest.week_start)}</span>
-            <span className="text-border">/</span>
-            <span className={isFinal ? "text-muted-foreground" : "text-accent"}>
-              {isFinal ? "Final" : "Live"}
-            </span>
-
-            <span className="text-border">/</span>
-            <span>{contestQ.data?.entry_count ?? 0} entries</span>
+      <header className="border-b border-border">
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          aria-expanded={!collapsed}
+          className="w-full flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Trophy className="w-4 h-4 text-accent shrink-0" />
+            <h3 className="text-sm font-mono uppercase tracking-widest truncate">Weekly Showdown</h3>
           </div>
-        ) : null}
+          <div className="flex items-center gap-2">
+            {contestQ.isLoading ? (
+              <Skeleton className="h-4 w-40" />
+            ) : contest ? (
+              <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                <span>Week of {formatWeekLabel(contest.week_start)}</span>
+                <span className="text-border">/</span>
+                <span className={isFinal ? "text-muted-foreground" : "text-accent"}>
+                  {isFinal ? "Final" : "Live"}
+                </span>
+                <span className="text-border">/</span>
+                <span>{contestQ.data?.entry_count ?? 0} entries</span>
+              </div>
+            ) : null}
+            <ChevronDown
+              className={`w-4 h-4 text-muted-foreground transition-transform ${collapsed ? "" : "rotate-180"}`}
+            />
+          </div>
+        </button>
       </header>
 
-      {contestQ.isLoading ? (
+      {collapsed ? null : contestQ.isLoading ? (
+
         <div className="p-4 space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-12 w-full" />
