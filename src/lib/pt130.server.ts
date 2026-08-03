@@ -171,8 +171,8 @@ export async function scrapePt130(descriptor: string): Promise<Pt130Sale[]> {
 export async function refreshPt130ForCard(
   supabase: {
     from: (t: string) => {
-      delete: () => { eq: (c: string, v: string) => Promise<{ error: unknown }> };
-      insert: (rows: unknown[]) => Promise<{ error: unknown }>;
+      delete: () => { eq: (c: string, v: string) => PromiseLike<{ error: unknown }> };
+      insert: (rows: unknown[]) => PromiseLike<{ error: unknown }>;
     };
   },
   args: {
