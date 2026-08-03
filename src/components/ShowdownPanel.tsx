@@ -163,14 +163,76 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
       </header>
 
       {collapsed ? null : contestQ.isLoading ? (
-
         <div className="p-4 space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-border">
+        <>
+          <div className="bg-background border-b border-border px-4 py-3">
+            <Collapsible>
+              <CollapsibleTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  How scoring works
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-3 text-sm space-y-4 text-foreground/80">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                      Player points (per stat)
+                    </p>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                      <span>Hitting</span>
+                      <span className="text-muted-foreground">1B +1 · 2B +2 · 3B +3 · HR +4</span>
+                      <span> </span>
+                      <span className="text-muted-foreground">RBI +1 · Run +1 · BB +0.5 · SB +1</span>
+                      <span> </span>
+                      <span className="text-muted-foreground">K −0.5</span>
+                      <span>Pitching</span>
+                      <span className="text-muted-foreground">IP +1 · K +1 · Win +3 · Save +2</span>
+                      <span> </span>
+                      <span className="text-muted-foreground">ER −1 · H −0.25 · BB −0.25</span>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                      Card multiplier boosts
+                    </p>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                      <span>Autograph</span>
+                      <span className="text-muted-foreground">+25%</span>
+                      <span>Numbered / serial</span>
+                      <span className="text-muted-foreground">+15%</span>
+                      <span>Parallel / refractor</span>
+                      <span className="text-muted-foreground">+15%</span>
+                      <span>Rookie card</span>
+                      <span className="text-muted-foreground">+10%</span>
+                      <span>First Bowman</span>
+                      <span className="text-muted-foreground">+10%</span>
+                      <span>Graded 9.5+</span>
+                      <span className="text-muted-foreground">+10%</span>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">
+                      Boosts stack additively, capped at +60% (max 1.60x). A plain base card is 1.00x.
+                    </p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Your entry score is the sum of each player’s weekly points multiplied by that card’s
+                  multiplier. Highest score wins. Ties break by higher combined multiplier, then earliest
+                  entry.
+                </p>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-border">
+
           {/* Lineup builder */}
           <div className="bg-background p-4">
             <div className="flex items-center justify-between mb-3">
