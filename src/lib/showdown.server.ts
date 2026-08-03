@@ -56,6 +56,24 @@ export async function ensureContestForWeek(admin: Admin, ref: Date = new Date())
   return created;
 }
 
+/** This week's contest — the one currently being scored. */
+export async function ensureCurrentContest(admin: Admin): Promise<ContestRow> {
+  return ensureContestForWeek(admin);
+}
+
+/**
+ * The contest users can currently enter. Normally this week's; once this week's
+ * deadline has passed, next week's opens so there is always a lineup to submit.
+ */
+export async function ensureEntryContest(admin: Admin, current: ContestRow): Promise<ContestRow> {
+  const stillOpen = current.status === "open" && new Date(current.lock_at).getTime() > Date.now();
+  if (stillOpen) return current;
+  const next = new Date(`${current.week_start}T00:00:00Z`);
+  next.setUTCDate(next.getUTCDate() + 7);
+  return ensureContestForWeek(admin, next);
+}
+
+
 async function mlbJson(url: string): Promise<unknown> {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`MLB API ${res.status}`);
