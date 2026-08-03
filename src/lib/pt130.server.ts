@@ -8,6 +8,7 @@ const GATEWAY_URL = "https://connector-gateway.lovable.dev/firecrawl/v2/scrape";
 
 export type Pt130Sale = {
   title: string | null;
+  image_url: string | null;
   price: number;
   sold_at: string | null; // ISO date (YYYY-MM-DD) if parseable
   listing_type: "fixed" | "auction" | "best_offer" | "other";
@@ -50,10 +51,10 @@ export function parsePt130Markdown(markdown: string): Pt130Sale[] {
   if (soldSectionStart < 0) return out;
   const soldMarkdown = markdown.slice(soldSectionStart);
   const pattern =
-    /\[!\[([^\]]*)\]([\s\S]*?)(Fixed Price|Auction|Best Offer)(?: Accepted)?[\s\S]*?(\d{1,2}\s+[A-Za-z]{3}\s+\d{2,4}(?:\s+\d{1,2}:\d{2}:\d{2})?)\]\((https?:\/\/[^)]+)\)/g;
+    /\[!\[([^\]]*)\]\((https?:\/\/[^)]+)\)([\s\S]*?)(Fixed Price|Auction|Best Offer)(?: Accepted)?[\s\S]*?(\d{1,2}\s+[A-Za-z]{3}\s+\d{2,4}(?:\s+\d{1,2}:\d{2}:\d{2})?)\]\((https?:\/\/[^)]+)\)/g;
   let m: RegExpExecArray | null;
   while ((m = pattern.exec(soldMarkdown)) !== null) {
-    const [, title, listingBody, typeStr, dateStr, url] = m;
+    const [, title, imageUrl, listingBody, typeStr, dateStr, url] = m;
     const priceMatches = [...listingBody.matchAll(/\$([\d,]+(?:\.\d+)?)\s*USD/g)];
     // Best-offer rows show the original asking price first and the accepted
     // sale price second. The last amount is the actual completed-sale value.
@@ -62,6 +63,7 @@ export function parsePt130Markdown(markdown: string): Pt130Sale[] {
     if (!Number.isFinite(price) || price <= 0) continue;
     out.push({
       title: title.trim() || null,
+      image_url: imageUrl || null,
       price,
       sold_at: parseSoldDate(dateStr),
       listing_type: normalizeListingType(typeStr),
@@ -215,6 +217,7 @@ export async function refreshPt130ForCard(
     sold_at: s.sold_at,
     price: s.price,
     title: s.title,
+    image_url: s.image_url,
     url: s.url,
     listing_type: s.listing_type,
   }));
