@@ -136,7 +136,7 @@ function DashboardPage() {
               />
             </header>
 
-            <div className="mt-px grid grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border">
+            <div className="mt-6 lg:mt-px grid grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border">
               <SmallStat label="Avg Card Value" value={fmt(s.avgValue)} />
               <SmallStat label="Autographs" value={String(s.autos)} />
               <SmallStat label="Rookies" value={String(s.rookies)} />
