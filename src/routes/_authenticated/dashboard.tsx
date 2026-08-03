@@ -1990,12 +1990,21 @@ function AddCardDialog({
       toast.success(`Card identified (${result.confidence} confidence). Verify the details.`);
       setStep("form");
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Scan failed");
-      setStep("form");
+      const msg = e instanceof Error ? e.message : "Scan failed";
+      // Baseball-only rejection: discard the photo so the user re-uploads.
+      if (/only accepts baseball cards/i.test(msg)) {
+        setImageDataUrl(null);
+        toast.error(msg);
+        setStep("choose");
+      } else {
+        toast.error(msg);
+        setStep("form");
+      }
     } finally {
       setScanning(false);
     }
   }
+
 
   async function fileToDataUrl(file: Blob): Promise<string> {
     return new Promise((res, rej) => {
