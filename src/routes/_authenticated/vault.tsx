@@ -96,32 +96,9 @@ export const Route = createFileRoute("/_authenticated/vault")({
       { name: "twitter:card", content: "summary" },
     ],
   }),
-  component: Dashboard,
+  component: VaultPage,
 });
 
-
-function SignOutButton() {
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [busy, setBusy] = useState(false);
-  async function handle() {
-    setBusy(true);
-    await queryClient.cancelQueries();
-    queryClient.clear();
-    await supabase.auth.signOut();
-    navigate({ to: "/auth", replace: true });
-  }
-  return (
-    <button
-      onClick={handle}
-      disabled={busy}
-      title="Sign out"
-      className="p-2 rounded-sm border border-border hover:bg-secondary transition-colors disabled:opacity-60"
-    >
-      <LogOut className="size-4" />
-    </button>
-  );
-}
 
 type Sale = {
   id: string;
