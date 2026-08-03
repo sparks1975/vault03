@@ -107,7 +107,7 @@ function DashboardPage() {
       <AppNav />
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 pt-4 md:pt-12">
-        <div className="mb-6 md:hidden">
+        <div className="mb-6 lg:hidden">
           <MobileNavTabs />
         </div>
 

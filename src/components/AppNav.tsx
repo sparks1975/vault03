@@ -42,7 +42,7 @@ export function AppNav({ actions, leading }: { actions?: ReactNode; leading?: Re
         <Link to="/dashboard" className="font-extrabold tracking-tighter text-lg md:text-xl italic shrink-0 pr-1">
           VAULT.03
         </Link>
-        <div className="hidden md:flex gap-6 text-xs font-black uppercase tracking-widest text-muted-foreground">
+        <div className="hidden lg:flex gap-6 whitespace-nowrap text-xs font-black uppercase tracking-widest text-muted-foreground">
           {links.map((l) => (
             <Link
               key={l.to}
@@ -65,13 +65,13 @@ export function AppNav({ actions, leading }: { actions?: ReactNode; leading?: Re
 
 export function MobileNavTabs() {
   return (
-    <div className="md:hidden flex gap-px bg-border border border-border text-[10px] font-black uppercase tracking-widest">
+    <div className="lg:hidden flex gap-px bg-border border border-border text-[10px] font-black uppercase tracking-widest">
       {links.map((l) => (
         <Link
           key={l.to}
           to={l.to}
           activeProps={{ className: "text-accent" }}
-          className="flex-1 bg-background py-2 text-center text-muted-foreground"
+          className="flex-1 bg-background py-2 text-center text-muted-foreground whitespace-nowrap"
         >
           {l.label}
         </Link>
