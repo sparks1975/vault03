@@ -48,8 +48,17 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
 
   const contestQ = useQuery({ queryKey: ["showdown"], queryFn: () => showdownFn() });
   const contest = contestQ.data?.contest;
+  // The week being scored feeds the leaderboard; the entry contest is the week
+  // whose lineup is still open (next week once Monday's deadline passes).
+  const entryContest = contestQ.data?.entry_contest;
 
   const entryQ = useQuery({
+    queryKey: ["showdown-entry", entryContest?.id],
+    queryFn: () => myEntryFn({ data: { contest_id: entryContest!.id } }),
+    enabled: !!entryContest?.id,
+  });
+
+  const scoredQ = useQuery({
     queryKey: ["showdown-entry", contest?.id],
     queryFn: () => myEntryFn({ data: { contest_id: contest!.id } }),
     enabled: !!contest?.id,
@@ -66,8 +75,11 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
   );
   const lineup = draft ?? savedIds;
 
-  const locked = !!contest && (contest.status !== "open" || new Date(contest.lock_at).getTime() <= Date.now());
+  const locked =
+    !!entryContest &&
+    (entryContest.status !== "open" || new Date(entryContest.lock_at).getTime() <= Date.now());
   const isFinal = contest?.status === "final";
+
 
   const submit = useMutation({
     mutationFn: () => submitFn({ data: { contest_id: contest!.id, card_ids: lineup } }),
