@@ -186,6 +186,8 @@ export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const [brightness, setBrightness] = useState(0);
+  const [contrast, setContrast] = useState(0);
   const [pixels, setPixels] = useState<Area | null>(null);
   const [working, setWorking] = useState(false);
 
@@ -193,11 +195,20 @@ export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use
     setPixels(areaPixels);
   }, []);
 
+  // CSS preview approximation of the same LUT applied on export.
+  const previewFilter = `brightness(${1 + brightness / 100}) contrast(${(100 + contrast) / 100})`;
+
   async function confirm() {
     if (!pixels) return;
     setWorking(true);
     try {
-      const { rotCanvas, sourceWidth, sourceHeight } = await buildCroppedCanvas(image, pixels, rotation);
+      const { rotCanvas, sourceWidth, sourceHeight } = await buildCroppedCanvas(
+        image,
+        pixels,
+        rotation,
+        brightness,
+        contrast,
+      );
       const [displayUrl, identifyUrl] = await Promise.all([
         getCroppedDataUrl(rotCanvas, pixels, sourceWidth, sourceHeight),
         getIdentifyDataUrl(rotCanvas, pixels, sourceWidth, sourceHeight),
