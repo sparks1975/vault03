@@ -46,6 +46,7 @@ import { Button } from "@/components/ui/button";
 
 import { supabase } from "@/integrations/supabase/client";
 import { ShareDialog } from "@/components/ShareDialog";
+import { ShowdownPanel, type ShowdownCard } from "@/components/ShowdownPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -581,6 +582,12 @@ function Dashboard() {
               )}
             </div>
           </header>
+        )}
+
+        {!mobileDetail && (
+          <div className="mt-8 md:mt-12 animate-in-up [animation-delay:80ms]">
+            <ShowdownPanel cards={cardData as unknown as ShowdownCard[]} />
+          </div>
         )}
 
         <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
