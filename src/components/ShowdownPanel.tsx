@@ -92,7 +92,7 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
     mutationFn: () => submitFn({ data: { contest_id: entryContest!.id, card_ids: lineup } }),
     onSuccess: async () => {
       setDraft(null);
-      setIsEditing(false);
+      
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["showdown"] }),
         qc.invalidateQueries({ queryKey: ["showdown-entry"] }),
@@ -136,14 +136,14 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
 
 
   const [collapsed, setCollapsed] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const submitted = savedIds.length === LINEUP_SIZE;
   const dirty = draft !== null && JSON.stringify([...draft].sort()) !== JSON.stringify([...savedIds].sort());
 
   const savedCards = useMemo(
     () => savedIds.map((id) => cards.find((c) => c.id === id)).filter(Boolean) as ShowdownCard[],
     [savedIds, cards],
   );
-  const showSelection = !locked && (isEditing || savedIds.length !== LINEUP_SIZE || dirty);
+  const showSelection = !locked && !submitted;
 
 
   return (
@@ -381,33 +381,26 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
               </div>
             )}
 
-            {!locked && (
-              showSelection ? (
-                <Button
-                  className="mt-4 w-full rounded-sm font-mono uppercase tracking-widest text-xs"
-                  disabled={lineup.length !== LINEUP_SIZE || submit.isPending || (!dirty && savedIds.length === LINEUP_SIZE)}
-                  onClick={() => submit.mutate()}
-                >
-                  {submit.isPending ? (
-                    <>
-                      <Loader2 className="w-3 h-3 mr-2 animate-spin" /> Submitting
-                    </>
-                  ) : savedIds.length === LINEUP_SIZE ? (
-                    dirty ? "Update lineup" : "Lineup submitted"
-                  ) : (
-                    "Submit lineup"
-                  )}
-                </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  className="mt-4 w-full rounded-sm font-mono uppercase tracking-widest text-xs"
-                  onClick={() => setIsEditing(true)}
-                >
-                  Edit lineup
-                </Button>
-              )
-            )}
+            {showSelection ? (
+              <Button
+                className="mt-4 w-full rounded-sm font-mono uppercase tracking-widest text-xs"
+                disabled={lineup.length !== LINEUP_SIZE || submit.isPending}
+                onClick={() => submit.mutate()}
+              >
+                {submit.isPending ? (
+                  <>
+                    <Loader2 className="w-3 h-3 mr-2 animate-spin" /> Submitting
+                  </>
+                ) : (
+                  "Submit lineup"
+                )}
+              </Button>
+            ) : submitted ? (
+              <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
+                <Lock className="w-3 h-3" />
+                Lineup locked in for this week.
+              </p>
+            ) : null}
           </div>
 
 
