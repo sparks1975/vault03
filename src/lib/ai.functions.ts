@@ -186,6 +186,56 @@ async function scanViaAIVisionLinked(imageDataUrl: string): Promise<ScanResult> 
   return enriched;
 }
 
+// Vault.03 is baseball-only. Classify the photo before spending any paid
+// identification call on it, and reject anything that isn't a baseball card.
+type SportCheck = { is_card: boolean; sport: string | null; confidence: "high" | "medium" | "low" };
+
+export class NotBaseballCardError extends Error {}
+
+async function assertBaseballCard(imageDataUrl: string): Promise<void> {
+  let parsed: SportCheck | null = null;
+  try {
+    const text = await callAI({
+      model: MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You classify photos of trading cards. Reply ONLY with a JSON object — no prose.",
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                'Look at this image. Return JSON: {"is_card": boolean, "sport": "baseball"|"football"|"basketball"|"hockey"|"soccer"|"pokemon"|"other"|null, "confidence": "high"|"medium"|"low"}. is_card is true only if the image shows a trading card (raw or graded slab). sport is the sport or category the card belongs to; use null if you cannot tell. Baseball includes MLB, MiLB, NPB (Japanese baseball), college, and vintage baseball cards.',
+            },
+            { type: "image_url", image_url: { url: imageDataUrl } },
+          ],
+        },
+      ],
+    });
+    parsed = extractJson<SportCheck>(text);
+  } catch (err) {
+    // Never block a legitimate upload because the classifier itself failed.
+    console.error("Sport pre-check failed:", err);
+    return;
+  }
+  if (!parsed) return;
+  const sport = (parsed.sport ?? "").toLowerCase();
+  if (parsed.is_card === false && parsed.confidence === "high") {
+    throw new NotBaseballCardError("That photo doesn't look like a trading card. Vault.03 only accepts baseball cards.");
+  }
+  // Only reject on a confident non-baseball read; an unknown/low-confidence
+  // sport falls through to identification.
+  if (sport && sport !== "baseball" && parsed.confidence !== "low") {
+    throw new NotBaseballCardError(
+      `This looks like a ${sport} card. Vault.03 only accepts baseball cards.`,
+    );
+  }
+}
+
 // ---------- Photo scan: Cardsight REST identify, AI fallback ----------
 export const scanCardPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -193,6 +243,7 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
     z.object({ imageDataUrl: z.string().startsWith("data:image/") }).parse(d),
   )
   .handler(async ({ data }) => {
+    await assertBaseballCard(data.imageDataUrl);
     const { bytes, contentType } = dataUrlToBytes(data.imageDataUrl);
 
     // 1) Cardsight structured identify (returns canonical card_id + slab data).
