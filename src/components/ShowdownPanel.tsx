@@ -154,11 +154,14 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
           <div className="bg-background p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                Your lineup · {lineup.length}/{LINEUP_SIZE}
+                {entryContest && !entryContest.is_current
+                  ? `Lineup · week of ${formatWeekLabel(entryContest.week_start)}`
+                  : "Your lineup"}{" "}
+                · {lineup.length}/{LINEUP_SIZE}
               </p>
-              {entryQ.data?.entry ? (
+              {scoredQ.data?.entry ? (
                 <p className="text-sm font-mono font-bold">
-                  {fmtPts(entryQ.data.entry.score)} <span className="text-[10px] text-muted-foreground">PTS</span>
+                  {fmtPts(scoredQ.data.entry.score)} <span className="text-[10px] text-muted-foreground">PTS</span>
                 </p>
               ) : null}
             </div>
@@ -169,6 +172,7 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
                 {isFinal ? "This week is final." : "Lineups are locked for this week."}
               </p>
             )}
+
 
             {eligible.length === 0 ? (
               <p className="text-sm text-muted-foreground">
