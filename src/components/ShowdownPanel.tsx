@@ -133,9 +133,10 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
           <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
             <span>Week of {formatWeekLabel(contest.week_start)}</span>
             <span className="text-border">/</span>
-            <span className={locked ? "text-muted-foreground" : "text-accent"}>
-              {isFinal ? "Final" : locked ? "Locked" : "Open"}
+            <span className={isFinal ? "text-muted-foreground" : "text-accent"}>
+              {isFinal ? "Final" : "Live"}
             </span>
+
             <span className="text-border">/</span>
             <span>{contestQ.data?.entry_count ?? 0} entries</span>
           </div>
