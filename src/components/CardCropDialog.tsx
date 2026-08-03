@@ -41,10 +41,34 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+// Brightness/contrast are applied once to the rotated source canvas via a
+// 256-entry lookup table, so the exported display and identify encodes share
+// exactly the adjustments previewed in the dialog.
+function applyAdjustments(canvas: HTMLCanvasElement, brightness: number, contrast: number) {
+  if (brightness === 0 && contrast === 0) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const c = (100 + contrast) / 100;
+  const lut = new Uint8ClampedArray(256);
+  for (let i = 0; i < 256; i++) {
+    lut[i] = Math.max(0, Math.min(255, (i - 128) * c + 128 + brightness * 1.28));
+  }
+  const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = frame.data;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = lut[d[i]]!;
+    d[i + 1] = lut[d[i + 1]]!;
+    d[i + 2] = lut[d[i + 2]]!;
+  }
+  ctx.putImageData(frame, 0, 0);
+}
+
 async function buildCroppedCanvas(
   imageSrc: string,
   crop: Area,
   rotation: number,
+  brightness = 0,
+  contrast = 0,
 ): Promise<{ rotCanvas: HTMLCanvasElement; sourceWidth: number; sourceHeight: number }> {
   const image = await loadImage(imageSrc);
   const rad = (rotation * Math.PI) / 180;
@@ -63,6 +87,8 @@ async function buildCroppedCanvas(
   rctx.translate(bBoxW / 2, bBoxH / 2);
   rctx.rotate(rad);
   rctx.drawImage(image, -image.width / 2, -image.height / 2);
+  rctx.setTransform(1, 0, 0, 1, 0, 0);
+  applyAdjustments(rotCanvas, brightness, contrast);
 
   return {
     rotCanvas,
@@ -70,6 +96,7 @@ async function buildCroppedCanvas(
     sourceHeight: Math.max(1, Math.round(crop.height)),
   };
 }
+
 
 function drawCropAtSize(
   rotCanvas: HTMLCanvasElement,
