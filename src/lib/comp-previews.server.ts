@@ -92,6 +92,84 @@ async function fetchOne(url: string, signal: AbortSignal): Promise<CompPreview> 
   }
 }
 
+// ---- eBay Browse API path -------------------------------------------------
+// eBay blocks datacenter HTML requests (403), so OG scraping returns nothing.
+// When the URL is an eBay item we use the Browse API instead.
+
+let ebayToken: { value: string; expiresAt: number } | null = null;
+
+async function getEbayToken(): Promise<string | null> {
+  const appId = process.env["EBAY_PROD_APP_ID"];
+  const certId = process.env["EBAY_PROD_CERT_ID"];
+  if (!appId || !certId) return null;
+  if (ebayToken && Date.now() < ebayToken.expiresAt) return ebayToken.value;
+  try {
+    const res = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
+      method: "POST",
+      headers: {
+        authorization: `Basic ${btoa(`${appId}:${certId}`)}`,
+        "content-type": "application/x-www-form-urlencoded",
+      },
+      body: "grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope",
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { access_token?: string; expires_in?: number };
+    if (!json.access_token) return null;
+    ebayToken = {
+      value: json.access_token,
+      expiresAt: Date.now() + Math.max(60, (json.expires_in ?? 7200) - 120) * 1000,
+    };
+    return ebayToken.value;
+  } catch {
+    return null;
+  }
+}
+
+function ebayLegacyId(url: string): string | null {
+  const m = url.match(/\/itm\/(?:[^/?#]*\/)?(\d{9,15})/);
+  return m ? m[1] : null;
+}
+
+async function fetchEbayItem(url: string, legacyId: string): Promise<CompPreview | null> {
+  const token = await getEbayToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(
+      `https://api.ebay.com/buy/browse/v1/item/get_item_by_legacy_id?legacy_item_id=${legacyId}`,
+      {
+        headers: {
+          authorization: `Bearer ${token}`,
+          "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+        },
+      },
+    );
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      title?: string;
+      image?: { imageUrl?: string };
+      additionalImages?: { imageUrl?: string }[];
+      shortDescription?: string;
+      condition?: string;
+      price?: { value?: string; currency?: string };
+      seller?: { username?: string };
+    };
+    const image = json.image?.imageUrl ?? json.additionalImages?.[0]?.imageUrl ?? null;
+    const bits = [
+      json.condition,
+      json.price?.value ? `${json.price.currency === "USD" ? "$" : ""}${json.price.value}` : null,
+      json.seller?.username ? `Seller ${json.seller.username}` : null,
+    ].filter(Boolean);
+    return {
+      url,
+      image,
+      title: json.title ?? null,
+      description: json.shortDescription ?? (bits.length ? bits.join(" · ") : null),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchCompPreviewsImpl(urls: string[]): Promise<CompPreview[]> {
   const now = Date.now();
   const unique = Array.from(new Set(urls.filter((u) => typeof u === "string" && /^https?:\/\//i.test(u))));
