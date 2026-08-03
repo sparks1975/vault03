@@ -709,14 +709,17 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       });
     }
 
-    // Dedupe by url (or title|price|date).
-    const seen = new Set<string>();
-    const deduped = candidates.filter((c) => {
-      const key = c.url || `${c.title ?? ""}|${c.price}|${c.sold_at ?? ""}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    // Dedupe by url (or title|price|date), but preserve the 130point copy when
+    // it carries a sold-listing photo that the CardSight copy does not.
+    const dedupedByKey = new Map<string, (typeof candidates)[number]>();
+    for (const candidate of candidates) {
+      const key = candidate.url || `${candidate.title ?? ""}|${candidate.price}|${candidate.sold_at ?? ""}`;
+      const current = dedupedByKey.get(key);
+      if (!current || (!current.image_url && candidate.image_url)) {
+        dedupedByKey.set(key, candidate);
+      }
+    }
+    const deduped = Array.from(dedupedByKey.values());
     deduped.sort((a, b) => {
       const ta = a.sold_at ? new Date(a.sold_at).getTime() : 0;
       const tb = b.sold_at ? new Date(b.sold_at).getTime() : 0;
@@ -729,7 +732,19 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       .eq("card_id", data.card_id)
       .eq("user_id", userId);
 
-    return { candidates: deduped, selected: selected ?? [] };
+    // card_sales predates image storage. Hydrate selected rows from the
+    // matching candidate so checked comps use the same captured sold photo.
+    const selectedWithImages = (selected ?? []).map((sale) => {
+      const match = deduped.find((candidate) => {
+        if (sale.url && candidate.url && sale.url === candidate.url) return true;
+        return candidate.title === sale.title &&
+          Number(candidate.price) === Number(sale.price) &&
+          String(candidate.sold_at ?? "").slice(0, 10) === String(sale.sold_at ?? "").slice(0, 10);
+      });
+      return { ...sale, image_url: match?.image_url ?? null };
+    });
+
+    return { candidates: deduped, selected: selectedWithImages };
   });
 
 export const addManualComps = createServerFn({ method: "POST" })

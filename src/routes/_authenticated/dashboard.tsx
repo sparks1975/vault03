@@ -1594,6 +1594,7 @@ type ExistingComp = {
   id: string;
   url: string | null;
   title: string | null;
+  image_url?: string | null;
   price: number | string;
   sold_at: string | null;
   source: string | null;
@@ -1709,7 +1710,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
     const known = new Set(candidates.map(candidateKey));
     const extras: CompCandidate[] = existing
       .filter((e) => !known.has(candidateKey(e)))
-      .map((e) => ({ title: e.title, image_url: null, price: Number(e.price), sold_at: e.sold_at, source: e.source ?? "eBay sold", url: e.url }));
+      .map((e) => ({ title: e.title, image_url: e.image_url ?? null, price: Number(e.price), sold_at: e.sold_at, source: e.source ?? "eBay sold", url: e.url }));
     const all = [...candidates, ...extras];
     const q = filter.trim().toLowerCase();
     return q ? all.filter((c) => (c.title ?? "").toLowerCase().includes(q)) : all;
