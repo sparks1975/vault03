@@ -201,7 +201,7 @@ export function baseSetName(value: string | null | undefined): string | null {
   // the brackets, then subset suffixes after a dash.
   normalized = normalized
     .replace(/\bcustom\b|\bart card\b/g, " ")
-    .replace(/\bb w\b/g, "black and white")
+    .replace(/\bb (and )?w\b/g, "black and white")
     .replace(/\s+/g, " ")
     .trim();
 
