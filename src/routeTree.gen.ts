@@ -13,7 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedVaultRouteImport } from './routes/_authenticated/vault'
 import { Route as ApiPublicHooksScoreShowdownRouteImport } from './routes/api/public/hooks/score-showdown'
 import { Route as ApiPublicHooksRefresh130pointRouteImport } from './routes/api/public/hooks/refresh-130point'
 
@@ -36,9 +36,9 @@ const SSlugRoute = SSlugRouteImport.update({
   path: '/s/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
+const AuthenticatedVaultRoute = AuthenticatedVaultRouteImport.update({
+  id: '/vault',
+  path: '/vault',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const ApiPublicHooksScoreShowdownRoute =
@@ -57,7 +57,7 @@ const ApiPublicHooksRefresh130pointRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
   '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
   '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
@@ -65,7 +65,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
   '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
   '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
@@ -75,7 +75,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
-  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
   '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
   '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
@@ -85,7 +85,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
-    | '/dashboard'
+    | '/vault'
     | '/s/$slug'
     | '/api/public/hooks/refresh-130point'
     | '/api/public/hooks/score-showdown'
@@ -93,7 +93,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
-    | '/dashboard'
+    | '/vault'
     | '/s/$slug'
     | '/api/public/hooks/refresh-130point'
     | '/api/public/hooks/score-showdown'
@@ -102,7 +102,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
-    | '/_authenticated/dashboard'
+    | '/_authenticated/vault'
     | '/s/$slug'
     | '/api/public/hooks/refresh-130point'
     | '/api/public/hooks/score-showdown'
@@ -147,11 +147,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/dashboard': {
-      id: '/_authenticated/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+    '/_authenticated/vault': {
+      id: '/_authenticated/vault'
+      path: '/vault'
+      fullPath: '/vault'
+      preLoaderRoute: typeof AuthenticatedVaultRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/api/public/hooks/score-showdown': {
@@ -172,11 +172,11 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedVaultRoute: typeof AuthenticatedVaultRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedVaultRoute: AuthenticatedVaultRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -193,3 +193,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
