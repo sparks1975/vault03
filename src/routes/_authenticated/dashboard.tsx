@@ -243,13 +243,8 @@ function DashboardPage() {
                   )}
                 </div>
 
-                <Link
-                  to="/showdown"
-                  className="block border border-border p-6 hover:bg-secondary/40 transition-colors"
-                >
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Weekly Showdown</p>
-                  <p className="text-sm">Set your 5-card lineup and climb the global leaderboard.</p>
-                </Link>
+                <ShowdownSummary />
+
               </aside>
             </div>
           </>
