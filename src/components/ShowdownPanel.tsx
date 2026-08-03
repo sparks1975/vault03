@@ -169,8 +169,9 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
           ))}
         </div>
       ) : (
-        <>
+        <div className="contents">
           <div className="bg-background border-b border-border px-4 py-3">
+
             <Collapsible>
               <CollapsibleTrigger asChild>
                 <button
