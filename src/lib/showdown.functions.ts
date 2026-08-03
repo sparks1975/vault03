@@ -61,9 +61,18 @@ export const getCurrentShowdown = createServerFn({ method: "GET" }).handler(asyn
       lock_at: contest.lock_at,
       status: contest.status,
     },
+    entry_contest: {
+      id: entryContest.id,
+      week_start: entryContest.week_start,
+      week_end: entryContest.week_end,
+      lock_at: entryContest.lock_at,
+      status: entryContest.status,
+      is_current: entryContest.id === contest.id,
+    },
     entry_count: leaderboard.length,
     leaderboard,
   };
+
 });
 
 export const getMyShowdownEntry = createServerFn({ method: "GET" })
