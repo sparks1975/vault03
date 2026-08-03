@@ -41,10 +41,34 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+// Brightness/contrast are applied once to the rotated source canvas via a
+// 256-entry lookup table, so the exported display and identify encodes share
+// exactly the adjustments previewed in the dialog.
+function applyAdjustments(canvas: HTMLCanvasElement, brightness: number, contrast: number) {
+  if (brightness === 0 && contrast === 0) return;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const c = (100 + contrast) / 100;
+  const lut = new Uint8ClampedArray(256);
+  for (let i = 0; i < 256; i++) {
+    lut[i] = Math.max(0, Math.min(255, (i - 128) * c + 128 + brightness * 1.28));
+  }
+  const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const d = frame.data;
+  for (let i = 0; i < d.length; i += 4) {
+    d[i] = lut[d[i]]!;
+    d[i + 1] = lut[d[i + 1]]!;
+    d[i + 2] = lut[d[i + 2]]!;
+  }
+  ctx.putImageData(frame, 0, 0);
+}
+
 async function buildCroppedCanvas(
   imageSrc: string,
   crop: Area,
   rotation: number,
+  brightness = 0,
+  contrast = 0,
 ): Promise<{ rotCanvas: HTMLCanvasElement; sourceWidth: number; sourceHeight: number }> {
   const image = await loadImage(imageSrc);
   const rad = (rotation * Math.PI) / 180;
@@ -63,6 +87,8 @@ async function buildCroppedCanvas(
   rctx.translate(bBoxW / 2, bBoxH / 2);
   rctx.rotate(rad);
   rctx.drawImage(image, -image.width / 2, -image.height / 2);
+  rctx.setTransform(1, 0, 0, 1, 0, 0);
+  applyAdjustments(rotCanvas, brightness, contrast);
 
   return {
     rotCanvas,
@@ -70,6 +96,7 @@ async function buildCroppedCanvas(
     sourceHeight: Math.max(1, Math.round(crop.height)),
   };
 }
+
 
 function drawCropAtSize(
   rotCanvas: HTMLCanvasElement,
@@ -159,6 +186,8 @@ export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
+  const [brightness, setBrightness] = useState(0);
+  const [contrast, setContrast] = useState(0);
   const [pixels, setPixels] = useState<Area | null>(null);
   const [working, setWorking] = useState(false);
 
@@ -166,11 +195,20 @@ export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use
     setPixels(areaPixels);
   }, []);
 
+  // CSS preview approximation of the same LUT applied on export.
+  const previewFilter = `brightness(${1 + brightness / 100}) contrast(${(100 + contrast) / 100})`;
+
   async function confirm() {
     if (!pixels) return;
     setWorking(true);
     try {
-      const { rotCanvas, sourceWidth, sourceHeight } = await buildCroppedCanvas(image, pixels, rotation);
+      const { rotCanvas, sourceWidth, sourceHeight } = await buildCroppedCanvas(
+        image,
+        pixels,
+        rotation,
+        brightness,
+        contrast,
+      );
       const [displayUrl, identifyUrl] = await Promise.all([
         getCroppedDataUrl(rotCanvas, pixels, sourceWidth, sourceHeight),
         getIdentifyDataUrl(rotCanvas, pixels, sourceWidth, sourceHeight),
@@ -192,7 +230,7 @@ export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
             <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Adjust photo</p>
-            <h3 className="font-extrabold text-lg tracking-tight">Crop & rotate</h3>
+            <h3 className="font-extrabold text-lg tracking-tight">Crop, rotate & light</h3>
           </div>
           <button
             onClick={onCancel}
@@ -215,6 +253,7 @@ export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use
             onCropComplete={onCropComplete}
             objectFit="contain"
             restrictPosition={false}
+            style={{ mediaStyle: { filter: previewFilter } }}
             showGrid
           />
         </div>
@@ -265,7 +304,44 @@ export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use
               </button>
             </div>
           </ControlRow>
+          <ControlRow label="Bright">
+            <input
+              type="range"
+              min={-100}
+              max={100}
+              step={1}
+              value={brightness}
+              onChange={(e) => setBrightness(Number(e.target.value))}
+              className="flex-1 accent-accent"
+            />
+            <span className="text-[10px] font-mono tabular-nums text-muted-foreground w-8 text-right">{brightness}</span>
+          </ControlRow>
+          <ControlRow label="Contrast">
+            <input
+              type="range"
+              min={-100}
+              max={100}
+              step={1}
+              value={contrast}
+              onChange={(e) => setContrast(Number(e.target.value))}
+              className="flex-1 accent-accent"
+            />
+            <span className="text-[10px] font-mono tabular-nums text-muted-foreground w-8 text-right">{contrast}</span>
+          </ControlRow>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setBrightness(0);
+                setContrast(0);
+              }}
+              className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary"
+            >
+              Reset light
+            </button>
+          </div>
         </div>
+
 
         <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
           <button
