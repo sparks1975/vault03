@@ -107,14 +107,14 @@ function DashboardPage() {
       <AppNav />
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 pt-4 md:pt-12">
-        <div className="mb-6 md:hidden">
+        <div className="mb-6 lg:hidden">
           <MobileNavTabs />
         </div>
 
         {cardsQ.isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-background p-8 space-y-3">
+              <div key={i} className="bg-background p-5 md:p-6 lg:p-8 space-y-3">
                 <Skeleton className="h-3 w-20" />
                 <Skeleton className="h-8 w-24" />
                 <Skeleton className="h-3 w-16" />
@@ -123,7 +123,7 @@ function DashboardPage() {
           </div>
         ) : (
           <>
-            <header className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border animate-in-up">
+            <header className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border animate-in-up">
               <StatCell label="Total Value" value={fmt(s.totalValue)} sub={s.count ? "Live" : "Add your first card"} subAccent={s.count > 0} />
               <StatCell label="Assets" value={String(s.count)} sub={s.count ? `Graded: ${s.gradedPct}%` : "—"} />
               <StatCell label="Cost Basis" value={fmt(s.totalCost)} sub={`${s.valued} valued`} />
@@ -134,7 +134,7 @@ function DashboardPage() {
               />
             </header>
 
-            <div className="mt-px grid grid-cols-2 md:grid-cols-4 gap-px bg-border border border-border">
+            <div className="mt-px grid grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border">
               <SmallStat label="Avg Card Value" value={fmt(s.avgValue)} />
               <SmallStat label="Autographs" value={String(s.autos)} />
               <SmallStat label="Rookies" value={String(s.rookies)} />
@@ -260,9 +260,9 @@ function DashboardPage() {
 
 function StatCell({ label, value, sub, subAccent }: { label: string; value: string; sub?: string; subAccent?: boolean }) {
   return (
-    <div className="bg-background p-6 md:p-8">
+    <div className="min-w-0 bg-background p-5 md:p-6 lg:p-8">
       <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">{label}</p>
-      <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight">{value}</h2>
+      <h2 className="text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-tight truncate">{value}</h2>
       {sub && <p className={`text-xs font-mono mt-2 ${subAccent ? "text-accent" : "text-muted-foreground"}`}>{sub}</p>}
     </div>
   );
@@ -270,9 +270,9 @@ function StatCell({ label, value, sub, subAccent }: { label: string; value: stri
 
 function SmallStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-background p-4">
+    <div className="min-w-0 bg-background p-4">
       <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">{label}</p>
-      <p className="text-lg font-bold tracking-tight">{value}</p>
+      <p className="text-lg font-bold tracking-tight truncate">{value}</p>
     </div>
   );
 }
