@@ -112,10 +112,11 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
 
   const pointsByCard = useMemo(() => {
     const m = new Map<string, { player_points: number; points: number }>();
-    for (const c of entryQ.data?.cards ?? [])
+    for (const c of scoredQ.data?.cards ?? [])
       m.set(c.card_id, { player_points: c.player_points, points: c.points });
     return m;
-  }, [entryQ.data]);
+  }, [scoredQ.data]);
+
 
   const dirty = draft !== null && JSON.stringify([...draft].sort()) !== JSON.stringify([...savedIds].sort());
 
