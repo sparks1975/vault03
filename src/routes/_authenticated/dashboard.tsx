@@ -1995,7 +1995,7 @@ function AddCardDialog({
       if (/only accepts baseball cards/i.test(msg)) {
         setImageDataUrl(null);
         toast.error(msg);
-        setStep("photo");
+        setStep("choose");
       } else {
         toast.error(msg);
         setStep("form");
