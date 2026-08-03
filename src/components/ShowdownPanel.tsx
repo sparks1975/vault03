@@ -126,6 +126,14 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
     return m;
   }, [scoredQ.data]);
 
+  const entryPointsByCard = useMemo(() => {
+    const m = new Map<string, { player_points: number; points: number; multiplier: number }>();
+    for (const c of entryQ.data?.cards ?? [])
+      m.set(c.card_id, { player_points: c.player_points, points: c.points, multiplier: c.multiplier });
+    return m;
+  }, [entryQ.data]);
+
+
 
   const [collapsed, setCollapsed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
