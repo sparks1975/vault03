@@ -181,3 +181,50 @@ export function toApprovedCardSet(...parts: Array<string | number | null | undef
 
   return titleCase(normalized);
 }
+// ---------------------------------------------------------------------------
+// Grouping helper for analytics ("Sets by count").
+//
+// Card set_name values arrive from several sources (Cardsight, GPT fallback,
+// manual edits) so the same physical set shows up under multiple spellings:
+// "Topps Black & White", "Topps Black and White", "Topps B&W Rookie
+// Resolution", "Topps Black & White - Frame Rate". Counting raw strings splits
+// one 5-card set into four rows. baseSetName() collapses spelling variants,
+// parentheticals, subset suffixes and "Base Set" filler onto one label.
+// ---------------------------------------------------------------------------
+const SET_FILLER = /\b(base set|base|complete set|set)\b/g;
+
+export function baseSetName(value: string | null | undefined): string | null {
+  let normalized = normalizeSetText(value);
+  if (!normalized) return null;
+
+  // Strip parentheticals such as "(Custom/Art Card)" before normalizing wiped
+  // the brackets, then subset suffixes after a dash.
+  normalized = normalized
+    .replace(/\bcustom\b|\bart card\b/g, " ")
+    .replace(/\bb w\b/g, "black and white")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const alias = APPROVED_LOOKUP.get(normalized) ?? SET_ALIASES[normalized];
+  if (alias) return alias;
+
+  // Prefer the longest approved multi-word set contained in the name, so
+  // "Topps B&W Rookie Resolution" lands on "Topps Black and White" instead of
+  // the bare "Topps" brand.
+  const ordered = [...APPROVED_CARD_SETS].sort(
+    (a, b) => normalizeSetText(b).length - normalizeSetText(a).length,
+  );
+  for (const set of ordered) {
+    const setNorm = normalizeSetText(set);
+    if (setNorm.split(" ").length < 2) continue;
+    if (normalized.includes(setNorm)) return set;
+  }
+
+  const stripped = normalized.replace(SET_FILLER, " ").replace(/\s+/g, " ").trim();
+  if (!stripped) return titleCase(normalized);
+
+  const strippedAlias = APPROVED_LOOKUP.get(stripped) ?? SET_ALIASES[stripped];
+  if (strippedAlias) return strippedAlias;
+
+  return titleCase(stripped);
+}
