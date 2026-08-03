@@ -136,14 +136,14 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
 
 
   const [collapsed, setCollapsed] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const submitted = savedIds.length === LINEUP_SIZE;
   const dirty = draft !== null && JSON.stringify([...draft].sort()) !== JSON.stringify([...savedIds].sort());
 
   const savedCards = useMemo(
     () => savedIds.map((id) => cards.find((c) => c.id === id)).filter(Boolean) as ShowdownCard[],
     [savedIds, cards],
   );
-  const showSelection = !locked && (isEditing || savedIds.length !== LINEUP_SIZE || dirty);
+  const showSelection = !locked && !submitted;
 
 
   return (
