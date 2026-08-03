@@ -304,7 +304,44 @@ export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use
               </button>
             </div>
           </ControlRow>
+          <ControlRow label="Bright">
+            <input
+              type="range"
+              min={-100}
+              max={100}
+              step={1}
+              value={brightness}
+              onChange={(e) => setBrightness(Number(e.target.value))}
+              className="flex-1 accent-accent"
+            />
+            <span className="text-[10px] font-mono tabular-nums text-muted-foreground w-8 text-right">{brightness}</span>
+          </ControlRow>
+          <ControlRow label="Contrast">
+            <input
+              type="range"
+              min={-100}
+              max={100}
+              step={1}
+              value={contrast}
+              onChange={(e) => setContrast(Number(e.target.value))}
+              className="flex-1 accent-accent"
+            />
+            <span className="text-[10px] font-mono tabular-nums text-muted-foreground w-8 text-right">{contrast}</span>
+          </ControlRow>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => {
+                setBrightness(0);
+                setContrast(0);
+              }}
+              className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary"
+            >
+              Reset light
+            </button>
+          </div>
         </div>
+
 
         <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
           <button
