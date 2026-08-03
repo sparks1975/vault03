@@ -1583,6 +1583,7 @@ function RecentComparables({ sales, cardId }: { sales: SaleRow[]; cardId: string
 
 type CompCandidate = {
   title: string | null;
+  image_url?: string | null;
   price: number;
   sold_at: string | null;
   source: string;
@@ -1708,7 +1709,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
     const known = new Set(candidates.map(candidateKey));
     const extras: CompCandidate[] = existing
       .filter((e) => !known.has(candidateKey(e)))
-      .map((e) => ({ title: e.title, price: Number(e.price), sold_at: e.sold_at, source: e.source ?? "eBay sold", url: e.url }));
+      .map((e) => ({ title: e.title, image_url: null, price: Number(e.price), sold_at: e.sold_at, source: e.source ?? "eBay sold", url: e.url }));
     const all = [...candidates, ...extras];
     const q = filter.trim().toLowerCase();
     return q ? all.filter((c) => (c.title ?? "").toLowerCase().includes(q)) : all;
@@ -1820,10 +1821,10 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
                       className="shrink-0 size-16 bg-muted border border-border overflow-hidden flex items-center justify-center"
                       aria-label="Toggle comp"
                     >
-                      {preview?.image ? (
+                      {c.image_url || preview?.image ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
-                          src={preview.image}
+                          src={c.image_url || preview?.image || ""}
                           alt=""
                           loading="lazy"
                           className="h-full w-full object-cover"

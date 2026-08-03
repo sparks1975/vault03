@@ -1,0 +1,1 @@
+ALTER TABLE public.pt130_comps ADD COLUMN image_url text;

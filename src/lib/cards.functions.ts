@@ -566,6 +566,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
 
     const candidates: Array<{
       title: string | null;
+      image_url: string | null;
       price: number;
       sold_at: string | null;
       source: string;
@@ -647,6 +648,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
           if (!Number.isFinite(price) || price <= 0 || !verifyCompTitle(r.title, card).verified) continue;
           candidates.push({
             title: r.title ?? null,
+            image_url: null,
             price,
             sold_at: r.date ?? null,
             source: r.source || "eBay sold",
@@ -658,10 +660,40 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       }
     }
 
+    // Older cached 130point rows predate image storage. Refresh those rows once
+    // from the same verified sold-results search so Manage Comps can display
+    // the listing photo without relying on ended eBay pages or active listings.
+    const { data: missingPhotoRows } = await supabase
+      .from("pt130_comps")
+      .select("id")
+      .eq("card_id", data.card_id)
+      .eq("user_id", userId)
+      .is("image_url", null)
+      .limit(1);
+    if ((missingPhotoRows?.length ?? 0) > 0) {
+      try {
+        const { buildPt130Descriptors, refreshPt130ForCard } = await import("./pt130.server");
+        await refreshPt130ForCard(supabase, {
+          card_id: data.card_id,
+          user_id: userId,
+          descriptor: buildPt130Descriptors({
+            year: card.year,
+            set_name: card.set_name,
+            player_name: card.player_name,
+            card_number: card.card_number,
+            is_autograph: card.is_autograph,
+          }),
+          card_number: card.card_number,
+        });
+      } catch (err) {
+        console.error("fetchCompCandidates photo backfill failed", err);
+      }
+    }
+
     // Include cached 130point rows if any.
     const { data: pt } = await supabase
       .from("pt130_comps")
-      .select("title, price, sold_at, url")
+      .select("title, image_url, price, sold_at, url")
       .eq("card_id", data.card_id)
       .eq("user_id", userId);
     for (const r of pt ?? []) {
@@ -669,6 +701,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       if (!Number.isFinite(price) || price <= 0 || !verifyCompTitle(r.title, card).verified) continue;
       candidates.push({
         title: r.title ?? null,
+        image_url: r.image_url ?? null,
         price,
         sold_at: r.sold_at ?? null,
         source: "eBay sold",
