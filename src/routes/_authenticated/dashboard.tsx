@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo } from "react";
 
 import { listCards } from "@/lib/cards.functions";
+import { getCurrentShowdown, getMyShowdownEntry } from "@/lib/showdown.functions";
 import { AppNav, MobileNavTabs } from "@/components/AppNav";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -243,13 +244,8 @@ function DashboardPage() {
                   )}
                 </div>
 
-                <Link
-                  to="/showdown"
-                  className="block border border-border p-6 hover:bg-secondary/40 transition-colors"
-                >
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Weekly Showdown</p>
-                  <p className="text-sm">Set your 5-card lineup and climb the global leaderboard.</p>
-                </Link>
+                <ShowdownSummary />
+
               </aside>
             </div>
           </>
@@ -275,5 +271,91 @@ function SmallStat({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">{label}</p>
       <p className="text-lg font-bold tracking-tight truncate">{value}</p>
     </div>
+  );
+}
+
+// Dashboard Showdown tile: shows this week's actual results (your score, rank
+// and the leaderboard leaders) instead of a static marketing message.
+function ShowdownSummary() {
+  const showdownFn = useServerFn(getCurrentShowdown);
+  const myEntryFn = useServerFn(getMyShowdownEntry);
+
+  const contestQ = useQuery({ queryKey: ["showdown"], queryFn: () => showdownFn() });
+  const contest = contestQ.data?.contest;
+  const leaderboard = contestQ.data?.leaderboard ?? [];
+
+  const entryQ = useQuery({
+    queryKey: ["showdown-entry", contest?.id],
+    queryFn: () => myEntryFn({ data: { contest_id: contest!.id } }),
+    enabled: !!contest?.id,
+  });
+
+  const myScore = entryQ.data?.entry?.score ?? null;
+  const myRank =
+    myScore == null ? null : leaderboard.filter((r) => r.score > myScore).length + 1;
+  const pts = (n: number) => n.toLocaleString(undefined, { maximumFractionDigits: 1 });
+
+  return (
+    <Link to="/showdown" className="block border border-border p-6 hover:bg-secondary/40 transition-colors">
+      <div className="flex items-baseline justify-between gap-3 mb-3">
+        <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Weekly Showdown</p>
+        {contest ? (
+          <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+            {contest.status === "final" ? "Final" : "Live"}
+          </span>
+        ) : null}
+      </div>
+
+      {contestQ.isLoading || entryQ.isLoading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-28" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+      ) : (
+        <>
+          <div className="flex items-end gap-6 mb-4">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Your points</p>
+              <p className="text-3xl font-black leading-tight tracking-tight">
+                {myScore == null ? "—" : pts(myScore)}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Rank</p>
+              <p className="text-3xl font-black leading-tight tracking-tight">
+                {myRank == null ? "—" : `#${myRank}`}
+                {myRank != null && leaderboard.length > 0 ? (
+                  <span className="text-sm font-mono font-normal text-muted-foreground"> / {leaderboard.length}</span>
+                ) : null}
+              </p>
+            </div>
+          </div>
+
+          {leaderboard.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No entries scored yet this week — set your lineup to get on the board.
+            </p>
+          ) : (
+            <ol className="divide-y divide-border">
+              {leaderboard.slice(0, 3).map((row) => (
+                <li key={row.user_id} className="flex items-center gap-3 py-2">
+                  <span className="w-4 text-xs font-mono text-muted-foreground">{row.rank}</span>
+                  <span className="flex-1 min-w-0 text-sm truncate">{row.display_name}</span>
+                  <span className="text-sm font-mono font-bold">{pts(row.score)}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+
+          {myScore == null ? (
+            <p className="text-xs text-muted-foreground mt-3">You have no lineup in this week yet.</p>
+          ) : (
+            <p className="text-xs text-muted-foreground mt-3">
+              {(entryQ.data?.cards ?? []).length} cards in your lineup
+            </p>
+          )}
+        </>
+      )}
+    </Link>
   );
 }
