@@ -388,8 +388,9 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
               </div>
             )}
           </div>
-        </div>
+        </>
       )}
     </section>
+
   );
 }
