@@ -92,7 +92,7 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
     mutationFn: () => submitFn({ data: { contest_id: entryContest!.id, card_ids: lineup } }),
     onSuccess: async () => {
       setDraft(null);
-      setIsEditing(false);
+      
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["showdown"] }),
         qc.invalidateQueries({ queryKey: ["showdown-entry"] }),
