@@ -118,6 +118,7 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
   }, [scoredQ.data]);
 
 
+  const [collapsed, setCollapsed] = useState(false);
   const dirty = draft !== null && JSON.stringify([...draft].sort()) !== JSON.stringify([...savedIds].sort());
 
   return (
