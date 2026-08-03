@@ -2063,11 +2063,12 @@ function AddCardDialog({
         const existing = prev ?? [];
         return [created as Card, ...existing.filter((card) => card.id !== created.id)];
       });
-      onCreated(created.id);
-      onClose();
       toast.success("Card added. Fetching valuation…");
 
-      // Async valuation
+      // Keep this dialog mounted until valuation and comp persistence finish.
+      // Closing here used to unmount the component while its authenticated
+      // server-function request was still running, so new cards could appear
+      // without comps even though the identical Refresh value action worked.
       try {
         const est = await estimateFn({
           data: {
@@ -2112,6 +2113,7 @@ function AddCardDialog({
         // same way the per-card refresh does.
         await qc.invalidateQueries({ queryKey: ["cards"] });
         onCreated(created.id);
+        onClose();
         const soldCount = est.sales.filter((s) => s.source.includes("eBay sold")).length;
         if (soldCount > 0) {
           toast.success(`Valued — ${soldCount} sold comp${soldCount === 1 ? "" : "s"}`);
@@ -2120,6 +2122,9 @@ function AddCardDialog({
         }
       } catch (e) {
         console.error("Valuation failed", e);
+        await qc.invalidateQueries({ queryKey: ["cards"] });
+        onCreated(created.id);
+        onClose();
         toast.error("Valuation failed — use Refresh value on the card.");
       }
       void updateFn;
