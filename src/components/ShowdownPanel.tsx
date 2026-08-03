@@ -92,6 +92,7 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
     mutationFn: () => submitFn({ data: { contest_id: entryContest!.id, card_ids: lineup } }),
     onSuccess: async () => {
       setDraft(null);
+      setIsEditing(false);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["showdown"] }),
         qc.invalidateQueries({ queryKey: ["showdown-entry"] }),
@@ -102,6 +103,7 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
     onError: (e: unknown) =>
       toast.error(e instanceof Error ? e.message : "Could not submit your lineup."),
   });
+
 
   function toggle(id: string) {
     if (locked) return;
@@ -124,9 +126,25 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
     return m;
   }, [scoredQ.data]);
 
+  const entryPointsByCard = useMemo(() => {
+    const m = new Map<string, { player_points: number; points: number; multiplier: number }>();
+    for (const c of entryQ.data?.cards ?? [])
+      m.set(c.card_id, { player_points: c.player_points, points: c.points, multiplier: c.multiplier });
+    return m;
+  }, [entryQ.data]);
+
+
 
   const [collapsed, setCollapsed] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const dirty = draft !== null && JSON.stringify([...draft].sort()) !== JSON.stringify([...savedIds].sort());
+
+  const savedCards = useMemo(
+    () => savedIds.map((id) => cards.find((c) => c.id === id)).filter(Boolean) as ShowdownCard[],
+    [savedIds, cards],
+  );
+  const showSelection = !locked && (isEditing || savedIds.length !== LINEUP_SIZE || dirty);
+
 
   return (
     <section className="border border-border">
@@ -252,12 +270,11 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
               </p>
             )}
 
-
             {eligible.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No eligible cards yet. Cards need an identified MLB player to play.
               </p>
-            ) : (
+            ) : showSelection ? (
               <div className="max-h-80 overflow-y-auto divide-y divide-border">
                 {eligible.map((c) => {
                   const selected = lineup.includes(c.id);
@@ -315,26 +332,85 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
                   );
                 })}
               </div>
+            ) : (
+              <div className="max-h-80 overflow-y-auto divide-y divide-border">
+                {savedCards.map((c) => {
+                  const mult = cardMultiplier(c);
+                  const scored = entryPointsByCard.get(c.id);
+                  return (
+                    <div
+                      key={c.id}
+                      className="w-full flex items-center gap-3 py-2 px-1"
+                    >
+                      {c.photo_thumb_url || c.photo_url ? (
+                        <img
+                          src={c.photo_thumb_url ?? c.photo_url ?? ""}
+                          alt={c.player_name}
+                          loading="lazy"
+                          className="w-8 h-11 object-cover shrink-0"
+                        />
+                      ) : (
+                        <span className="w-8 h-11 bg-secondary shrink-0" />
+                      )}
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-bold truncate">{c.player_name}</span>
+                        <span className="block text-[10px] font-mono uppercase tracking-widest text-muted-foreground truncate">
+                          {[c.year, c.set_name, c.card_number ? `#${c.card_number}` : null]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                        {cardBoosts(c).length > 0 && (
+                          <span className="block text-[10px] text-accent truncate">
+                            {cardBoosts(c)
+                              .map((b) => b.label)
+                              .join(" · ")}
+                          </span>
+                        )}
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block text-xs font-mono font-bold">{mult.toFixed(2)}x</span>
+                        {scored ? (
+                          <span className="block text-[10px] font-mono text-muted-foreground">
+                            {fmtPts(scored.points)} pts
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             )}
 
             {!locked && (
-              <Button
-                className="mt-4 w-full rounded-sm font-mono uppercase tracking-widest text-xs"
-                disabled={lineup.length !== LINEUP_SIZE || submit.isPending || (!dirty && savedIds.length === LINEUP_SIZE)}
-                onClick={() => submit.mutate()}
-              >
-                {submit.isPending ? (
-                  <>
-                    <Loader2 className="w-3 h-3 mr-2 animate-spin" /> Submitting
-                  </>
-                ) : savedIds.length === LINEUP_SIZE ? (
-                  dirty ? "Update lineup" : "Lineup submitted"
-                ) : (
-                  "Submit lineup"
-                )}
-              </Button>
+              showSelection ? (
+                <Button
+                  className="mt-4 w-full rounded-sm font-mono uppercase tracking-widest text-xs"
+                  disabled={lineup.length !== LINEUP_SIZE || submit.isPending || (!dirty && savedIds.length === LINEUP_SIZE)}
+                  onClick={() => submit.mutate()}
+                >
+                  {submit.isPending ? (
+                    <>
+                      <Loader2 className="w-3 h-3 mr-2 animate-spin" /> Submitting
+                    </>
+                  ) : savedIds.length === LINEUP_SIZE ? (
+                    dirty ? "Update lineup" : "Lineup submitted"
+                  ) : (
+                    "Submit lineup"
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="mt-4 w-full rounded-sm font-mono uppercase tracking-widest text-xs"
+                  onClick={() => setIsEditing(true)}
+                >
+                  Edit lineup
+                </Button>
+              )
             )}
           </div>
+
+
 
           {/* Leaderboard + badges */}
           <div className="bg-background p-4">
