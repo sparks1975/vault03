@@ -1,3 +1,4 @@
+import { baseSetName } from "@/lib/card-sets";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -81,7 +82,7 @@ function DashboardPage() {
       .slice(0, 5);
     const setCounts = new Map<string, number>();
     for (const c of cards) {
-      const key = c.set_name ?? "Unknown set";
+      const key = baseSetName(c.set_name) ?? "Unknown set";
       setCounts.set(key, (setCounts.get(key) ?? 0) + 1);
     }
     const topSets = [...setCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
