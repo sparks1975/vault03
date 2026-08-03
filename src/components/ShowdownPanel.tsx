@@ -82,7 +82,7 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
 
 
   const submit = useMutation({
-    mutationFn: () => submitFn({ data: { contest_id: contest!.id, card_ids: lineup } }),
+    mutationFn: () => submitFn({ data: { contest_id: entryContest!.id, card_ids: lineup } }),
     onSuccess: async () => {
       setDraft(null);
       await Promise.all([
