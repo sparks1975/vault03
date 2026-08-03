@@ -230,7 +230,7 @@ export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <div>
             <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Adjust photo</p>
-            <h3 className="font-extrabold text-lg tracking-tight">Crop & rotate</h3>
+            <h3 className="font-extrabold text-lg tracking-tight">Crop, rotate & light</h3>
           </div>
           <button
             onClick={onCancel}
@@ -253,6 +253,7 @@ export function CardCropDialog({ image, onCancel, onConfirm, confirmLabel = "Use
             onCropComplete={onCropComplete}
             objectFit="contain"
             restrictPosition={false}
+            style={{ mediaStyle: { filter: previewFilter } }}
             showGrid
           />
         </div>
