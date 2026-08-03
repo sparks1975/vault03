@@ -92,6 +92,7 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
     mutationFn: () => submitFn({ data: { contest_id: entryContest!.id, card_ids: lineup } }),
     onSuccess: async () => {
       setDraft(null);
+      setIsEditing(false);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["showdown"] }),
         qc.invalidateQueries({ queryKey: ["showdown-entry"] }),
@@ -102,6 +103,7 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
     onError: (e: unknown) =>
       toast.error(e instanceof Error ? e.message : "Could not submit your lineup."),
   });
+
 
   function toggle(id: string) {
     if (locked) return;
