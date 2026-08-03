@@ -474,9 +474,9 @@ function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-20 overflow-x-hidden">
-      <nav className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border px-4 md:px-6 h-16 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-4 md:gap-8 min-w-0">
-          {mobileDetail && (
+      <AppNav
+        leading={
+          mobileDetail ? (
             <button
               onClick={() => setMobileDetail(false)}
               className="lg:hidden p-2 -ml-2 rounded-sm border border-border hover:bg-secondary"
@@ -484,88 +484,35 @@ function Dashboard() {
             >
               <ChevronLeft className="size-4" />
             </button>
-          )}
-          <span className="font-extrabold tracking-tighter text-lg md:text-xl italic shrink-0 pr-1">VAULT.03</span>
-          <div className="hidden md:flex gap-6 text-sm font-medium text-muted-foreground">
-            <span className="text-accent">Dashboard</span>
-          </div>
+          ) : null
+        }
+        actions={
+          <>
+            <button
+              onClick={() => runRevalueAll()}
+              disabled={revalueProgress.isRunning || cardData.length === 0}
+              title="Re-value all cards"
+              className="px-3 md:px-4 py-2 border border-border text-foreground text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-secondary transition-colors inline-flex items-center gap-2 disabled:opacity-50"
+            >
+              {revalueProgress.isRunning ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
+              <span className="hidden sm:inline">Re-value</span>
+            </button>
+            <ShareDialog />
+            <button
+              onClick={() => setAddOpen(true)}
+              className="px-3 md:px-4 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-accent transition-colors inline-flex items-center gap-2"
+            >
+              <Plus className="size-3.5" /> <span className="hidden sm:inline">Add Card</span><span className="sm:hidden">Add</span>
+            </button>
+          </>
+        }
+      />
+
+      <main className="max-w-7xl mx-auto px-4 md:px-6 pt-4 md:pt-12">
+        <div className="mb-6 md:hidden">
+          <MobileNavTabs />
         </div>
-        <div className="flex gap-2 md:gap-3 items-center shrink-0">
-          <button
-            onClick={() => runRevalueAll()}
-            disabled={revalueProgress.isRunning || cardData.length === 0}
-            title="Re-value all cards"
-            className="px-3 md:px-4 py-2 border border-border text-foreground text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-secondary transition-colors inline-flex items-center gap-2 disabled:opacity-50"
-          >
-            {revalueProgress.isRunning ? <Loader2 className="size-3.5 animate-spin" /> : <RefreshCw className="size-3.5" />}
-            <span className="hidden sm:inline">Re-value</span>
-          </button>
-          <ShareDialog />
-          <button
-            onClick={() => setAddOpen(true)}
-            className="px-3 md:px-4 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-accent transition-colors inline-flex items-center gap-2"
-          >
-            <Plus className="size-3.5" /> <span className="hidden sm:inline">Add Card</span><span className="sm:hidden">Add</span>
-          </button>
-          <SignOutButton />
-        </div>
 
-      </nav>
-
-      <main className="max-w-7xl mx-auto px-4 md:px-6 pt-8 md:pt-12">
-        {cardsQ.isLoading ? (
-          <header className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border animate-in-up">
-            {Array.from({ length: 2 }).map((_, i) => (
-              <div key={i} className="bg-background p-8 space-y-3">
-                <Skeleton className="h-3 w-20" />
-                <Skeleton className="h-8 w-24" />
-                <Skeleton className="h-3 w-16" />
-              </div>
-            ))}
-            <div className="bg-background p-6 md:p-8 md:col-span-2 space-y-3">
-              <Skeleton className="h-3 w-20" />
-              <Skeleton className="h-5 w-2/3" />
-              <Skeleton className="h-3 w-1/3" />
-            </div>
-          </header>
-        ) : (
-          <header className="grid grid-cols-1 md:grid-cols-4 gap-px bg-border border border-border animate-in-up">
-            <StatCell label="Total Value" value={fmt(totals.totalValue)} sub={totals.count ? "Live" : "Add your first card"} subAccent={totals.count > 0} />
-            <StatCell label="Assets" value={String(totals.count)} sub={totals.count ? `Graded: ${totals.gradedPct}%` : "—"} />
-            <div className="bg-background p-6 md:p-8 md:col-span-2">
-              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Top Mover</p>
-              {totals.topMover ? (
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-2">
-                  <div className="min-w-0">
-                    <h3 className="font-bold break-words leading-tight">
-                      {totals.topMover.year ?? ""} {totals.topMover.set_name ?? ""} {totals.topMover.player_name}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                      {totals.topMover.grader ?? ""} {totals.topMover.grade ?? ""}
-                    </p>
-                  </div>
-                  <div className="sm:text-right shrink-0">
-                    <span className={`font-mono font-bold text-sm md:text-base ${(totals.topMoverDollars ?? 0) >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}>
-                      {(totals.topMoverDollars ?? 0) >= 0 ? "+" : ""}{fmt(totals.topMoverDollars)}
-                      {totals.topMoverPct != null && ` (${fmtPct(totals.topMoverPct)})`}
-                    </span>
-                    <p className="text-[9px] font-mono text-muted-foreground uppercase">vs. purchase</p>
-                  </div>
-                </div>
-              ) : cardData.length > 0 ? (
-                <p className="text-sm text-muted-foreground">Add a purchase price to your cards to see gains vs. current value.</p>
-              ) : (
-                <p className="text-sm text-muted-foreground">No valuations yet — add a card to see market movement.</p>
-              )}
-            </div>
-          </header>
-        )}
-
-        {!mobileDetail && (
-          <div className="mt-8 md:mt-12 animate-in-up [animation-delay:80ms]">
-            <ShowdownPanel cards={cardData as unknown as ShowdownCard[]} />
-          </div>
-        )}
 
         <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
           <section className={`lg:col-span-7 animate-in-up [animation-delay:100ms] ${mobileDetail ? "hidden lg:block" : ""}`}>
