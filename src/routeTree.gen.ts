@@ -14,6 +14,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as ApiPublicHooksScoreShowdownRouteImport } from './routes/api/public/hooks/score-showdown'
 import { Route as ApiPublicHooksRefresh130pointRouteImport } from './routes/api/public/hooks/refresh-130point'
 
 const AuthRoute = AuthRouteImport.update({
@@ -40,6 +41,12 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const ApiPublicHooksScoreShowdownRoute =
+  ApiPublicHooksScoreShowdownRouteImport.update({
+    id: '/api/public/hooks/score-showdown',
+    path: '/api/public/hooks/score-showdown',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksRefresh130pointRoute =
   ApiPublicHooksRefresh130pointRouteImport.update({
     id: '/api/public/hooks/refresh-130point',
@@ -53,6 +60,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/s/$slug': typeof SSlugRoute
   '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
+  '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -60,6 +68,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/s/$slug': typeof SSlugRoute
   '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
+  '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -69,6 +78,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/s/$slug': typeof SSlugRoute
   '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
+  '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -78,6 +88,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/s/$slug'
     | '/api/public/hooks/refresh-130point'
+    | '/api/public/hooks/score-showdown'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -85,6 +96,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/s/$slug'
     | '/api/public/hooks/refresh-130point'
+    | '/api/public/hooks/score-showdown'
   id:
     | '__root__'
     | '/'
@@ -93,6 +105,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/s/$slug'
     | '/api/public/hooks/refresh-130point'
+    | '/api/public/hooks/score-showdown'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -101,6 +114,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRoute
   SSlugRoute: typeof SSlugRoute
   ApiPublicHooksRefresh130pointRoute: typeof ApiPublicHooksRefresh130pointRoute
+  ApiPublicHooksScoreShowdownRoute: typeof ApiPublicHooksScoreShowdownRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -140,6 +154,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/api/public/hooks/score-showdown': {
+      id: '/api/public/hooks/score-showdown'
+      path: '/api/public/hooks/score-showdown'
+      fullPath: '/api/public/hooks/score-showdown'
+      preLoaderRoute: typeof ApiPublicHooksScoreShowdownRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/refresh-130point': {
       id: '/api/public/hooks/refresh-130point'
       path: '/api/public/hooks/refresh-130point'
@@ -167,6 +188,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRoute,
   SSlugRoute: SSlugRoute,
   ApiPublicHooksRefresh130pointRoute: ApiPublicHooksRefresh130pointRoute,
+  ApiPublicHooksScoreShowdownRoute: ApiPublicHooksScoreShowdownRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
