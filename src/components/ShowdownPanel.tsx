@@ -252,7 +252,6 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
               </p>
             )}
 
-
             {eligible.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No eligible cards yet. Cards need an identified MLB player to play.
@@ -335,6 +334,7 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
               </Button>
             )}
           </div>
+
 
           {/* Leaderboard + badges */}
           <div className="bg-background p-4">
