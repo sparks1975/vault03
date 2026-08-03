@@ -1,11 +1,16 @@
 import { createFileRoute, notFound } from "@tanstack/react-router";
 import { getPublicCollection } from "@/lib/share.functions";
+import { getPublicBadges } from "@/lib/showdown.functions";
+import { badgeMeta, formatWeekLabel } from "@/lib/showdown-scoring";
 
 export const Route = createFileRoute("/s/$slug")({
   loader: async ({ params }) => {
-    const result = await getPublicCollection({ data: { slug: params.slug } });
+    const [result, badges] = await Promise.all([
+      getPublicCollection({ data: { slug: params.slug } }),
+      getPublicBadges({ data: { slug: params.slug } }).catch(() => []),
+    ]);
     if (result.notFound) throw notFound();
-    return result;
+    return { ...result, badges };
   },
   head: ({ loaderData, params }) => {
     const name = loaderData?.owner?.display_name || params.slug;
