@@ -169,9 +169,8 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
           ))}
         </div>
       ) : (
-        <div className="contents">
-          <div className="bg-background border-b border-border px-4 py-3">
-
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-border">
+          <div className="col-span-1 lg:col-span-2 bg-background border-b border-border px-4 py-3">
             <Collapsible>
               <CollapsibleTrigger asChild>
                 <button
@@ -191,14 +190,10 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                       <span>Hitting</span>
                       <span className="text-muted-foreground">1B +1 · 2B +2 · 3B +3 · HR +4</span>
-                      <span> </span>
-                      <span className="text-muted-foreground">RBI +1 · Run +1 · BB +0.5 · SB +1</span>
-                      <span> </span>
-                      <span className="text-muted-foreground">K −0.5</span>
+                      <span className="col-span-2 text-muted-foreground">RBI +1 · Run +1 · BB +0.5 · SB +1 · K −0.5</span>
                       <span>Pitching</span>
                       <span className="text-muted-foreground">IP +1 · K +1 · Win +3 · Save +2</span>
-                      <span> </span>
-                      <span className="text-muted-foreground">ER −1 · H −0.25 · BB −0.25</span>
+                      <span className="col-span-2 text-muted-foreground">ER −1 · H −0.25 · BB −0.25</span>
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -232,9 +227,9 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
               </CollapsibleContent>
             </Collapsible>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-border">
 
           {/* Lineup builder */}
+
           <div className="bg-background p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
