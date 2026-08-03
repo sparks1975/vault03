@@ -19,10 +19,11 @@ const SPORT_IDS = "1,11,12,13,14,16";
 
 export type ContestRow = Database["public"]["Tables"]["contests"]["Row"];
 
-/** Creates this week's contest if it doesn't exist; returns it. */
-export async function ensureCurrentContest(admin: Admin): Promise<ContestRow> {
-  const start = weekStart();
+/** Creates the contest for the week containing `ref` if missing; returns it. */
+export async function ensureContestForWeek(admin: Admin, ref: Date = new Date()): Promise<ContestRow> {
+  const start = weekStart(ref);
   const startIso = toDateString(start);
+
 
   const { data: existing, error } = await admin
     .from("contests")
