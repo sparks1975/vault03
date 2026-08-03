@@ -42,7 +42,7 @@ export function AppNav({ actions, leading }: { actions?: ReactNode; leading?: Re
         <Link to="/dashboard" className="font-extrabold tracking-tighter text-lg md:text-xl italic shrink-0 pr-1">
           VAULT.03
         </Link>
-        <div className="hidden md:flex gap-6 text-sm font-medium text-muted-foreground">
+        <div className="hidden md:flex gap-6 text-xs font-black uppercase tracking-widest text-muted-foreground">
           {links.map((l) => (
             <Link
               key={l.to}
