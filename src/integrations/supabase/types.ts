@@ -250,6 +250,7 @@ export type Database = {
         Row: {
           card_id: string
           id: string
+          image_url: string | null
           listing_type: string | null
           price: number
           scraped_at: string
@@ -261,6 +262,7 @@ export type Database = {
         Insert: {
           card_id: string
           id?: string
+          image_url?: string | null
           listing_type?: string | null
           price: number
           scraped_at?: string
@@ -272,6 +274,7 @@ export type Database = {
         Update: {
           card_id?: string
           id?: string
+          image_url?: string | null
           listing_type?: string | null
           price?: number
           scraped_at?: string
