@@ -2084,6 +2084,9 @@ function AddCardDialog({
             cardsight_parallel_id: created.cardsight_parallel_id,
             cardsight_grade_id: created.cardsight_grade_id,
             card_id: created.id,
+            // Match the per-card "Refresh value" path exactly: a brand-new card
+            // must never inherit a stale comp cache or failed-lookup cooldown.
+            force_refresh: true,
           },
         });
         await replaceValFn({
