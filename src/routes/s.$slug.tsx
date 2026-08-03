@@ -86,6 +86,29 @@ function SharedCollection() {
           </div>
         </header>
 
+        {data.badges.length > 0 && (
+          <section className="mt-4 border border-border bg-background p-5">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground mb-3">Showdown Badges</p>
+            <div className="flex flex-wrap gap-2">
+              {data.badges.map((b: { id: string; badge_type: string; week_start: string | null }) => {
+                const meta = badgeMeta(b.badge_type);
+                return (
+                  <span
+                    key={b.id}
+                    title={meta.blurb}
+                    className={`text-[10px] font-mono uppercase tracking-widest px-2 py-1 border ${meta.tone}`}
+                  >
+                    {meta.label}
+                    {b.week_start ? ` · ${formatWeekLabel(b.week_start)}` : ""}
+                  </span>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+
+
         {data.cards.length === 0 ? (
           <p className="text-center text-muted-foreground py-16">No cards yet.</p>
         ) : (
