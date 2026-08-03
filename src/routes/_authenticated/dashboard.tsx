@@ -2084,6 +2084,9 @@ function AddCardDialog({
             cardsight_parallel_id: created.cardsight_parallel_id,
             cardsight_grade_id: created.cardsight_grade_id,
             card_id: created.id,
+            // Match the per-card "Refresh value" path exactly: a brand-new card
+            // must never inherit a stale comp cache or failed-lookup cooldown.
+            force_refresh: true,
           },
         });
         await replaceValFn({
@@ -2105,9 +2108,19 @@ function AddCardDialog({
         if (Object.keys(idPatch).length > 0) {
           await updateFn({ data: { id: created.id, patch: idPatch } });
         }
+        // Pull the freshly written value + comps into the list/detail views the
+        // same way the per-card refresh does.
+        await qc.invalidateQueries({ queryKey: ["cards"] });
         onCreated(created.id);
+        const soldCount = est.sales.filter((s) => s.source.includes("eBay sold")).length;
+        if (soldCount > 0) {
+          toast.success(`Valued — ${soldCount} sold comp${soldCount === 1 ? "" : "s"}`);
+        } else {
+          toast.warning("No verified sold comps found — enter a value manually.");
+        }
       } catch (e) {
         console.error("Valuation failed", e);
+        toast.error("Valuation failed — use Refresh value on the card.");
       }
       void updateFn;
     } catch (e) {
