@@ -118,12 +118,17 @@ export function weekEnd(start: Date): Date {
   return d;
 }
 
-/** Lineups lock Monday at 17:00 UTC (roughly before the first games). */
+/**
+ * Lineups stay open for the whole contest week — they lock when the week ends
+ * (Monday 00:00 UTC after the final Sunday).
+ */
 export function lockAt(start: Date): Date {
   const d = new Date(start);
-  d.setUTCHours(17, 0, 0, 0);
+  d.setUTCDate(d.getUTCDate() + 7);
+  d.setUTCHours(0, 0, 0, 0);
   return d;
 }
+
 
 export function formatWeekLabel(weekStartIso: string): string {
   const d = new Date(`${weekStartIso}T00:00:00Z`);
