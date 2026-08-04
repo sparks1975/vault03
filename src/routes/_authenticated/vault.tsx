@@ -2204,12 +2204,19 @@ function AddCardDialog({
               )}
             </div>
 
+            <CatalogLinkPicker
+              cardId={form.cardsight_card_id}
+              lookup={form}
+              onLink={(id) => setForm({ ...form, cardsight_card_id: id, cardsight_parallel_id: null })}
+            />
+
             <ParallelSelect
               cardId={form.cardsight_card_id}
               lookup={form}
               value={form.cardsight_parallel_id}
               onChange={(id) => setForm({ ...form, cardsight_parallel_id: id })}
             />
+
 
 
 
