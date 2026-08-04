@@ -2401,9 +2401,10 @@ function ParallelSelect({
       )}
       {!canLookup && (
         <span className="text-[9px] font-mono text-muted-foreground">
-          Identify the exact card first to load scoped options.
+          Link this card to the catalog above to choose a parallel/refractor.
         </span>
       )}
+
       {canLookup && !q.isLoading && (q.data?.length ?? 0) === 0 && (
         <span className="text-[9px] font-mono text-muted-foreground">
           No scoped parallel/refractor options found for this set.
