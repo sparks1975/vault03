@@ -2020,6 +2020,30 @@ function AddCardDialog({
     }
   }
 
+  // The user resolves a disagreement between the two reads: the chosen
+  // candidate's fields overwrite the form and become the catalog link.
+  function applyCandidate(c: ScanCandidate) {
+    setForm((f) => ({
+      ...f,
+      player_name: c.player_name ?? f.player_name,
+      team: c.team ?? "",
+      position: c.position ?? "",
+      year: c.year != null ? String(c.year) : "",
+      set_name: c.set_name ?? "",
+      card_number: c.card_number ?? "",
+      grade: c.grade ?? "",
+      grader: c.grader ?? "",
+      cardsight_card_id: c.cardsight_card_id ?? null,
+      cardsight_parallel_id: null,
+    }));
+    setChosenSource(c.source);
+    setScanSource(c.source);
+    setConfidence("medium");
+    toast.success(`Using the ${c.source_label.toLowerCase()}.`);
+  }
+
+
+
 
   async function fileToDataUrl(file: Blob): Promise<string> {
     return new Promise((res, rej) => {
