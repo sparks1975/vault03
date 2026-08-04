@@ -464,7 +464,12 @@ export const scanCardBack = createServerFn({ method: "POST" })
   .inputValidator((d: { imageDataUrl: string }) =>
     z.object({ imageDataUrl: z.string().startsWith("data:image/") }).parse(d),
   )
-  .handler(async ({ data }): Promise<BackScanResult> => {
+  .handler(async ({ data }): Promise<BackScanResult> => readCardBackDetails(data.imageDataUrl));
+
+async function readCardBackDetails(imageDataUrl: string): Promise<BackScanResult> {
+  {
+    const data = { imageDataUrl };
+
     const text = await callAI({
       model: MODEL,
       messages: [
