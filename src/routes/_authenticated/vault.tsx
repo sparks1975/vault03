@@ -1865,6 +1865,10 @@ function AddCardDialog({
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<"front" | "back">("front");
   const [confidence, setConfidence] = useState<"high" | "medium" | "low" | null>(null);
+  const [scanSource, setScanSource] = useState<"catalog" | "ai" | null>(null);
+  type ScanCandidate = Awaited<ReturnType<typeof scanCardPhoto>>["candidates"][number];
+  const [candidates, setCandidates] = useState<ScanCandidate[]>([]);
+  const [chosenSource, setChosenSource] = useState<"catalog" | "ai" | null>(null);
   const [backScanning, setBackScanning] = useState(false);
   const [backNote, setBackNote] = useState<string | null>(null);
   const [form, setForm] = useState({
