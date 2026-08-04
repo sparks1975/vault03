@@ -991,7 +991,34 @@ export async function listCatalogCardCandidates(lookup: CardLookup): Promise<Cat
     }
   }
 
-  return [...cardsById.values()]
+  const all = [...cardsById.values()];
+
+  // The broad queries above (player+year, player+number) are only fallbacks.
+  // Without filtering, their loose hits — dual/triple autograph inserts from a
+  // different release — end up shown next to (or instead of) real matches for
+  // the set the user actually typed. Keep the strictest tier that has results.
+  const wantedNumber = normalizeCardNumber(number);
+  const setTerms = expandSetSearchTerms(setName).map((t) => normalizeText(t)).filter(Boolean);
+  const numberOk = (card: CatalogCard) =>
+    !wantedNumber || normalizeCardNumber(card.number) === wantedNumber;
+  const yearOk = (card: CatalogCard) => !year || compact(card.releaseYear) === compact(year);
+  const setOk = (card: CatalogCard) => {
+    if (setTerms.length === 0) return true;
+    const hay = normalizeText([card.releaseName, card.setName].filter(Boolean).join(" "));
+    return setTerms.some((term) => hay.includes(term));
+  };
+
+  const tiers = [
+    all.filter((c) => numberOk(c) && yearOk(c) && setOk(c)),
+    all.filter((c) => numberOk(c) && yearOk(c)),
+    all.filter((c) => yearOk(c) && setOk(c)),
+    all.filter((c) => setOk(c)),
+    all.filter((c) => yearOk(c)),
+    all,
+  ];
+  const kept = tiers.find((t) => t.length > 0) ?? [];
+
+  return kept
     .map((card) => ({
       card_id: card.id,
       player_name: card.name ?? null,
@@ -1006,6 +1033,7 @@ export async function listCatalogCardCandidates(lookup: CardLookup): Promise<Cat
     .sort((a, b) => b.relevance - a.relevance || (a.player_name ?? "").localeCompare(b.player_name ?? ""))
     .slice(0, 25);
 }
+
 
 
 
