@@ -461,6 +461,15 @@ const SET_TITLE_ALIASES: Record<string, string[]> = {
   "Topps NPB Finest": ["topps npb finest"],
   "Topps Bowman NPB": ["topps bowman npb", "bowman npb"],
   "Topps NPB 206": ["topps npb 206", "npb 206"],
+  "Bowman Sterling": ["bowman sterling"],
+  "Bowman's Best": ["bowmans best", "bowman best"],
+  "Bowman Platinum": ["bowman platinum"],
+  "Bowman Heritage": ["bowman heritage"],
+  "Bowman Inception": ["bowman inception"],
+  "Bowman Chrome Sapphire": ["bowman chrome sapphire"],
+  "Bowman Sapphire": ["bowman sapphire"],
+  "Bowman Chrome": ["bowman chrome"],
+  "Bowman Draft": ["bowman draft"],
 };
 
 function titleMatchesKnownSetAlias(titleNorm: string, setName: string): boolean {

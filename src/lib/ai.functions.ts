@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { APPROVED_CARD_SETS, toApprovedCardSet } from "./card-sets";
+import { APPROVED_CARD_SETS, setFromCardNumber, toApprovedCardSet } from "./card-sets";
 
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3.5-flash";
@@ -104,7 +104,7 @@ async function scanViaAIVision(imageUrl: string, backImageUrl?: string | null): 
     {
       type: "text",
       text:
-        `Identify this baseball card. ${backImageUrl ? "The FIRST image is the front of the card, the SECOND image is the back. The back carries the printed card number, copyright year, set/brand line and serial numbering — trust the back's printed text over anything inferred from the front." : ""} Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "parallel_hint": string|null, "serial_number": string|null, "is_rookie": boolean|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null. parallel_hint is the parallel/refractor/color variation printed or clearly visible on the card (e.g. "Gold Refractor", "Blue /150") or null for a base card — read it from the card's own foil/border/text, never guess. serial_number is numbering like "12/50" if printed, else null. IMPORTANT: set_name must be one of this exact approved list or null: ${APPROVED_CARD_SETS.join(", ")}. Do NOT include parallel, refractor, insert, color, numbering, year, or autograph descriptors in set_name. Never invent or guess a set name.`,
+        `Identify this baseball card. ${backImageUrl ? "The FIRST image is the front of the card, the SECOND image is the back. The back carries the printed card number, copyright year, set/brand line and serial numbering — trust the back's printed text over anything inferred from the front." : ""} Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "parallel_hint": string|null, "serial_number": string|null, "is_rookie": boolean|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null. parallel_hint is the parallel/refractor/color variation printed or clearly visible on the card (e.g. "Gold Refractor", "Blue /150") or null for a base card — read it from the card's own foil/border/text, never guess. serial_number is numbering like "12/50" if printed, else null. IMPORTANT: set_name must be one of this exact approved list or null: ${APPROVED_CARD_SETS.join(", ")}. Do NOT include parallel, refractor, insert, color, numbering, year, or autograph descriptors in set_name. Never invent or guess a set name. The printed card number prefix names the product: e.g. BSR/BSA/BST = Bowman Sterling, BB = Bowman's Best, BCP = Bowman Chrome, BDC/BDP = Bowman Draft, BP = Bowman. Use it to pick the specific set instead of the bare brand.`,
     },
     { type: "image_url", image_url: { url: imageUrl } },
   ];
@@ -125,7 +125,26 @@ async function scanViaAIVision(imageUrl: string, backImageUrl?: string | null): 
   if (parsed && typeof parsed.set_name === "string") {
     parsed.set_name = toApprovedCardSet(stripParallelFromSetName(parsed.set_name)) ?? null;
   }
+  if (parsed) {
+    parsed.set_name = refineSetFromCardNumber(parsed.set_name, parsed.card_number);
+  }
   return { ...parsed, cardsight_card_id: null };
+}
+
+// A card number prefix like "BSR-40" names the product ("Bowman Sterling")
+// while the front photo often only shows the bare brand logo ("Bowman"). When
+// the prefix resolves to a more specific set inside the same brand, prefer it.
+function refineSetFromCardNumber(
+  setName: string | null | undefined,
+  cardNumber: string | null | undefined,
+): string | null {
+  const current = setName ? String(setName) : null;
+  const inferred = setFromCardNumber(cardNumber);
+  if (!inferred) return current;
+  if (!current) return inferred;
+  const brand = (value: string) => value.toLowerCase().replace(/[^a-z ]/g, "").trim().split(" ")[0];
+  if (brand(current) !== brand(inferred)) return current;
+  return inferred.length > current.length ? inferred : current;
 }
 
 
@@ -503,13 +522,17 @@ async function readCardBackDetails(imageDataUrl: string): Promise<BackScanResult
         confidence: "low",
       };
     }
+    const backCardNumber = parsed.card_number
+      ? String(parsed.card_number).replace(/^#/, "").trim()
+      : null;
     return {
       player_name: parsed.player_name ?? null,
       year: parsed.year != null ? Number(parsed.year) || null : null,
-      set_name: parsed.set_name
-        ? toApprovedCardSet(stripParallelFromSetName(String(parsed.set_name))) ?? null
-        : null,
-      card_number: parsed.card_number ? String(parsed.card_number).replace(/^#/, "").trim() : null,
+      set_name: refineSetFromCardNumber(
+        parsed.set_name ? toApprovedCardSet(stripParallelFromSetName(String(parsed.set_name))) ?? null : null,
+        backCardNumber,
+      ),
+      card_number: backCardNumber,
       serial_number: parsed.serial_number ? String(parsed.serial_number).trim() : null,
       is_rookie: typeof parsed.is_rookie === "boolean" ? parsed.is_rookie : null,
       confidence: parsed.confidence === "high" || parsed.confidence === "medium" ? parsed.confidence : "low",
