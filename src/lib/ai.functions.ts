@@ -89,26 +89,30 @@ function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; contentType: stri
   return { bytes, contentType };
 }
 
-async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
+// Front (and, when supplied, back) vision read. Passing both faces in the same
+// request is what makes two near-identical cards read consistently: the printed
+// card number / set line / serial on the back disambiguates parallels that look
+// almost identical from the front. temperature 0 keeps repeat scans stable.
+async function scanViaAIVision(imageUrl: string, backImageUrl?: string | null): Promise<ScanResult> {
+  const content: unknown[] = [
+    {
+      type: "text",
+      text:
+        `Identify this baseball card. ${backImageUrl ? "The FIRST image is the front of the card, the SECOND image is the back. The back carries the printed card number, copyright year, set/brand line and serial numbering — trust the back's printed text over anything inferred from the front." : ""} Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "parallel_hint": string|null, "serial_number": string|null, "is_rookie": boolean|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null. parallel_hint is the parallel/refractor/color variation printed or clearly visible on the card (e.g. "Gold Refractor", "Blue /150") or null for a base card — read it from the card's own foil/border/text, never guess. serial_number is numbering like "12/50" if printed, else null. IMPORTANT: set_name must be one of this exact approved list or null: ${APPROVED_CARD_SETS.join(", ")}. Do NOT include parallel, refractor, insert, color, numbering, year, or autograph descriptors in set_name. Never invent or guess a set name.`,
+    },
+    { type: "image_url", image_url: { url: imageUrl } },
+  ];
+  if (backImageUrl) content.push({ type: "image_url", image_url: { url: backImageUrl } });
   const text = await callAI({
     model: MODEL,
+    temperature: 0,
     messages: [
       {
         role: "system",
         content:
-          "You are a sports card identification expert (baseball, football, basketball, hockey, soccer). Extract details from card photos. Reply ONLY with a JSON object matching the requested schema — no prose.",
+          "You are a baseball card identification expert. Extract details from card photos and transcribe printed text exactly. Reply ONLY with a JSON object matching the requested schema — no prose.",
       },
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text:
-              `Identify this sports card. Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null. IMPORTANT: set_name must be one of this exact approved list or null: ${APPROVED_CARD_SETS.join(", ")}. Do NOT include parallel, refractor, insert, color, numbering, year, or autograph descriptors in set_name. Never invent or guess a set name.`,
-          },
-          { type: "image_url", image_url: { url: imageUrl } },
-        ],
-      },
+      { role: "user", content },
     ],
   });
   const parsed = extractJson<Omit<ScanResult, "cardsight_card_id">>(text);
@@ -117,6 +121,7 @@ async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
   }
   return { ...parsed, cardsight_card_id: null };
 }
+
 
 // Remove parallel/refractor/insert descriptors an AI model may append to a set
 // name. Set names should only reflect the actual product; parallels live on a
