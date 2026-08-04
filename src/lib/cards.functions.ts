@@ -249,13 +249,33 @@ const allowed = [
       }
     }
 
+    // The user linked (or changed) the catalog match by hand. That's a better
+    // signal than any automatic resolution, so clear the lookup/valuation
+    // failure cooldowns and drop the grade id + stale comps so the next
+    // valuation re-resolves against the newly linked catalog card.
+    let catalogRelinked = false;
+    if (explicitIds && !identityReset) {
+      const { data: existing } = await supabase
+        .from("cards")
+        .select("cardsight_card_id")
+        .eq("id", data.id)
+        .maybeSingle();
+      if (existing && existing.cardsight_card_id !== clean["cardsight_card_id"]) {
+        catalogRelinked = true;
+        clean["cardsight_grade_id"] = null;
+        clean["cardsight_lookup_failed_at"] = null;
+        clean["last_valuation_failed_at"] = null;
+      }
+    }
+
     const { error } = await supabase.from("cards").update(clean as never).eq("id", data.id);
     if (error) throw error;
 
-    if (identityReset) {
+    if (identityReset || catalogRelinked) {
       await supabase.from("card_sales").delete().eq("card_id", data.id);
       await supabase.from("pt130_comps").delete().eq("card_id", data.id);
     }
+
     return { ok: true, identity_reset: identityReset };
   });
 

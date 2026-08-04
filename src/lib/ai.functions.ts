@@ -247,12 +247,23 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
     const { bytes, contentType } = dataUrlToBytes(data.imageDataUrl);
 
     // 1) Cardsight structured identify (returns canonical card_id + slab data).
+    // Send the crop dialog's high-resolution encode as-is: small print (card
+    // number, subset name, serial) is what identification depends on, and the
+    // display-oriented compressor resizes to 640x896, which destroys it. Only
+    // very large uploads get shrunk, purely to stay inside request limits.
     let ident: ScanResult | null = null;
     try {
       const { identifyCardRest } = await import("./cardsight.server");
-      const { compressBytes } = await import("./tinypng.server");
-      const compressed = await compressBytes(bytes, contentType);
-      ident = (await identifyCardRest(compressed.bytes, compressed.contentType)) as ScanResult | null;
+      let identifyBytes = bytes;
+      let identifyType = contentType;
+      if (bytes.byteLength > 4_000_000) {
+        const { compressBytes } = await import("./tinypng.server");
+        const compressed = await compressBytes(bytes, contentType);
+        identifyBytes = compressed.bytes;
+        identifyType = compressed.contentType;
+      }
+      ident = (await identifyCardRest(identifyBytes, identifyType)) as ScanResult | null;
+
     } catch (err) {
       console.error("Cardsight identify failed:", err);
     }
