@@ -236,13 +236,34 @@ async function assertBaseballCard(imageDataUrl: string): Promise<void> {
   }
 }
 
+// A scan result plus what produced it and (when the two independent reads
+// disagree) the competing candidates, so the UI can show the disagreement and
+// let the user pick the correct match instead of silently guessing.
+type ScanCandidate = ScanResult & {
+  source: "catalog" | "ai";
+  source_label: string;
+};
+type ScanResponse = ScanResult & {
+  source: "catalog" | "ai";
+  disagreement: boolean;
+  candidates: ScanCandidate[];
+};
+
+function asCandidate(r: ScanResult, source: "catalog" | "ai"): ScanCandidate {
+  return {
+    ...r,
+    source,
+    source_label: source === "catalog" ? "Catalog match" : "AI photo read",
+  };
+}
+
 // ---------- Photo scan: Cardsight REST identify, AI fallback ----------
 export const scanCardPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { imageDataUrl: string }) =>
     z.object({ imageDataUrl: z.string().startsWith("data:image/") }).parse(d),
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<ScanResponse> => {
     await assertBaseballCard(data.imageDataUrl);
     const { bytes, contentType } = dataUrlToBytes(data.imageDataUrl);
 
@@ -272,24 +293,32 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
       // A high-confidence structured match is trusted directly — the common,
       // cheap, fast path.
       if (ident.confidence === "high") {
-        return enrichWithMlb(ident);
+        const enriched = await enrichWithMlb(ident);
+        return { ...enriched, source: "catalog", disagreement: false, candidates: [] };
       }
       // Medium/low confidence: a wrong guess here reads as "identification
       // returned the wrong player/team/number" with nothing to catch it, so
       // corroborate with an independent AI vision read before trusting it.
       const aiChecked = await scanViaAIVisionLinked(data.imageDataUrl);
       if (namesLikelyMatch(ident.player_name, aiChecked.player_name)) {
-        return enrichWithMlb(ident);
+        const enriched = await enrichWithMlb(ident);
+        return { ...enriched, source: "catalog", disagreement: false, candidates: [] };
       }
       // The two independent reads disagree on the player — neither is
-      // trustworthy alone. Prefer the AI read (already catalog-linked) but
-      // make sure the confidence stays low so the UI's existing "verify the
-      // details" prompt reflects the real uncertainty here.
-      return { ...aiChecked, confidence: "low" };
+      // trustworthy alone. Surface both so the user resolves it explicitly.
+      const catalogEnriched = await enrichWithMlb(ident);
+      return {
+        ...aiChecked,
+        confidence: "low",
+        source: "ai",
+        disagreement: true,
+        candidates: [asCandidate(aiChecked, "ai"), asCandidate(catalogEnriched, "catalog")],
+      };
     }
 
     // 2) Fallback: direct AI vision (Cardsight identify failed outright).
-    return scanViaAIVisionLinked(data.imageDataUrl);
+    const fallback = await scanViaAIVisionLinked(data.imageDataUrl);
+    return { ...fallback, source: "ai", disagreement: false, candidates: [] };
   });
 
 // ---------- Back-of-card scan ----------

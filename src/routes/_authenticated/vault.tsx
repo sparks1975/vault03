@@ -1865,6 +1865,10 @@ function AddCardDialog({
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<"front" | "back">("front");
   const [confidence, setConfidence] = useState<"high" | "medium" | "low" | null>(null);
+  const [scanSource, setScanSource] = useState<"catalog" | "ai" | null>(null);
+  type ScanCandidate = Awaited<ReturnType<typeof scanCardPhoto>>["candidates"][number];
+  const [candidates, setCandidates] = useState<ScanCandidate[]>([]);
+  const [chosenSource, setChosenSource] = useState<"catalog" | "ai" | null>(null);
   const [backScanning, setBackScanning] = useState(false);
   const [backNote, setBackNote] = useState<string | null>(null);
   const [form, setForm] = useState({
@@ -1936,7 +1940,15 @@ function AddCardDialog({
         cardsight_parallel_id: null,
       }));
       setConfidence(result.confidence ?? null);
-      toast.success(`Card identified (${result.confidence} confidence). Verify the details.`);
+      setScanSource(result.source ?? null);
+      setCandidates(result.disagreement ? result.candidates : []);
+      setChosenSource(null);
+      setBackNote(null);
+      if (result.disagreement) {
+        toast.warning("Two reads disagree on this card — pick the correct match.");
+      } else {
+        toast.success(`Card identified (${result.confidence} confidence). Verify the details.`);
+      }
       setStep("form");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Scan failed";
@@ -2007,6 +2019,30 @@ function AddCardDialog({
       setBackScanning(false);
     }
   }
+
+  // The user resolves a disagreement between the two reads: the chosen
+  // candidate's fields overwrite the form and become the catalog link.
+  function applyCandidate(c: ScanCandidate) {
+    setForm((f) => ({
+      ...f,
+      player_name: c.player_name ?? f.player_name,
+      team: c.team ?? "",
+      position: c.position ?? "",
+      year: c.year != null ? String(c.year) : "",
+      set_name: c.set_name ?? "",
+      card_number: c.card_number ?? "",
+      grade: c.grade ?? "",
+      grader: c.grader ?? "",
+      cardsight_card_id: c.cardsight_card_id ?? null,
+      cardsight_parallel_id: null,
+    }));
+    setChosenSource(c.source);
+    setScanSource(c.source);
+    setConfidence("medium");
+    toast.success(`Using the ${c.source_label.toLowerCase()}.`);
+  }
+
+
 
 
   async function fileToDataUrl(file: Blob): Promise<string> {
@@ -2228,10 +2264,55 @@ function AddCardDialog({
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {confidence === "high"
-                    ? "Matched to the catalog. Give the details a quick look before saving."
-                    : "Some details couldn't be read reliably. Scan the back of the card or correct the fields below — the card number, year and set drive comp accuracy."}
+                  {candidates.length > 0 && !chosenSource
+                    ? "Two independent reads of this photo disagree on the player. Pick the correct match below — nothing is saved until you do."
+                    : confidence === "high"
+                      ? "Matched to the catalog. Give the details a quick look before saving."
+                      : "Some details couldn't be read reliably. Scan the back of the card or correct the fields below — the card number, year and set drive comp accuracy."}
                 </p>
+                {scanSource && candidates.length === 0 && (
+                  <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                    Source · {scanSource === "catalog" ? "Catalog match" : "AI photo read"}
+                  </p>
+                )}
+
+                {candidates.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-border border border-border">
+                    {candidates.map((c) => {
+                      const selected = chosenSource === c.source;
+                      return (
+                        <button
+                          key={c.source}
+                          type="button"
+                          onClick={() => applyCandidate(c)}
+                          className={`bg-background p-3 text-left hover:bg-secondary transition-colors ${
+                            selected ? "ring-1 ring-inset ring-accent" : ""
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <span className="text-[10px] font-mono font-black uppercase tracking-widest">
+                              {c.source_label}
+                            </span>
+                            <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                              {selected ? "Selected" : "Use this"}
+                            </span>
+                          </div>
+                          <p className="text-sm font-extrabold tracking-tight">{c.player_name || "—"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {[c.year, c.set_name, c.card_number ? `#${c.card_number}` : null]
+                              .filter(Boolean)
+                              .join(" · ") || "No set details read"}
+                          </p>
+                          <p className="text-[10px] font-mono text-muted-foreground mt-1">
+                            {[c.team, c.position].filter(Boolean).join(" · ") || "Team unknown"}
+                            {c.cardsight_card_id ? " · catalog linked" : " · no catalog link"}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <div className="flex flex-wrap items-center gap-2">
                   <label className="cursor-pointer text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary inline-flex items-center gap-1">
                     <input
@@ -2244,10 +2325,23 @@ function AddCardDialog({
                     {backScanning ? <Loader2 className="size-3 animate-spin" /> : <Camera className="size-3" />}
                     {backScanning ? "Reading back…" : "Scan back of card"}
                   </label>
+                  {candidates.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCandidates([]);
+                        setChosenSource(null);
+                      }}
+                      className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary"
+                    >
+                      Neither — I'll enter it
+                    </button>
+                  )}
                   {backNote && <span className="text-[10px] font-mono text-muted-foreground">{backNote}</span>}
                 </div>
               </div>
             )}
+
 
             <div className="grid grid-cols-2 gap-3">
               <Field label="Player name*" value={form.player_name} onChange={(v) => setForm({ ...form, player_name: v })} />
@@ -2370,7 +2464,8 @@ function AddCardDialog({
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={saving}
+                disabled={saving || (candidates.length > 0 && !chosenSource)}
+                title={candidates.length > 0 && !chosenSource ? "Pick the correct match first" : undefined}
                 className="px-5 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest hover:bg-accent disabled:opacity-50 inline-flex items-center gap-2"
               >
                 {saving && <Loader2 className="size-3.5 animate-spin" />} Save card
