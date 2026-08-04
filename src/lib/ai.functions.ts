@@ -522,13 +522,17 @@ async function readCardBackDetails(imageDataUrl: string): Promise<BackScanResult
         confidence: "low",
       };
     }
+    const backCardNumber = parsed.card_number
+      ? String(parsed.card_number).replace(/^#/, "").trim()
+      : null;
     return {
       player_name: parsed.player_name ?? null,
       year: parsed.year != null ? Number(parsed.year) || null : null,
-      set_name: parsed.set_name
-        ? toApprovedCardSet(stripParallelFromSetName(String(parsed.set_name))) ?? null
-        : null,
-      card_number: parsed.card_number ? String(parsed.card_number).replace(/^#/, "").trim() : null,
+      set_name: refineSetFromCardNumber(
+        parsed.set_name ? toApprovedCardSet(stripParallelFromSetName(String(parsed.set_name))) ?? null : null,
+        backCardNumber,
+      ),
+      card_number: backCardNumber,
       serial_number: parsed.serial_number ? String(parsed.serial_number).trim() : null,
       is_rookie: typeof parsed.is_rookie === "boolean" ? parsed.is_rookie : null,
       confidence: parsed.confidence === "high" || parsed.confidence === "medium" ? parsed.confidence : "low",
