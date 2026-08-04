@@ -2260,6 +2260,48 @@ function AddCardDialog({
           </div>
         )}
 
+        {step === "back" && !scanning && (
+          <div className="border border-border">
+            <div className="p-6 border-b border-border">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Step 2 of 2</p>
+              <h3 className="font-extrabold text-lg tracking-tight mb-1">Photo of the back</h3>
+              <p className="text-xs text-muted-foreground">
+                The back carries the printed card number, year, set line and serial numbering — it's what keeps two
+                near-identical parallels apart. Reading both faces together makes identification far more consistent.
+              </p>
+            </div>
+            <div className="p-6 flex flex-col sm:flex-row gap-4 items-start">
+              {imageDataUrl && (
+                <img
+                  src={imageDataUrl}
+                  alt="Front of card"
+                  className="w-24 border border-border shrink-0"
+                />
+              )}
+              <div className="flex flex-wrap gap-2">
+                <label className="text-xs font-mono uppercase tracking-widest bg-foreground text-background px-4 py-2 hover:bg-accent cursor-pointer inline-flex items-center gap-2">
+                  <Camera className="size-3" />
+                  Add back photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => e.target.files?.[0] && handlePhoto(e.target.files[0], "back")}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => frontIdentifyUrl && runScan(frontIdentifyUrl, null)}
+                  className="text-xs font-mono uppercase tracking-widest border border-border px-4 py-2 hover:bg-secondary"
+                >
+                  Skip — front only
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+
         {scanning && (
           <div className="mt-6 p-4 border border-border text-sm inline-flex items-center gap-2">
             <Loader2 className="size-4 animate-spin" /> Identifying card…
