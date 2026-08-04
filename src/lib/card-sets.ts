@@ -137,7 +137,52 @@ const SET_ALIASES: Record<string, ApprovedCardSet> = {
   "topps bowman npb": "Topps Bowman NPB",
   "topps bowman npb 206": "Topps NPB 206",
   "topps npb 206": "Topps NPB 206",
+  "bowman sterling": "Bowman Sterling",
+  "topps bowman sterling": "Bowman Sterling",
+  "bowman sterling continuity": "Bowman Sterling",
+  "bowmans best": "Bowman's Best",
+  "bowman best": "Bowman's Best",
+  "topps bowmans best": "Bowman's Best",
+  "bowman platinum": "Bowman Platinum",
+  "bowman heritage": "Bowman Heritage",
+  "bowman inception": "Bowman Inception",
+  "bowman chrome sapphire": "Bowman Chrome Sapphire",
+  "bowman sapphire edition": "Bowman Sapphire",
 };
+
+// Card-number prefixes that identify the set even when the front only shows the
+// brand logo (e.g. "#BSR-40" is Bowman Sterling Rookie, not plain Bowman).
+// Longest prefixes first so BSR wins over BS.
+const CARD_NUMBER_SET_CODES: Array<[string, string]> = [
+  ["BSRA", "Bowman Sterling"],
+  ["BSPA", "Bowman"],
+  ["BSR", "Bowman Sterling"],
+  ["BSA", "Bowman Sterling"],
+  ["BST", "Bowman Sterling"],
+  ["BBA", "Bowman's Best"],
+  ["BB", "Bowman's Best"],
+  ["BCP", "Bowman Chrome"],
+  ["BDC", "Bowman Draft"],
+  ["BDP", "Bowman Draft"],
+  ["BP", "Bowman"],
+  ["BI", "Bowman Inception"],
+];
+
+/**
+ * Infers the set from a printed card number prefix. Returns null when the
+ * prefix is unknown or the number is purely numeric.
+ */
+export function setFromCardNumber(cardNumber: string | null | undefined): string | null {
+  const raw = String(cardNumber ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+  const prefix = raw.match(/^[A-Z]+/)?.[0];
+  if (!prefix) return null;
+  for (const [code, set] of CARD_NUMBER_SET_CODES) {
+    if (prefix === code) return set;
+  }
+  return null;
+}
 
 function normalizeSetText(value: string | number | null | undefined): string {
   return String(value ?? "")
