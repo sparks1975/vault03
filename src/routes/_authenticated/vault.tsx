@@ -24,7 +24,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
+import { scanCardPhoto, scanCardBack, estimateCardValue } from "@/lib/ai.functions";
 import { listCardsightParallels, searchCardsightCards } from "@/lib/cardsight.functions";
 import { APPROVED_CARD_SETS } from "@/lib/card-sets";
 import { CardCropDialog } from "@/components/CardCropDialog";
