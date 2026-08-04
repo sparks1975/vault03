@@ -120,4 +120,11 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
+
+  /* Prevent iOS Safari from auto-zooming when focusing form controls */
+  @media (max-width: 768px) {
+    input, select, textarea, button {
+      font-size: 16px;
+    }
+  }
 }
