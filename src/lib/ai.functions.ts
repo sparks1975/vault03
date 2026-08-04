@@ -514,7 +514,9 @@ async function readCardBackDetails(imageDataUrl: string): Promise<BackScanResult
       is_rookie: typeof parsed.is_rookie === "boolean" ? parsed.is_rookie : null,
       confidence: parsed.confidence === "high" || parsed.confidence === "medium" ? parsed.confidence : "low",
     };
-  });
+  }
+}
+
 
 // If team/position are missing, look them up from the free MLB Stats API.
 async function enrichWithMlb(result: ScanResult): Promise<ScanResult> {
