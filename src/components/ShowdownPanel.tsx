@@ -417,14 +417,30 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
             ) : (
               <ol className="divide-y divide-border">
                 {(contestQ.data?.leaderboard ?? []).slice(0, 10).map((row) => (
-                  <li key={row.user_id} className="flex items-center gap-3 py-2">
-                    <span className="w-6 text-xs font-mono text-muted-foreground">{row.rank}</span>
-                    <span className="flex-1 min-w-0 text-sm truncate">{row.display_name}</span>
-                    <span className="text-sm font-mono font-bold">{fmtPts(row.score)}</span>
+                  <li key={row.user_id}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenUser((v) => (v === row.user_id ? null : row.user_id))}
+                      aria-expanded={openUser === row.user_id}
+                      className="w-full flex items-center gap-3 py-2 text-left hover:bg-secondary/50 transition-colors"
+                    >
+                      <span className="w-6 text-xs font-mono text-muted-foreground">{row.rank}</span>
+                      <span className="flex-1 min-w-0 text-sm truncate">{row.display_name}</span>
+                      <span className="text-sm font-mono font-bold">{fmtPts(row.score)}</span>
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${
+                          openUser === row.user_id ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                    {openUser === row.user_id ? (
+                      <OpponentLineup contestId={contest!.id} userId={row.user_id} />
+                    ) : null}
                   </li>
                 ))}
               </ol>
             )}
+
 
             <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mt-6 mb-3">
               Your badges
