@@ -77,7 +77,13 @@ type ScanResult = {
   confidence: "high" | "medium" | "low";
   cardsight_card_id: string | null;
   cardsight_parallel_id?: string | null;
+  // Read off the card itself (front foil/border text or the back's printed
+  // numbering). These are what keep two identical-looking parallels apart.
+  parallel_hint?: string | null;
+  serial_number?: string | null;
+  is_rookie?: boolean | null;
 };
+
 
 function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; contentType: string } {
   const m = dataUrl.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
