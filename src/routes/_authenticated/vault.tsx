@@ -1083,12 +1083,18 @@ function CardDetail({
                 />
               )}
             </div>
+            <CatalogLinkPicker
+              cardId={(draft.cardsight_card_id ?? card.cardsight_card_id) ?? null}
+              lookup={{ ...card, ...draft }}
+              onLink={(id) => setDraft({ ...draft, cardsight_card_id: id, cardsight_parallel_id: null })}
+            />
             <ParallelSelect
               cardId={(draft.cardsight_card_id ?? card.cardsight_card_id) ?? null}
               lookup={{ ...card, ...draft }}
               value={draft.cardsight_parallel_id ?? null}
               onChange={(id) => setDraft({ ...draft, cardsight_parallel_id: id })}
             />
+
           <label className="block">
 
 
