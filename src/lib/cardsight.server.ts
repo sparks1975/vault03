@@ -916,6 +916,99 @@ export async function listSetCandidatesForCard(lookup: CardLookup): Promise<SetC
     .slice(0, 20);
 }
 
+// ---------- Manual catalog picker ----------
+// Unlike listSetCandidatesForCard (one row per set, strictly filtered), this
+// returns individual catalog cards so the user can pick the exact match by
+// hand when automatic resolution misses. Filtering is deliberately loose —
+// the user is the filter here — but results stay ranked by relevance.
+export type CatalogCardCandidate = {
+  card_id: string;
+  player_name: string | null;
+  year: string | null;
+  set_name: string | null;
+  release_name: string | null;
+  subset_name: string | null;
+  card_number: string | null;
+  parallel_count: number;
+  relevance: number;
+};
+
+export async function listCatalogCardCandidates(lookup: CardLookup): Promise<CatalogCardCandidate[]> {
+  const descriptorLookup = lookup.descriptor ? parseDescriptor(lookup.descriptor) : {};
+  const merged: CardLookup = { ...descriptorLookup, ...lookup };
+  const player = merged.player_name?.trim();
+  const year = merged.year == null ? null : String(merged.year).trim();
+  const setName = merged.set_name?.trim();
+  const number = merged.card_number?.trim().replace(/^#\s*/, "");
+
+  const paths = new Set<string>();
+  const addCardsPath = (params: Record<string, string | null | undefined>) => {
+    const sp = new URLSearchParams({ take: "50" });
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) sp.set(key, value);
+    });
+    if ([...sp.keys()].length > 1) paths.add(`/v1/catalog/cards?${sp.toString()}`);
+  };
+
+  addCardsPath({ name: player, number, year, releaseName: setName });
+  addCardsPath({ name: player, number, year });
+  addCardsPath({ name: player, year, releaseName: setName });
+  addCardsPath({ name: player, year });
+  addCardsPath({ name: player, number });
+
+  const cardsById = new Map<string, CatalogCard>();
+  for (const path of paths) {
+    try {
+      const resp = await csFetch<{ cards: CatalogCard[] }>(path);
+      for (const card of resp.cards ?? []) cardsById.set(card.id, card);
+    } catch (err) {
+      console.error("Cardsight catalog candidates lookup failed:", err);
+    }
+    if (cardsById.size >= 40) break;
+  }
+
+  // Free-text search as a last resort, so an odd set/number spelling still
+  // surfaces something the user can pick.
+  if (cardsById.size === 0) {
+    const q = [year, setName, player, number ? `#${number}` : null].filter(Boolean).join(" ").trim();
+    if (q.length >= 2) {
+      try {
+        const resp = await csFetch<{ results: SearchResult[] }>(
+          `/v1/catalog/search?type=card&take=20&q=${encodeURIComponent(q.slice(0, 200))}`,
+        );
+        for (const result of resp.results ?? []) {
+          if (result.type !== "card" || cardsById.has(result.id)) continue;
+          try {
+            const detail = await csFetch<CatalogCard>(`/v1/catalog/cards/${result.id}`);
+            cardsById.set(detail.id, detail);
+          } catch {
+            // Ignore detail misses.
+          }
+        }
+      } catch (err) {
+        console.error("Cardsight catalog candidate search failed:", err);
+      }
+    }
+  }
+
+  return [...cardsById.values()]
+    .map((card) => ({
+      card_id: card.id,
+      player_name: card.name ?? null,
+      year: card.releaseYear ?? null,
+      set_name: sanitizeSetName(card.releaseName, card.setName) ?? card.releaseName ?? null,
+      release_name: card.releaseName ?? null,
+      subset_name: card.setName ?? null,
+      card_number: card.number ?? null,
+      parallel_count: card.parallelCount ?? card.parallels?.length ?? 0,
+      relevance: scoreCard(card, merged),
+    }))
+    .sort((a, b) => b.relevance - a.relevance || (a.player_name ?? "").localeCompare(b.player_name ?? ""))
+    .slice(0, 25);
+}
+
+
+
 function expandSetSearchTerms(setName: string | null | undefined): string[] {
   const raw = String(setName ?? "").trim();
   if (!raw) return [];
