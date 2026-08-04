@@ -2414,3 +2414,128 @@ function ParallelSelect({
   );
 }
 
+type CatalogCandidate = Awaited<ReturnType<typeof searchCardsightCards>>[number];
+
+// Manual catalog link. When automatic identification misses (or was never
+// resolved), the user searches the catalog with whatever details are in the
+// form and picks the exact card. Linking sets the catalog id, which is what
+// the parallel/refractor picker and verified comps depend on.
+function CatalogLinkPicker({
+  cardId,
+  lookup,
+  onLink,
+}: {
+  cardId: string | null;
+  lookup: {
+    player_name?: string | null;
+    year?: string | number | null;
+    set_name?: string | null;
+    card_number?: string | null;
+    serial_number?: string | null;
+  };
+  onLink: (id: string | null) => void;
+}) {
+  const searchFn = useServerFn(searchCardsightCards);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [results, setResults] = useState<CatalogCandidate[] | null>(null);
+
+  async function run() {
+    if (!String(lookup.player_name ?? "").trim()) {
+      toast.error("Enter a player name first");
+      return;
+    }
+    setOpen(true);
+    setBusy(true);
+    try {
+      const r = await searchFn({
+        data: {
+          player_name: lookup.player_name ?? null,
+          year: lookup.year ?? null,
+          set_name: lookup.set_name ?? null,
+          card_number: lookup.card_number ?? null,
+          descriptor: cardDescriptor(lookup),
+        },
+      });
+      setResults(r);
+    } catch {
+      toast.error("Catalog search failed");
+      setResults([]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="border border-border p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+          Catalog match {cardId ? "· linked" : "· not linked"}
+        </p>
+        <button
+          type="button"
+          onClick={run}
+          disabled={busy}
+          className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary disabled:opacity-50 inline-flex items-center gap-1"
+        >
+          {busy && <Loader2 className="size-3 animate-spin" />}
+          Find in catalog
+        </button>
+      </div>
+      <p className="mt-1 text-[9px] font-mono text-muted-foreground">
+        {cardId
+          ? "This card is linked to the catalog — parallels and verified comps are available."
+          : "Not linked yet. Search and pick the exact card to enable parallels and verified comps."}
+      </p>
+      {open && (
+        <div className="mt-3 space-y-1 max-h-56 overflow-y-auto">
+          {busy && <p className="text-[10px] font-mono text-muted-foreground">Searching catalog…</p>}
+          {!busy && results?.length === 0 && (
+            <p className="text-[10px] font-mono text-muted-foreground">
+              No catalog matches. Try adjusting the year, set or card number.
+            </p>
+          )}
+          {!busy &&
+            (results ?? []).map((r) => {
+              const active = r.card_id === cardId;
+              return (
+                <button
+                  key={r.card_id}
+                  type="button"
+                  onClick={() => {
+                    onLink(r.card_id);
+                    setOpen(false);
+                  }}
+                  className={`w-full text-left border px-2 py-1.5 text-xs hover:bg-secondary ${
+                    active ? "border-accent" : "border-border"
+                  }`}
+                >
+                  <span className="font-bold">{r.player_name ?? "Unknown player"}</span>
+                  <span className="block text-[10px] font-mono text-muted-foreground">
+                    {[r.year, r.set_name, r.subset_name && r.subset_name !== r.set_name ? r.subset_name : null, r.card_number ? `#${r.card_number}` : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                    {r.parallel_count > 0 ? ` · ${r.parallel_count} parallels` : ""}
+                  </span>
+                </button>
+              );
+            })}
+          {cardId && (
+            <button
+              type="button"
+              onClick={() => {
+                onLink(null);
+                setOpen(false);
+              }}
+              className="w-full text-left border border-border px-2 py-1.5 text-[10px] font-mono uppercase tracking-widest hover:bg-secondary"
+            >
+              Unlink catalog match
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
