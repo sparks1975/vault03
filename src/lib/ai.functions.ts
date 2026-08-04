@@ -166,9 +166,10 @@ function namesLikelyMatch(a: string | null | undefined, b: string | null | undef
 // parallels work off the AI's read too. Used both as the fallback when
 // Cardsight identify fails outright, and to corroborate a low/medium
 // confidence Cardsight identify.
-async function scanViaAIVisionLinked(imageDataUrl: string): Promise<ScanResult> {
-  const result = await scanViaAIVision(imageDataUrl);
+async function scanViaAIVisionLinked(imageDataUrl: string, backImageDataUrl?: string | null): Promise<ScanResult> {
+  const result = await scanViaAIVision(imageDataUrl, backImageDataUrl);
   const enriched = await enrichWithMlb(result);
+
   try {
     const { getCatalogValuationLookup, searchCatalogCardByFields } = await import("./cardsight.server");
     const desc = [enriched.year, enriched.set_name, enriched.player_name, enriched.card_number ? `#${enriched.card_number}` : null]
