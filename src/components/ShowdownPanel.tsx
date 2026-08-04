@@ -16,6 +16,7 @@ import {
   getMyShowdownEntry,
   submitShowdownEntry,
   getMyBadges,
+  getShowdownLineup,
 } from "@/lib/showdown.functions";
 import {
   LINEUP_SIZE,
@@ -136,6 +137,8 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
 
 
   const [collapsed, setCollapsed] = useState(false);
+  const [openUser, setOpenUser] = useState<string | null>(null);
+
   const submitted = savedIds.length === LINEUP_SIZE;
   const dirty = draft !== null && JSON.stringify([...draft].sort()) !== JSON.stringify([...savedIds].sort());
 
@@ -417,14 +420,30 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
             ) : (
               <ol className="divide-y divide-border">
                 {(contestQ.data?.leaderboard ?? []).slice(0, 10).map((row) => (
-                  <li key={row.user_id} className="flex items-center gap-3 py-2">
-                    <span className="w-6 text-xs font-mono text-muted-foreground">{row.rank}</span>
-                    <span className="flex-1 min-w-0 text-sm truncate">{row.display_name}</span>
-                    <span className="text-sm font-mono font-bold">{fmtPts(row.score)}</span>
+                  <li key={row.user_id}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenUser((v) => (v === row.user_id ? null : row.user_id))}
+                      aria-expanded={openUser === row.user_id}
+                      className="w-full flex items-center gap-3 py-2 text-left hover:bg-secondary/50 transition-colors"
+                    >
+                      <span className="w-6 text-xs font-mono text-muted-foreground">{row.rank}</span>
+                      <span className="flex-1 min-w-0 text-sm truncate">{row.display_name}</span>
+                      <span className="text-sm font-mono font-bold">{fmtPts(row.score)}</span>
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${
+                          openUser === row.user_id ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                    {openUser === row.user_id ? (
+                      <OpponentLineup contestId={contest!.id} userId={row.user_id} />
+                    ) : null}
                   </li>
                 ))}
               </ol>
             )}
+
 
             <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mt-6 mb-3">
               Your badges
@@ -458,5 +477,47 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
 
     </section>
 
+  );
+}
+
+function OpponentLineup({ contestId, userId }: { contestId: string; userId: string }) {
+  const lineupFn = useServerFn(getShowdownLineup);
+  const q = useQuery({
+    queryKey: ["showdown-lineup", contestId, userId],
+    queryFn: () => lineupFn({ data: { contest_id: contestId, user_id: userId } }),
+  });
+
+  if (q.isLoading)
+    return (
+      <div className="pb-3 pl-9 pr-1">
+        <Skeleton className="h-4 w-48" />
+      </div>
+    );
+
+  const cards = q.data?.cards ?? [];
+  if (cards.length === 0)
+    return (
+      <p className="pb-3 pl-9 pr-1 text-xs text-muted-foreground">No lineup available.</p>
+    );
+
+  return (
+    <ul className="pb-3 pl-9 pr-1 space-y-1">
+      {cards.map((c, i) => (
+        <li key={`${c.player_name}-${i}`} className="flex items-baseline gap-2 text-xs">
+          <span className="flex-1 min-w-0">
+            <span className="font-bold">{c.player_name}</span>
+            {c.detail ? (
+              <span className="block text-[10px] font-mono uppercase tracking-widest text-muted-foreground truncate">
+                {c.detail}
+              </span>
+            ) : null}
+          </span>
+          <span className="shrink-0 font-mono text-muted-foreground">
+            {c.multiplier.toFixed(2)}x
+          </span>
+          <span className="shrink-0 w-14 text-right font-mono font-bold">{fmtPts(c.points)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }

@@ -112,6 +112,57 @@ export const getMyShowdownEntry = createServerFn({ method: "GET" })
     };
   });
 
+export const getShowdownLineup = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) =>
+    z.object({ contest_id: z.string().uuid(), user_id: z.string().uuid() }).parse(d),
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: entry, error } = await supabaseAdmin
+      .from("contest_entries")
+      .select("id, score")
+      .eq("contest_id", data.contest_id)
+      .eq("user_id", data.user_id)
+      .maybeSingle();
+    if (error) throw error;
+    if (!entry) return { cards: [] as { player_name: string; detail: string; multiplier: number; points: number }[] };
+
+    const { data: rows, error: cErr } = await supabaseAdmin
+      .from("contest_entry_cards")
+      .select("card_id, player_points, multiplier, points")
+      .eq("entry_id", entry.id);
+    if (cErr) throw cErr;
+
+    const cardIds = (rows ?? []).map((r) => r.card_id);
+    const meta = new Map<string, { player_name: string; detail: string }>();
+    if (cardIds.length > 0) {
+      const { data: cards } = await supabaseAdmin
+        .from("cards")
+        .select("id, player_name, year, set_name, card_number, parallel")
+        .in("id", cardIds);
+      for (const c of cards ?? [])
+        meta.set(c.id, {
+          player_name: c.player_name ?? "Unknown player",
+          detail: [c.year, c.set_name, c.card_number ? `#${c.card_number}` : null, c.parallel]
+            .filter(Boolean)
+            .join(" · "),
+        });
+    }
+
+    return {
+      cards: (rows ?? [])
+        .map((r) => ({
+          player_name: meta.get(r.card_id)?.player_name ?? "Unknown player",
+          detail: meta.get(r.card_id)?.detail ?? "",
+          multiplier: Number(r.multiplier),
+          points: Number(r.points),
+        }))
+        .sort((a, b) => b.points - a.points),
+    };
+  });
+
 export const submitShowdownEntry = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) =>
