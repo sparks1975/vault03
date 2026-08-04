@@ -17,12 +17,57 @@ const SHAPES: Record<string, BadgeShape> = {
   first_entry: "circle",
 };
 
+// All paths drawn inside a 120x132 viewBox with a 14px safe margin so thick
+// strokes and glows never clip.
 const PATHS: Record<BadgeShape, string> = {
-  // 100x112 viewBox
-  shield: "M8 6h84v66c0 18-30 28-42 34C38 100 8 90 8 72Z",
-  hexagon: "M50 4l40 23v50L50 100 10 77V27Z",
-  circle: "M50 8a48 48 0 1 0 0 96 48 48 0 1 0 0-96Z",
-  ribbon: "M10 4h80v104L50 82 10 108Z",
+  shield: "M14 16h92v62c0 24-34 34-46 40-12-6-46-16-46-40Z",
+  hexagon: "M60 14l46 26v52L60 118 14 92V40Z",
+  circle: "M60 14a52 52 0 1 0 0 104 52 52 0 1 0 0-104Z",
+  ribbon: "M18 14h84v104L60 92 18 118Z",
+};
+
+type Tone = {
+  rimA: string;
+  rimB: string;
+  faceA: string;
+  faceB: string;
+  icon: string;
+  glow: string;
+};
+
+const TONES: Record<string, Tone> = {
+  champion: {
+    rimA: "#FDE68A",
+    rimB: "#B45309",
+    faceA: "#3A2A08",
+    faceB: "#15100A",
+    icon: "#FCD34D",
+    glow: "#F59E0B",
+  },
+  podium: {
+    rimA: "#F8FAFC",
+    rimB: "#64748B",
+    faceA: "#2A2F3A",
+    faceB: "#111418",
+    icon: "#E2E8F0",
+    glow: "#94A3B8",
+  },
+  top_10_pct: {
+    rimA: "#FDBA74",
+    rimB: "#C2410C",
+    faceA: "#3A1D0C",
+    faceB: "#160C06",
+    icon: "#FB923C",
+    glow: "#EA580C",
+  },
+  first_entry: {
+    rimA: "#C4B5FD",
+    rimB: "#5B21B6",
+    faceA: "#241A45",
+    faceB: "#100B1F",
+    icon: "#A78BFA",
+    glow: "#7C3AED",
+  },
 };
 
 export function AchievementBadge({
@@ -30,7 +75,7 @@ export function AchievementBadge({
   label,
   sublabel,
   title,
-  size = 84,
+  size = 96,
 }: {
   type: string;
   label: string;
@@ -40,52 +85,112 @@ export function AchievementBadge({
 }) {
   const shape = SHAPES[type] ?? "shield";
   const Icon = ICONS[type] ?? Star;
-  const gold = type === "champion";
+  const t = TONES[type] ?? TONES.first_entry;
+  const d = PATHS[shape];
+  const uid = `bdg-${type}-${shape}`;
 
   return (
-    <div className="flex flex-col items-center text-center w-[92px]" title={title}>
+    <div
+      className="flex w-[104px] flex-col items-center text-center"
+      title={title}
+    >
       <div
-        className="relative drop-shadow-[0_6px_14px_rgba(0,0,0,0.45)]"
-        style={{ width: size, height: (size * 112) / 100 }}
+        className="relative"
+        style={{ width: size, height: (size * 132) / 120 }}
       >
-        <svg viewBox="0 0 100 112" className="w-full h-full">
+        <svg viewBox="0 0 120 132" className="h-full w-full overflow-visible">
           <defs>
-            <linearGradient id={`bg-${type}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="oklch(0.24 0.02 280)" />
-              <stop offset="100%" stopColor="oklch(0.14 0.01 280)" />
+            <linearGradient id={`${uid}-rim`} x1="0" y1="0" x2="0.35" y2="1">
+              <stop offset="0%" stopColor={t.rimA} />
+              <stop offset="45%" stopColor={t.rimB} />
+              <stop offset="70%" stopColor={t.rimA} stopOpacity="0.9" />
+              <stop offset="100%" stopColor={t.rimB} />
             </linearGradient>
+            <linearGradient id={`${uid}-face`} x1="0.2" y1="0" x2="0.8" y2="1">
+              <stop offset="0%" stopColor={t.faceA} />
+              <stop offset="100%" stopColor={t.faceB} />
+            </linearGradient>
+            <linearGradient id={`${uid}-gloss`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.28" />
+              <stop offset="55%" stopColor="#FFFFFF" stopOpacity="0.04" />
+              <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+            </linearGradient>
+            <filter
+              id={`${uid}-shadow`}
+              x="-40%"
+              y="-40%"
+              width="180%"
+              height="180%"
+            >
+              <feDropShadow
+                dx="0"
+                dy="4"
+                stdDeviation="4"
+                floodColor="#000000"
+                floodOpacity="0.45"
+              />
+            </filter>
+            <clipPath id={`${uid}-clip`}>
+              <path d={d} />
+            </clipPath>
           </defs>
-          {/* outer accent frame */}
+
+          {/* outer glow */}
           <path
-            d={PATHS[shape]}
+            d={d}
             fill="none"
-            strokeWidth="7"
-            className={gold ? "stroke-amber-400" : "stroke-primary"}
+            stroke={t.glow}
+            strokeWidth="10"
+            opacity="0.22"
+            filter={`url(#${uid}-shadow)`}
           />
-          {/* inner plate */}
-          <g transform="translate(50 56) scale(0.86) translate(-50 -56)">
-            <path d={PATHS[shape]} fill={`url(#bg-${type})`} />
+
+          {/* metallic rim */}
+          <g filter={`url(#${uid}-shadow)`}>
             <path
-              d={PATHS[shape]}
+              d={d}
               fill="none"
+              stroke={`url(#${uid}-rim)`}
+              strokeWidth="8"
+              strokeLinejoin="round"
+            />
+          </g>
+
+          {/* recessed face */}
+          <g transform="translate(60 66) scale(0.84) translate(-60 -66)">
+            <path d={d} fill={`url(#${uid}-face)`} />
+            <g clipPath={`url(#${uid}-clip)`}>
+              <path d={d} fill={`url(#${uid}-gloss)`} />
+            </g>
+            <path
+              d={d}
+              fill="none"
+              stroke={t.rimA}
+              strokeOpacity="0.35"
               strokeWidth="2"
-              className={gold ? "stroke-amber-400/40" : "stroke-primary/40"}
+              strokeLinejoin="round"
             />
           </g>
         </svg>
+
         <span className="absolute inset-0 flex items-center justify-center">
           <Icon
-            className={gold ? "text-amber-400" : "text-primary"}
-            style={{ width: size * 0.36, height: size * 0.36 }}
-            strokeWidth={2.25}
+            style={{
+              width: size * 0.34,
+              height: size * 0.34,
+              color: t.icon,
+              filter: `drop-shadow(0 0 6px ${t.glow})`,
+            }}
+            strokeWidth={2.5}
           />
         </span>
       </div>
-      <span className="mt-2 text-[11px] font-black uppercase tracking-wider leading-tight">
+
+      <span className="mt-2 text-[11px] font-black uppercase leading-tight tracking-wider">
         {label}
       </span>
       {sublabel ? (
-        <span className="text-[9px] font-mono uppercase tracking-widest text-muted-foreground leading-tight">
+        <span className="font-mono text-[9px] uppercase leading-tight tracking-widest text-muted-foreground">
           {sublabel}
         </span>
       ) : null}
