@@ -24,7 +24,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-import { scanCardPhoto, estimateCardValue } from "@/lib/ai.functions";
+import { scanCardPhoto, scanCardBack, estimateCardValue } from "@/lib/ai.functions";
 import { listCardsightParallels, searchCardsightCards } from "@/lib/cardsight.functions";
 import { APPROVED_CARD_SETS } from "@/lib/card-sets";
 import { CardCropDialog } from "@/components/CardCropDialog";
@@ -1849,6 +1849,7 @@ function AddCardDialog({
   onCreated: (cardId: string) => void;
 }) {
   const scanFn = useServerFn(scanCardPhoto);
+  const scanBackFn = useServerFn(scanCardBack);
   const searchPlayerFn = useServerFn(searchMlbPlayer);
   const estimateFn = useServerFn(estimateCardValue);
   const createFn = useServerFn(createCard);
@@ -1862,6 +1863,10 @@ function AddCardDialog({
   const [saving, setSaving] = useState(false);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [cropSource, setCropSource] = useState<string | null>(null);
+  const [cropTarget, setCropTarget] = useState<"front" | "back">("front");
+  const [confidence, setConfidence] = useState<"high" | "medium" | "low" | null>(null);
+  const [backScanning, setBackScanning] = useState(false);
+  const [backNote, setBackNote] = useState<string | null>(null);
   const [form, setForm] = useState({
     player_name: "",
     team: "",
@@ -1884,7 +1889,7 @@ function AddCardDialog({
   });
   const [playerResults, setPlayerResults] = useState<Awaited<ReturnType<typeof searchMlbPlayer>>>([]);
 
-  async function handlePhoto(file: File) {
+  async function handlePhoto(file: File, target: "front" | "back" = "front") {
     try {
       let workingFile: Blob = file;
       const isHeic =
@@ -1900,6 +1905,7 @@ function AddCardDialog({
         }
       }
       const rawDataUrl = await fileToDataUrl(workingFile as File);
+      setCropTarget(target);
       setCropSource(rawDataUrl);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't read image");
@@ -1908,6 +1914,10 @@ function AddCardDialog({
 
   async function handleCropConfirm(displayDataUrl: string, identifyDataUrl: string) {
     setCropSource(null);
+    if (cropTarget === "back") {
+      await runBackScan(identifyDataUrl);
+      return;
+    }
     setImageDataUrl(displayDataUrl);
     setScanning(true);
     try {
@@ -1925,6 +1935,7 @@ function AddCardDialog({
         cardsight_card_id: result.cardsight_card_id ?? f.cardsight_card_id,
         cardsight_parallel_id: null,
       }));
+      setConfidence(result.confidence ?? null);
       toast.success(`Card identified (${result.confidence} confidence). Verify the details.`);
       setStep("form");
     } catch (e) {
@@ -1940,6 +1951,60 @@ function AddCardDialog({
       }
     } finally {
       setScanning(false);
+    }
+  }
+
+  // The back of the card carries the printed card number, year, set line and
+  // serial numbering — the fields the front scan most often gets wrong. Values
+  // read off the back win over the front read.
+  async function runBackScan(identifyDataUrl: string) {
+    setBackScanning(true);
+    try {
+      const back = await scanBackFn({ data: { imageDataUrl: identifyDataUrl } });
+      const filled: string[] = [];
+      setForm((f) => {
+        const next = { ...f };
+        if (back.card_number && back.card_number !== f.card_number) {
+          next.card_number = back.card_number;
+          filled.push("card #");
+        }
+        if (back.year && String(back.year) !== f.year) {
+          next.year = String(back.year);
+          filled.push("year");
+        }
+        if (back.set_name && back.set_name !== f.set_name) {
+          next.set_name = back.set_name;
+          filled.push("set");
+        }
+        if (back.serial_number) {
+          next.is_numbered = true;
+          next.serial_number = back.serial_number;
+          filled.push("serial");
+        }
+        if (back.is_rookie === true && !f.is_rookie) {
+          next.is_rookie = true;
+          filled.push("rookie");
+        }
+        // Identity fields changed — the catalog link no longer applies.
+        if (filled.some((x) => x === "card #" || x === "year" || x === "set")) {
+          next.cardsight_card_id = null;
+          next.cardsight_parallel_id = null;
+        }
+        return next;
+      });
+      if (back.card_number || back.year || back.set_name) {
+        setConfidence("high");
+      }
+      setBackNote(
+        filled.length > 0
+          ? `Back scan corrected: ${filled.join(", ")}.`
+          : "Back scan matched the front read — nothing to correct.",
+      );
+      toast.success("Back of card read.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Back scan failed");
+    } finally {
+      setBackScanning(false);
     }
   }
 
@@ -2139,6 +2204,51 @@ function AddCardDialog({
             {imageDataUrl && (
               <img src={imageDataUrl} alt="Uploaded card" className="w-32 aspect-[2/3] object-cover border border-border" />
             )}
+
+            {confidence && (
+              <div
+                className={`border p-3 space-y-2 ${
+                  confidence === "high"
+                    ? "border-border"
+                    : "border-accent bg-accent/5"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-mono uppercase tracking-widest">
+                    Identification confidence
+                  </p>
+                  <span
+                    className={`text-[10px] font-mono font-black uppercase tracking-widest px-2 py-0.5 border ${
+                      confidence === "high"
+                        ? "border-border text-muted-foreground"
+                        : "border-accent text-accent"
+                    }`}
+                  >
+                    {confidence}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {confidence === "high"
+                    ? "Matched to the catalog. Give the details a quick look before saving."
+                    : "Some details couldn't be read reliably. Scan the back of the card or correct the fields below — the card number, year and set drive comp accuracy."}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="cursor-pointer text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary inline-flex items-center gap-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={backScanning}
+                      onChange={(e) => e.target.files?.[0] && handlePhoto(e.target.files[0], "back")}
+                    />
+                    {backScanning ? <Loader2 className="size-3 animate-spin" /> : <Camera className="size-3" />}
+                    {backScanning ? "Reading back…" : "Scan back of card"}
+                  </label>
+                  {backNote && <span className="text-[10px] font-mono text-muted-foreground">{backNote}</span>}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <Field label="Player name*" value={form.player_name} onChange={(v) => setForm({ ...form, player_name: v })} />
               <Field label="Team" value={form.team} onChange={(v) => setForm({ ...form, team: v })} />

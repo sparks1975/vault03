@@ -292,6 +292,73 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
     return scanViaAIVisionLinked(data.imageDataUrl);
   });
 
+// ---------- Back-of-card scan ----------
+// The back of a baseball card carries the printed card number, copyright year,
+// set/brand line and serial numbering in plain text — the exact fields a front
+// scan most often misreads. This returns only what it can actually read so the
+// caller can fill gaps and correct the front read.
+type BackScanResult = {
+  player_name: string | null;
+  year: number | null;
+  set_name: string | null;
+  card_number: string | null;
+  serial_number: string | null;
+  is_rookie: boolean | null;
+  confidence: "high" | "medium" | "low";
+};
+
+export const scanCardBack = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { imageDataUrl: string }) =>
+    z.object({ imageDataUrl: z.string().startsWith("data:image/") }).parse(d),
+  )
+  .handler(async ({ data }): Promise<BackScanResult> => {
+    const text = await callAI({
+      model: MODEL,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You read the BACK of baseball cards and transcribe printed text exactly. Reply ONLY with a JSON object — no prose. Never guess: use null for anything you cannot literally read.",
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text:
+                `Read the back of this baseball card. Return JSON: {"player_name": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "serial_number": string|null, "is_rookie": boolean|null, "confidence": "high"|"medium"|"low"}. card_number is the printed card number exactly as shown (without a leading #). year is the card's set year (use the copyright year if that is all that is printed). serial_number is hand- or machine-numbered text like "12/50" if present, else null. is_rookie true only if the back explicitly marks a rookie card. set_name must be one of this exact approved list or null: ${APPROVED_CARD_SETS.join(", ")}. Do NOT include parallel, refractor, insert, color, numbering or autograph descriptors in set_name.`,
+            },
+            { type: "image_url", image_url: { url: data.imageDataUrl } },
+          ],
+        },
+      ],
+    });
+    const parsed = extractJson<BackScanResult>(text);
+    if (!parsed) {
+      return {
+        player_name: null,
+        year: null,
+        set_name: null,
+        card_number: null,
+        serial_number: null,
+        is_rookie: null,
+        confidence: "low",
+      };
+    }
+    return {
+      player_name: parsed.player_name ?? null,
+      year: parsed.year != null ? Number(parsed.year) || null : null,
+      set_name: parsed.set_name
+        ? toApprovedCardSet(stripParallelFromSetName(String(parsed.set_name))) ?? null
+        : null,
+      card_number: parsed.card_number ? String(parsed.card_number).replace(/^#/, "").trim() : null,
+      serial_number: parsed.serial_number ? String(parsed.serial_number).trim() : null,
+      is_rookie: typeof parsed.is_rookie === "boolean" ? parsed.is_rookie : null,
+      confidence: parsed.confidence === "high" || parsed.confidence === "medium" ? parsed.confidence : "low",
+    };
+  });
+
 // If team/position are missing, look them up from the free MLB Stats API.
 async function enrichWithMlb(result: ScanResult): Promise<ScanResult> {
   if (!result.player_name || (result.team && result.position)) return result;
