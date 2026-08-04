@@ -1858,10 +1858,12 @@ function AddCardDialog({
   const updateFn = useServerFn(updateCardFields);
   const qc = useQueryClient();
 
-  const [step, setStep] = useState<"choose" | "form">("choose");
+  const [step, setStep] = useState<"choose" | "back" | "form">("choose");
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [frontIdentifyUrl, setFrontIdentifyUrl] = useState<string | null>(null);
+  const [backPreviewUrl, setBackPreviewUrl] = useState<string | null>(null);
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<"front" | "back">("front");
   const [confidence, setConfidence] = useState<"high" | "medium" | "low" | null>(null);
@@ -1871,6 +1873,7 @@ function AddCardDialog({
   const [chosenSource, setChosenSource] = useState<"catalog" | "ai" | null>(null);
   const [backScanning, setBackScanning] = useState(false);
   const [backNote, setBackNote] = useState<string | null>(null);
+
   const [form, setForm] = useState({
     player_name: "",
     team: "",
