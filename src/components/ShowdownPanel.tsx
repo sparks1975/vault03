@@ -27,6 +27,8 @@ import {
 } from "@/lib/showdown-scoring";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AchievementBadge } from "@/components/AchievementBadge";
+
 
 export type ShowdownCard = {
   id: string;
