@@ -1849,6 +1849,7 @@ function AddCardDialog({
   onCreated: (cardId: string) => void;
 }) {
   const scanFn = useServerFn(scanCardPhoto);
+  const scanBackFn = useServerFn(scanCardBack);
   const searchPlayerFn = useServerFn(searchMlbPlayer);
   const estimateFn = useServerFn(estimateCardValue);
   const createFn = useServerFn(createCard);
