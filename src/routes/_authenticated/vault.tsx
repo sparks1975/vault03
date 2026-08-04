@@ -2204,6 +2204,51 @@ function AddCardDialog({
             {imageDataUrl && (
               <img src={imageDataUrl} alt="Uploaded card" className="w-32 aspect-[2/3] object-cover border border-border" />
             )}
+
+            {confidence && (
+              <div
+                className={`border p-3 space-y-2 ${
+                  confidence === "high"
+                    ? "border-border"
+                    : "border-accent bg-accent/5"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-[10px] font-mono uppercase tracking-widest">
+                    Identification confidence
+                  </p>
+                  <span
+                    className={`text-[10px] font-mono font-black uppercase tracking-widest px-2 py-0.5 border ${
+                      confidence === "high"
+                        ? "border-border text-muted-foreground"
+                        : "border-accent text-accent"
+                    }`}
+                  >
+                    {confidence}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {confidence === "high"
+                    ? "Matched to the catalog. Give the details a quick look before saving."
+                    : "Some details couldn't be read reliably. Scan the back of the card or correct the fields below — the card number, year and set drive comp accuracy."}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="cursor-pointer text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary inline-flex items-center gap-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      disabled={backScanning}
+                      onChange={(e) => e.target.files?.[0] && handlePhoto(e.target.files[0], "back")}
+                    />
+                    {backScanning ? <Loader2 className="size-3 animate-spin" /> : <Camera className="size-3" />}
+                    {backScanning ? "Reading back…" : "Scan back of card"}
+                  </label>
+                  {backNote && <span className="text-[10px] font-mono text-muted-foreground">{backNote}</span>}
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <Field label="Player name*" value={form.player_name} onChange={(v) => setForm({ ...form, player_name: v })} />
               <Field label="Team" value={form.team} onChange={(v) => setForm({ ...form, team: v })} />
