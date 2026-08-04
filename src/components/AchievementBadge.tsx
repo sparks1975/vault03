@@ -100,21 +100,6 @@ export function AchievementBadge({
       >
         <svg viewBox="0 0 120 132" className="h-full w-full overflow-visible">
           <defs>
-            <linearGradient id={`${uid}-rim`} x1="0" y1="0" x2="0.35" y2="1">
-              <stop offset="0%" stopColor={t.rimA} />
-              <stop offset="45%" stopColor={t.rimB} />
-              <stop offset="70%" stopColor={t.rimA} stopOpacity="0.9" />
-              <stop offset="100%" stopColor={t.rimB} />
-            </linearGradient>
-            <linearGradient id={`${uid}-face`} x1="0.2" y1="0" x2="0.8" y2="1">
-              <stop offset="0%" stopColor={t.faceA} />
-              <stop offset="100%" stopColor={t.faceB} />
-            </linearGradient>
-            <linearGradient id={`${uid}-gloss`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.28" />
-              <stop offset="55%" stopColor="#FFFFFF" stopOpacity="0.04" />
-              <stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
-            </linearGradient>
             <filter
               id={`${uid}-shadow`}
               x="-40%"
@@ -145,12 +130,12 @@ export function AchievementBadge({
             filter={`url(#${uid}-shadow)`}
           />
 
-          {/* metallic rim */}
+          {/* solid rim */}
           <g filter={`url(#${uid}-shadow)`}>
             <path
               d={d}
               fill="none"
-              stroke={`url(#${uid}-rim)`}
+              stroke={t.rimA}
               strokeWidth="8"
               strokeLinejoin="round"
             />
@@ -158,9 +143,13 @@ export function AchievementBadge({
 
           {/* recessed face */}
           <g transform="translate(60 66) scale(0.84) translate(-60 -66)">
-            <path d={d} fill={`url(#${uid}-face)`} />
-            <g clipPath={`url(#${uid}-clip)`}>
-              <path d={d} fill={`url(#${uid}-gloss)`} />
+            <path d={d} fill={t.faceA} />
+            <g clipPath={`url(#${uid}-clip`}>
+              <path
+                d={d}
+                fill="#FFFFFF"
+                fillOpacity="0.08"
+              />
             </g>
             <path
               d={d}
