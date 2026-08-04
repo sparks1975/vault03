@@ -27,6 +27,8 @@ import {
 } from "@/lib/showdown-scoring";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { AchievementBadge } from "@/components/AchievementBadge";
+
 
 export type ShowdownCard = {
   id: string;
@@ -455,22 +457,22 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
                 Finish top 10% in a weekly Showdown to earn your first badge.
               </p>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-4">
                 {(badgesQ.data ?? []).map((b) => {
                   const meta = badgeMeta(b.badge_type);
                   return (
-                    <span
+                    <AchievementBadge
                       key={b.id}
-                      className={`text-[10px] font-mono uppercase tracking-widest px-2 py-1 border ${meta.tone}`}
+                      type={b.badge_type}
+                      label={meta.label}
+                      sublabel={b.week_start ? formatWeekLabel(b.week_start) : undefined}
                       title={meta.blurb}
-                    >
-                      {meta.label}
-                      {b.week_start ? ` · ${formatWeekLabel(b.week_start)}` : ""}
-                    </span>
+                    />
                   );
                 })}
               </div>
             )}
+
           </div>
         </div>
       )}
