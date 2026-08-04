@@ -136,6 +136,8 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
 
 
   const [collapsed, setCollapsed] = useState(false);
+  const [openUser, setOpenUser] = useState<string | null>(null);
+
   const submitted = savedIds.length === LINEUP_SIZE;
   const dirty = draft !== null && JSON.stringify([...draft].sort()) !== JSON.stringify([...savedIds].sort());
 
