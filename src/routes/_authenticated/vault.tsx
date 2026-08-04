@@ -1940,7 +1940,15 @@ function AddCardDialog({
         cardsight_parallel_id: null,
       }));
       setConfidence(result.confidence ?? null);
-      toast.success(`Card identified (${result.confidence} confidence). Verify the details.`);
+      setScanSource(result.source ?? null);
+      setCandidates(result.disagreement ? result.candidates : []);
+      setChosenSource(null);
+      setBackNote(null);
+      if (result.disagreement) {
+        toast.warning("Two reads disagree on this card — pick the correct match.");
+      } else {
+        toast.success(`Card identified (${result.confidence} confidence). Verify the details.`);
+      }
       setStep("form");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Scan failed";
