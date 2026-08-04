@@ -1862,6 +1862,10 @@ function AddCardDialog({
   const [saving, setSaving] = useState(false);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
   const [cropSource, setCropSource] = useState<string | null>(null);
+  const [cropTarget, setCropTarget] = useState<"front" | "back">("front");
+  const [confidence, setConfidence] = useState<"high" | "medium" | "low" | null>(null);
+  const [backScanning, setBackScanning] = useState(false);
+  const [backNote, setBackNote] = useState<string | null>(null);
   const [form, setForm] = useState({
     player_name: "",
     team: "",
@@ -1884,7 +1888,7 @@ function AddCardDialog({
   });
   const [playerResults, setPlayerResults] = useState<Awaited<ReturnType<typeof searchMlbPlayer>>>([]);
 
-  async function handlePhoto(file: File) {
+  async function handlePhoto(file: File, target: "front" | "back" = "front") {
     try {
       let workingFile: Blob = file;
       const isHeic =
@@ -1900,6 +1904,7 @@ function AddCardDialog({
         }
       }
       const rawDataUrl = await fileToDataUrl(workingFile as File);
+      setCropTarget(target);
       setCropSource(rawDataUrl);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Couldn't read image");
@@ -1908,6 +1913,10 @@ function AddCardDialog({
 
   async function handleCropConfirm(displayDataUrl: string, identifyDataUrl: string) {
     setCropSource(null);
+    if (cropTarget === "back") {
+      await runBackScan(identifyDataUrl);
+      return;
+    }
     setImageDataUrl(displayDataUrl);
     setScanning(true);
     try {
@@ -1925,6 +1934,7 @@ function AddCardDialog({
         cardsight_card_id: result.cardsight_card_id ?? f.cardsight_card_id,
         cardsight_parallel_id: null,
       }));
+      setConfidence(result.confidence ?? null);
       toast.success(`Card identified (${result.confidence} confidence). Verify the details.`);
       setStep("form");
     } catch (e) {
@@ -1940,6 +1950,60 @@ function AddCardDialog({
       }
     } finally {
       setScanning(false);
+    }
+  }
+
+  // The back of the card carries the printed card number, year, set line and
+  // serial numbering — the fields the front scan most often gets wrong. Values
+  // read off the back win over the front read.
+  async function runBackScan(identifyDataUrl: string) {
+    setBackScanning(true);
+    try {
+      const back = await scanBackFn({ data: { imageDataUrl: identifyDataUrl } });
+      const filled: string[] = [];
+      setForm((f) => {
+        const next = { ...f };
+        if (back.card_number && back.card_number !== f.card_number) {
+          next.card_number = back.card_number;
+          filled.push("card #");
+        }
+        if (back.year && String(back.year) !== f.year) {
+          next.year = String(back.year);
+          filled.push("year");
+        }
+        if (back.set_name && back.set_name !== f.set_name) {
+          next.set_name = back.set_name;
+          filled.push("set");
+        }
+        if (back.serial_number) {
+          next.is_numbered = true;
+          next.serial_number = back.serial_number;
+          filled.push("serial");
+        }
+        if (back.is_rookie === true && !f.is_rookie) {
+          next.is_rookie = true;
+          filled.push("rookie");
+        }
+        // Identity fields changed — the catalog link no longer applies.
+        if (filled.some((x) => x === "card #" || x === "year" || x === "set")) {
+          next.cardsight_card_id = null;
+          next.cardsight_parallel_id = null;
+        }
+        return next;
+      });
+      if (back.card_number || back.year || back.set_name) {
+        setConfidence("high");
+      }
+      setBackNote(
+        filled.length > 0
+          ? `Back scan corrected: ${filled.join(", ")}.`
+          : "Back scan matched the front read — nothing to correct.",
+      );
+      toast.success("Back of card read.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Back scan failed");
+    } finally {
+      setBackScanning(false);
     }
   }
 
