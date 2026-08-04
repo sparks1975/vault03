@@ -125,7 +125,26 @@ async function scanViaAIVision(imageUrl: string, backImageUrl?: string | null): 
   if (parsed && typeof parsed.set_name === "string") {
     parsed.set_name = toApprovedCardSet(stripParallelFromSetName(parsed.set_name)) ?? null;
   }
+  if (parsed) {
+    parsed.set_name = refineSetFromCardNumber(parsed.set_name, parsed.card_number);
+  }
   return { ...parsed, cardsight_card_id: null };
+}
+
+// A card number prefix like "BSR-40" names the product ("Bowman Sterling")
+// while the front photo often only shows the bare brand logo ("Bowman"). When
+// the prefix resolves to a more specific set inside the same brand, prefer it.
+function refineSetFromCardNumber(
+  setName: string | null | undefined,
+  cardNumber: string | null | undefined,
+): string | null {
+  const current = setName ? String(setName) : null;
+  const inferred = setFromCardNumber(cardNumber);
+  if (!inferred) return current;
+  if (!current) return inferred;
+  const brand = (value: string) => value.toLowerCase().replace(/[^a-z ]/g, "").trim().split(" ")[0];
+  if (brand(current) !== brand(inferred)) return current;
+  return inferred.length > current.length ? inferred : current;
 }
 
 
