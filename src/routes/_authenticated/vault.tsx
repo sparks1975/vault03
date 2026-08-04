@@ -2464,7 +2464,8 @@ function AddCardDialog({
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={saving}
+                disabled={saving || (candidates.length > 0 && !chosenSource)}
+                title={candidates.length > 0 && !chosenSource ? "Pick the correct match first" : undefined}
                 className="px-5 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest hover:bg-accent disabled:opacity-50 inline-flex items-center gap-2"
               >
                 {saving && <Loader2 className="size-3.5 animate-spin" />} Save card
