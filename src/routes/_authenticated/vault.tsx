@@ -2278,6 +2278,10 @@ function AddCardDialog({
                   className="w-24 border border-border shrink-0"
                 />
               )}
+              {backPreviewUrl && (
+                <img src={backPreviewUrl} alt="Back of card" className="w-24 border border-border shrink-0" />
+              )}
+
               <div className="flex flex-wrap gap-2">
                 <label className="text-xs font-mono uppercase tracking-widest bg-foreground text-background px-4 py-2 hover:bg-accent cursor-pointer inline-flex items-center gap-2">
                   <Camera className="size-3" />
