@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { APPROVED_CARD_SETS, toApprovedCardSet } from "./card-sets";
+import { APPROVED_CARD_SETS, setFromCardNumber, toApprovedCardSet } from "./card-sets";
 
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3.5-flash";
