@@ -77,7 +77,13 @@ type ScanResult = {
   confidence: "high" | "medium" | "low";
   cardsight_card_id: string | null;
   cardsight_parallel_id?: string | null;
+  // Read off the card itself (front foil/border text or the back's printed
+  // numbering). These are what keep two identical-looking parallels apart.
+  parallel_hint?: string | null;
+  serial_number?: string | null;
+  is_rookie?: boolean | null;
 };
+
 
 function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; contentType: string } {
   const m = dataUrl.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
@@ -89,26 +95,30 @@ function dataUrlToBytes(dataUrl: string): { bytes: Uint8Array; contentType: stri
   return { bytes, contentType };
 }
 
-async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
+// Front (and, when supplied, back) vision read. Passing both faces in the same
+// request is what makes two near-identical cards read consistently: the printed
+// card number / set line / serial on the back disambiguates parallels that look
+// almost identical from the front. temperature 0 keeps repeat scans stable.
+async function scanViaAIVision(imageUrl: string, backImageUrl?: string | null): Promise<ScanResult> {
+  const content: unknown[] = [
+    {
+      type: "text",
+      text:
+        `Identify this baseball card. ${backImageUrl ? "The FIRST image is the front of the card, the SECOND image is the back. The back carries the printed card number, copyright year, set/brand line and serial numbering — trust the back's printed text over anything inferred from the front." : ""} Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "parallel_hint": string|null, "serial_number": string|null, "is_rookie": boolean|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null. parallel_hint is the parallel/refractor/color variation printed or clearly visible on the card (e.g. "Gold Refractor", "Blue /150") or null for a base card — read it from the card's own foil/border/text, never guess. serial_number is numbering like "12/50" if printed, else null. IMPORTANT: set_name must be one of this exact approved list or null: ${APPROVED_CARD_SETS.join(", ")}. Do NOT include parallel, refractor, insert, color, numbering, year, or autograph descriptors in set_name. Never invent or guess a set name.`,
+    },
+    { type: "image_url", image_url: { url: imageUrl } },
+  ];
+  if (backImageUrl) content.push({ type: "image_url", image_url: { url: backImageUrl } });
   const text = await callAI({
     model: MODEL,
+    temperature: 0,
     messages: [
       {
         role: "system",
         content:
-          "You are a sports card identification expert (baseball, football, basketball, hockey, soccer). Extract details from card photos. Reply ONLY with a JSON object matching the requested schema — no prose.",
+          "You are a baseball card identification expert. Extract details from card photos and transcribe printed text exactly. Reply ONLY with a JSON object matching the requested schema — no prose.",
       },
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text:
-              `Identify this sports card. Return JSON: {"player_name": string, "team": string|null, "position": string|null, "year": number|null, "set_name": string|null, "card_number": string|null, "grade": string|null, "grader": string|null, "confidence": "high"|"medium"|"low"}. Leave any field null if unreadable. grader is PSA/BGS/SGC/CGC or null. IMPORTANT: set_name must be one of this exact approved list or null: ${APPROVED_CARD_SETS.join(", ")}. Do NOT include parallel, refractor, insert, color, numbering, year, or autograph descriptors in set_name. Never invent or guess a set name.`,
-          },
-          { type: "image_url", image_url: { url: imageUrl } },
-        ],
-      },
+      { role: "user", content },
     ],
   });
   const parsed = extractJson<Omit<ScanResult, "cardsight_card_id">>(text);
@@ -117,6 +127,7 @@ async function scanViaAIVision(imageUrl: string): Promise<ScanResult> {
   }
   return { ...parsed, cardsight_card_id: null };
 }
+
 
 // Remove parallel/refractor/insert descriptors an AI model may append to a set
 // name. Set names should only reflect the actual product; parallels live on a
@@ -155,9 +166,10 @@ function namesLikelyMatch(a: string | null | undefined, b: string | null | undef
 // parallels work off the AI's read too. Used both as the fallback when
 // Cardsight identify fails outright, and to corroborate a low/medium
 // confidence Cardsight identify.
-async function scanViaAIVisionLinked(imageDataUrl: string): Promise<ScanResult> {
-  const result = await scanViaAIVision(imageDataUrl);
+async function scanViaAIVisionLinked(imageDataUrl: string, backImageDataUrl?: string | null): Promise<ScanResult> {
+  const result = await scanViaAIVision(imageDataUrl, backImageDataUrl);
   const enriched = await enrichWithMlb(result);
+
   try {
     const { getCatalogValuationLookup, searchCatalogCardByFields } = await import("./cardsight.server");
     const desc = [enriched.year, enriched.set_name, enriched.player_name, enriched.card_number ? `#${enriched.card_number}` : null]
@@ -247,6 +259,8 @@ type ScanResponse = ScanResult & {
   source: "catalog" | "ai";
   disagreement: boolean;
   candidates: ScanCandidate[];
+  back_read: boolean;
+  back_corrections: string[];
 };
 
 function asCandidate(r: ScanResult, source: "catalog" | "ai"): ScanCandidate {
@@ -257,15 +271,98 @@ function asCandidate(r: ScanResult, source: "catalog" | "ai"): ScanCandidate {
   };
 }
 
+// The back's printed text is the most reliable source for card #, year, set and
+// serial numbering, so it overrides whatever the front produced. When an
+// identity field changes, the catalog link established from the front no longer
+// applies and is re-resolved against the corrected fields.
+async function applyBackRead(
+  result: ScanResult,
+  back: BackScanResult | null,
+): Promise<{ result: ScanResult; corrections: string[] }> {
+  if (!back) return { result, corrections: [] };
+  const next: ScanResult = { ...result };
+  const corrections: string[] = [];
+  let identityChanged = false;
+  if (back.card_number && back.card_number !== next.card_number) {
+    next.card_number = back.card_number;
+    corrections.push("card #");
+    identityChanged = true;
+  }
+  if (back.year && back.year !== next.year) {
+    next.year = back.year;
+    corrections.push("year");
+    identityChanged = true;
+  }
+  if (back.set_name && back.set_name !== next.set_name) {
+    next.set_name = back.set_name;
+    corrections.push("set");
+    identityChanged = true;
+  }
+  if (back.serial_number && back.serial_number !== next.serial_number) {
+    next.serial_number = back.serial_number;
+    corrections.push("serial");
+  }
+  if (back.is_rookie === true && next.is_rookie !== true) {
+    next.is_rookie = true;
+    corrections.push("rookie");
+  }
+  if (identityChanged) {
+    next.cardsight_card_id = null;
+    next.cardsight_parallel_id = null;
+    try {
+      const { searchCatalogCardByFields, getCatalogValuationLookup } = await import("./cardsight.server");
+      const descriptor = [next.year, next.set_name, next.player_name, next.card_number ? `#${next.card_number}` : null]
+        .filter(Boolean)
+        .join(" ");
+      if (descriptor) {
+        const id = await searchCatalogCardByFields({
+          player_name: next.player_name,
+          year: next.year,
+          set_name: next.set_name,
+          card_number: next.card_number,
+          descriptor,
+        });
+        if (id) {
+          next.cardsight_card_id = id;
+          const canonical = await getCatalogValuationLookup(id);
+          if (canonical?.set_name) next.set_name = String(canonical.set_name);
+          if (canonical?.card_number) next.card_number = String(canonical.card_number);
+        }
+      }
+    } catch (err) {
+      console.error("Catalog re-link after back scan failed:", err);
+    }
+  }
+  // Reading the back confirms the printed identity fields, so a corroborated
+  // read is no longer "uncertain".
+  if (back.card_number && back.confidence !== "low") next.confidence = "high";
+  return { result: next, corrections };
+}
+
 // ---------- Photo scan: Cardsight REST identify, AI fallback ----------
 export const scanCardPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { imageDataUrl: string }) =>
-    z.object({ imageDataUrl: z.string().startsWith("data:image/") }).parse(d),
+  .inputValidator((d: { imageDataUrl: string; backImageDataUrl?: string | null }) =>
+    z
+      .object({
+        imageDataUrl: z.string().startsWith("data:image/"),
+        backImageDataUrl: z.string().startsWith("data:image/").nullable().optional(),
+      })
+      .parse(d),
   )
   .handler(async ({ data }): Promise<ScanResponse> => {
     await assertBaseballCard(data.imageDataUrl);
     const { bytes, contentType } = dataUrlToBytes(data.imageDataUrl);
+    const backUrl = data.backImageDataUrl ?? null;
+
+    // The back read runs as part of the normal scan (not a secondary step) and
+    // in parallel with the structured identify, so it costs no extra wall time.
+    const backPromise: Promise<BackScanResult | null> = backUrl
+      ? readCardBackDetails(backUrl).catch((err) => {
+          console.error("Back-of-card read failed:", err);
+          return null;
+        })
+      : Promise.resolve(null);
 
     // 1) Cardsight structured identify (returns canonical card_id + slab data).
     // Send the crop dialog's high-resolution encode as-is: small print (card
@@ -289,37 +386,63 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
       console.error("Cardsight identify failed:", err);
     }
 
+    const back = await backPromise;
+
+    const finish = async (
+      r: ScanResult,
+      source: "catalog" | "ai",
+      extra?: { disagreement?: boolean; candidates?: ScanCandidate[] },
+    ): Promise<ScanResponse> => {
+      const { result, corrections } = await applyBackRead(r, back);
+      return {
+        ...result,
+        source,
+        disagreement: extra?.disagreement ?? false,
+        candidates: extra?.candidates ?? [],
+        back_read: back != null,
+        back_corrections: corrections,
+      };
+    };
+
     if (ident?.player_name) {
       // A high-confidence structured match is trusted directly — the common,
-      // cheap, fast path.
-      if (ident.confidence === "high") {
-        const enriched = await enrichWithMlb(ident);
-        return { ...enriched, source: "catalog", disagreement: false, candidates: [] };
+      // cheap, fast path. Without a back photo there's nothing to corroborate
+      // it with; with one, the printed back still gets the final word.
+      if (ident.confidence === "high" && !back) {
+        return finish(await enrichWithMlb(ident), "catalog");
       }
-      // Medium/low confidence: a wrong guess here reads as "identification
-      // returned the wrong player/team/number" with nothing to catch it, so
-      // corroborate with an independent AI vision read before trusting it.
-      const aiChecked = await scanViaAIVisionLinked(data.imageDataUrl);
-      if (namesLikelyMatch(ident.player_name, aiChecked.player_name)) {
+      // Medium/low confidence (or a back photo available): a wrong guess here
+      // reads as "identification returned the wrong player/number" with nothing
+      // to catch it, so corroborate with an independent vision read of both faces.
+      const aiChecked = await scanViaAIVisionLinked(data.imageDataUrl, backUrl);
+      if (ident.confidence === "high" || namesLikelyMatch(ident.player_name, aiChecked.player_name)) {
         const enriched = await enrichWithMlb(ident);
-        return { ...enriched, source: "catalog", disagreement: false, candidates: [] };
+        // Keep the details only visible on the card itself (parallel wording,
+        // serial numbering, rookie mark) from the vision read.
+        return finish(
+          {
+            ...enriched,
+            parallel_hint: enriched.parallel_hint ?? aiChecked.parallel_hint ?? null,
+            serial_number: enriched.serial_number ?? aiChecked.serial_number ?? null,
+            is_rookie: enriched.is_rookie ?? aiChecked.is_rookie ?? null,
+          },
+          "catalog",
+        );
       }
       // The two independent reads disagree on the player — neither is
       // trustworthy alone. Surface both so the user resolves it explicitly.
       const catalogEnriched = await enrichWithMlb(ident);
-      return {
-        ...aiChecked,
-        confidence: "low",
-        source: "ai",
+      return finish({ ...aiChecked, confidence: "low" }, "ai", {
         disagreement: true,
         candidates: [asCandidate(aiChecked, "ai"), asCandidate(catalogEnriched, "catalog")],
-      };
+      });
     }
 
     // 2) Fallback: direct AI vision (Cardsight identify failed outright).
-    const fallback = await scanViaAIVisionLinked(data.imageDataUrl);
-    return { ...fallback, source: "ai", disagreement: false, candidates: [] };
+    const fallback = await scanViaAIVisionLinked(data.imageDataUrl, backUrl);
+    return finish(fallback, "ai");
   });
+
 
 // ---------- Back-of-card scan ----------
 // The back of a baseball card carries the printed card number, copyright year,
@@ -341,7 +464,12 @@ export const scanCardBack = createServerFn({ method: "POST" })
   .inputValidator((d: { imageDataUrl: string }) =>
     z.object({ imageDataUrl: z.string().startsWith("data:image/") }).parse(d),
   )
-  .handler(async ({ data }): Promise<BackScanResult> => {
+  .handler(async ({ data }): Promise<BackScanResult> => readCardBackDetails(data.imageDataUrl));
+
+async function readCardBackDetails(imageDataUrl: string): Promise<BackScanResult> {
+  {
+    const data = { imageDataUrl };
+
     const text = await callAI({
       model: MODEL,
       messages: [
@@ -386,7 +514,9 @@ export const scanCardBack = createServerFn({ method: "POST" })
       is_rookie: typeof parsed.is_rookie === "boolean" ? parsed.is_rookie : null,
       confidence: parsed.confidence === "high" || parsed.confidence === "medium" ? parsed.confidence : "low",
     };
-  });
+  }
+}
+
 
 // If team/position are missing, look them up from the free MLB Stats API.
 async function enrichWithMlb(result: ScanResult): Promise<ScanResult> {

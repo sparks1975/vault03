@@ -1858,10 +1858,12 @@ function AddCardDialog({
   const updateFn = useServerFn(updateCardFields);
   const qc = useQueryClient();
 
-  const [step, setStep] = useState<"choose" | "form">("choose");
+  const [step, setStep] = useState<"choose" | "back" | "form">("choose");
   const [scanning, setScanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [imageDataUrl, setImageDataUrl] = useState<string | null>(null);
+  const [frontIdentifyUrl, setFrontIdentifyUrl] = useState<string | null>(null);
+  const [backPreviewUrl, setBackPreviewUrl] = useState<string | null>(null);
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<"front" | "back">("front");
   const [confidence, setConfidence] = useState<"high" | "medium" | "low" | null>(null);
@@ -1871,6 +1873,7 @@ function AddCardDialog({
   const [chosenSource, setChosenSource] = useState<"catalog" | "ai" | null>(null);
   const [backScanning, setBackScanning] = useState(false);
   const [backNote, setBackNote] = useState<string | null>(null);
+
   const [form, setForm] = useState({
     player_name: "",
     team: "",
@@ -1919,13 +1922,27 @@ function AddCardDialog({
   async function handleCropConfirm(displayDataUrl: string, identifyDataUrl: string) {
     setCropSource(null);
     if (cropTarget === "back") {
-      await runBackScan(identifyDataUrl);
+      // Back photo captured as part of the normal flow: identify front + back
+      // together. From the form (a re-scan of the back) just merge corrections.
+      if (step === "back") {
+        setBackPreviewUrl(displayDataUrl);
+        await runScan(frontIdentifyUrl!, identifyDataUrl);
+      } else {
+        await runBackScan(identifyDataUrl);
+      }
       return;
     }
+    // Front captured — ask for the back before spending the identify call.
     setImageDataUrl(displayDataUrl);
+    setFrontIdentifyUrl(identifyDataUrl);
+    setBackPreviewUrl(null);
+    setStep("back");
+  }
+
+  async function runScan(frontUrl: string, backUrl: string | null) {
     setScanning(true);
     try {
-      const result = await scanFn({ data: { imageDataUrl: identifyDataUrl } });
+      const result = await scanFn({ data: { imageDataUrl: frontUrl, backImageDataUrl: backUrl } });
       setForm((f) => ({
         ...f,
         player_name: result.player_name ?? f.player_name,
@@ -1936,6 +1953,9 @@ function AddCardDialog({
         card_number: result.card_number ?? f.card_number,
         grade: result.grade ?? f.grade,
         grader: result.grader ?? f.grader,
+        serial_number: result.serial_number ?? f.serial_number,
+        is_numbered: result.serial_number ? true : f.is_numbered,
+        is_rookie: result.is_rookie === true ? true : f.is_rookie,
         cardsight_card_id: result.cardsight_card_id ?? f.cardsight_card_id,
         cardsight_parallel_id: null,
       }));
@@ -1943,11 +1963,20 @@ function AddCardDialog({
       setScanSource(result.source ?? null);
       setCandidates(result.disagreement ? result.candidates : []);
       setChosenSource(null);
-      setBackNote(null);
+      setBackNote(
+        !result.back_read
+          ? null
+          : result.back_corrections.length > 0
+            ? `Back scan corrected: ${result.back_corrections.join(", ")}.`
+            : "Back scan matched the front read — nothing to correct.",
+      );
       if (result.disagreement) {
         toast.warning("Two reads disagree on this card — pick the correct match.");
       } else {
         toast.success(`Card identified (${result.confidence} confidence). Verify the details.`);
+      }
+      if (result.parallel_hint) {
+        toast.info(`Parallel read off the card: ${result.parallel_hint}`);
       }
       setStep("form");
     } catch (e) {
@@ -1955,6 +1984,7 @@ function AddCardDialog({
       // Baseball-only rejection: discard the photo so the user re-uploads.
       if (/only accepts baseball cards/i.test(msg)) {
         setImageDataUrl(null);
+        setFrontIdentifyUrl(null);
         toast.error(msg);
         setStep("choose");
       } else {
@@ -1965,6 +1995,7 @@ function AddCardDialog({
       setScanning(false);
     }
   }
+
 
   // The back of the card carries the printed card number, year, set line and
   // serial numbering — the fields the front scan most often gets wrong. Values
@@ -2228,6 +2259,52 @@ function AddCardDialog({
             </button>
           </div>
         )}
+
+        {step === "back" && !scanning && (
+          <div className="border border-border">
+            <div className="p-6 border-b border-border">
+              <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Step 2 of 2</p>
+              <h3 className="font-extrabold text-lg tracking-tight mb-1">Photo of the back</h3>
+              <p className="text-xs text-muted-foreground">
+                The back carries the printed card number, year, set line and serial numbering — it's what keeps two
+                near-identical parallels apart. Reading both faces together makes identification far more consistent.
+              </p>
+            </div>
+            <div className="p-6 flex flex-col sm:flex-row gap-4 items-start">
+              {imageDataUrl && (
+                <img
+                  src={imageDataUrl}
+                  alt="Front of card"
+                  className="w-24 border border-border shrink-0"
+                />
+              )}
+              {backPreviewUrl && (
+                <img src={backPreviewUrl} alt="Back of card" className="w-24 border border-border shrink-0" />
+              )}
+
+              <div className="flex flex-wrap gap-2">
+                <label className="text-xs font-mono uppercase tracking-widest bg-foreground text-background px-4 py-2 hover:bg-accent cursor-pointer inline-flex items-center gap-2">
+                  <Camera className="size-3" />
+                  Add back photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => e.target.files?.[0] && handlePhoto(e.target.files[0], "back")}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => frontIdentifyUrl && runScan(frontIdentifyUrl, null)}
+                  className="text-xs font-mono uppercase tracking-widest border border-border px-4 py-2 hover:bg-secondary"
+                >
+                  Skip — front only
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
 
         {scanning && (
           <div className="mt-6 p-4 border border-border text-sm inline-flex items-center gap-2">
