@@ -61,6 +61,12 @@
   --positive: hsl(158 64% 40%);
   --negative: hsl(346 77% 50%);
   --first-bowman: hsl(210 75% 45%);
+  --badge-face: hsl(220 20% 9%);
+  --badge-icon: hsl(0 0% 98%);
+  --badge-champion: hsl(42 92% 48%);
+  --badge-podium: hsl(216 13% 52%);
+  --badge-top-ten: hsl(25 88% 52%);
+  --badge-first-entry: hsl(25 88% 52%);
 }
 
 
@@ -87,6 +93,12 @@
   --positive: hsl(158 64% 52%);
   --negative: hsl(346 77% 60%);
   --first-bowman: hsl(210 75% 60%);
+  --badge-face: hsl(220 20% 7%);
+  --badge-icon: hsl(0 0% 98%);
+  --badge-champion: hsl(42 92% 55%);
+  --badge-podium: hsl(216 14% 65%);
+  --badge-top-ten: hsl(25 90% 58%);
+  --badge-first-entry: hsl(25 90% 58%);
 }
 
 
