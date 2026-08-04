@@ -1922,13 +1922,27 @@ function AddCardDialog({
   async function handleCropConfirm(displayDataUrl: string, identifyDataUrl: string) {
     setCropSource(null);
     if (cropTarget === "back") {
-      await runBackScan(identifyDataUrl);
+      // Back photo captured as part of the normal flow: identify front + back
+      // together. From the form (a re-scan of the back) just merge corrections.
+      if (step === "back") {
+        setBackPreviewUrl(displayDataUrl);
+        await runScan(frontIdentifyUrl!, identifyDataUrl);
+      } else {
+        await runBackScan(identifyDataUrl);
+      }
       return;
     }
+    // Front captured — ask for the back before spending the identify call.
     setImageDataUrl(displayDataUrl);
+    setFrontIdentifyUrl(identifyDataUrl);
+    setBackPreviewUrl(null);
+    setStep("back");
+  }
+
+  async function runScan(frontUrl: string, backUrl: string | null) {
     setScanning(true);
     try {
-      const result = await scanFn({ data: { imageDataUrl: identifyDataUrl } });
+      const result = await scanFn({ data: { imageDataUrl: frontUrl, backImageDataUrl: backUrl } });
       setForm((f) => ({
         ...f,
         player_name: result.player_name ?? f.player_name,
@@ -1939,6 +1953,9 @@ function AddCardDialog({
         card_number: result.card_number ?? f.card_number,
         grade: result.grade ?? f.grade,
         grader: result.grader ?? f.grader,
+        serial_number: result.serial_number ?? f.serial_number,
+        is_numbered: result.serial_number ? true : f.is_numbered,
+        is_rookie: result.is_rookie === true ? true : f.is_rookie,
         cardsight_card_id: result.cardsight_card_id ?? f.cardsight_card_id,
         cardsight_parallel_id: null,
       }));
@@ -1946,11 +1963,20 @@ function AddCardDialog({
       setScanSource(result.source ?? null);
       setCandidates(result.disagreement ? result.candidates : []);
       setChosenSource(null);
-      setBackNote(null);
+      setBackNote(
+        !result.back_read
+          ? null
+          : result.back_corrections.length > 0
+            ? `Back scan corrected: ${result.back_corrections.join(", ")}.`
+            : "Back scan matched the front read — nothing to correct.",
+      );
       if (result.disagreement) {
         toast.warning("Two reads disagree on this card — pick the correct match.");
       } else {
         toast.success(`Card identified (${result.confidence} confidence). Verify the details.`);
+      }
+      if (result.parallel_hint) {
+        toast.info(`Parallel read off the card: ${result.parallel_hint}`);
       }
       setStep("form");
     } catch (e) {
@@ -1958,6 +1984,7 @@ function AddCardDialog({
       // Baseball-only rejection: discard the photo so the user re-uploads.
       if (/only accepts baseball cards/i.test(msg)) {
         setImageDataUrl(null);
+        setFrontIdentifyUrl(null);
         toast.error(msg);
         setStep("choose");
       } else {
@@ -1968,6 +1995,7 @@ function AddCardDialog({
       setScanning(false);
     }
   }
+
 
   // The back of the card carries the printed card number, year, set line and
   // serial numbering — the fields the front scan most often gets wrong. Values
