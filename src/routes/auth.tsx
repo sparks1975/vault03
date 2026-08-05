@@ -57,9 +57,17 @@ function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
+function AppleIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true" fill="currentColor">
+      <path d="M16.36 12.78c.02 2.66 2.33 3.54 2.36 3.55-.02.06-.37 1.28-1.23 2.53-.74 1.08-1.51 2.16-2.72 2.18-1.19.02-1.57-.71-2.93-.71-1.36 0-1.78.69-2.9.73-1.17.04-2.06-1.15-2.81-2.23-1.63-2.36-2.87-6.68-1.2-9.59.83-1.45 2.31-2.37 3.92-2.39 1.15-.02 2.23.77 2.93.77.7 0 2.02-.95 3.4-.81.58.02 2.2.21 3.24 1.59-.08.05-1.94 1.13-1.92 3.38M14.13 3.9c.62-.75 1.04-1.79.93-2.83-.9.04-1.99.6-2.63 1.35-.58.66-1.08 1.72-.94 2.74 1 .08 2.02-.51 2.64-1.26" />
+    </svg>
+  );
+}
+
 function AuthPage() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<"google" | "apple" | null>(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -83,8 +91,8 @@ function AuthPage() {
     };
   }, [navigate]);
 
-  async function handleGoogle() {
-    setLoading(true);
+  async function handleOAuth(provider: "google" | "apple") {
+    setLoading(provider);
 
     // Poll for a session in parallel — if the popup postMessage handshake
     // fails (mobile, popup blockers, cross-origin quirks) but tokens were
@@ -105,13 +113,13 @@ function AuthPage() {
     void poll();
 
     try {
-      const result = await lovable.auth.signInWithOAuth("google", {
+      const result = await lovable.auth.signInWithOAuth(provider, {
         redirect_uri: window.location.origin + "/auth",
       });
       if (result.error) {
         cancelled = true;
         toast.error(result.error.message ?? "Sign-in failed");
-        setLoading(false);
+        setLoading(null);
         return;
       }
       if (result.redirected) return;
@@ -126,13 +134,13 @@ function AuthPage() {
       setTimeout(() => {
         if (!cancelled) {
           cancelled = true;
-          setLoading(false);
+          setLoading(null);
         }
       }, 10_000);
     } catch (err) {
       cancelled = true;
       toast.error(err instanceof Error ? err.message : "Sign-in failed");
-      setLoading(false);
+      setLoading(null);
     }
   }
 
@@ -173,14 +181,26 @@ function AuthPage() {
             })}
           </ul>
 
-          <div className="mt-8">
+          <div className="mt-8 space-y-3">
             <Button
-              variant="outline"
-              onClick={handleGoogle}
-              disabled={loading}
+              onClick={() => handleOAuth("apple")}
+              disabled={loading !== null}
               className="w-full gap-3 py-5 text-sm font-semibold"
             >
-              {loading ? (
+              {loading === "apple" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <AppleIcon className="size-4" />
+              )}
+              Continue with Apple
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleOAuth("google")}
+              disabled={loading !== null}
+              className="w-full gap-3 py-5 text-sm font-semibold"
+            >
+              {loading === "google" ? (
                 <Loader2 className="size-4 animate-spin" />
               ) : (
                 <GoogleIcon className="size-4" />
