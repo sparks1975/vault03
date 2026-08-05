@@ -169,7 +169,7 @@ function SharedCollection() {
                     )}
                     {c.serial_number && (
                       <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 border border-border">
-                        /{c.serial_number}
+                        {c.serial_number}
                       </span>
                     )}
                   </div>

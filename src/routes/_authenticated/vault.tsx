@@ -702,7 +702,7 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
               )}
               {card.serial_number && (
                 <span className="px-1.5 py-0.5 border border-accent text-accent text-[10px] font-mono font-bold uppercase">
-                  #d /{card.serial_number}
+                  {card.serial_number}
                 </span>
               )}
               {card.is_autograph && (
@@ -1160,7 +1160,7 @@ function CardDetail({
           <div className="flex flex-wrap gap-1.5 mt-2">
             {card.serial_number && (
               <span className="px-1.5 py-0.5 border border-accent text-accent text-[10px] font-mono font-bold uppercase">
-                #d /{card.serial_number}
+                {card.serial_number}
               </span>
             )}
             {card.is_autograph && (
