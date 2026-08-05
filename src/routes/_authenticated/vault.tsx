@@ -516,7 +516,7 @@ function VaultPage() {
         <header className="mb-6">
           <div className="flex items-center gap-3">
             <Vault className="w-7 h-7 md:w-8 md:h-8 text-accent shrink-0" />
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">My Vault</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight font-mono">My Vault</h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             Every card you own, valued from real completed sales and sorted however you like.
