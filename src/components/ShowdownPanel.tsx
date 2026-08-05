@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
-import { Loader2, Trophy, Lock, ChevronDown, HelpCircle } from "lucide-react";
+import { Loader2, Lock, ChevronDown, HelpCircle } from "lucide-react";
 
 import {
   Collapsible,
@@ -138,7 +138,6 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
 
 
 
-  const [collapsed, setCollapsed] = useState(false);
   const [openUser, setOpenUser] = useState<string | null>(null);
 
   const submitted = savedIds.length === LINEUP_SIZE;
@@ -153,45 +152,30 @@ export function ShowdownPanel({ cards }: { cards: ShowdownCard[] }) {
 
   return (
     <section className="border border-border">
-      <header className="border-b border-border">
-        <button
-          type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          aria-expanded={!collapsed}
-          className="w-full flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-left hover:bg-muted/40 transition-colors"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <Trophy className="w-4 h-4 text-accent shrink-0" />
-            <h3 className="text-sm font-mono uppercase tracking-widest truncate">Weekly Showdown</h3>
+      <header className="border-b border-border px-4 py-3">
+        {contestQ.isLoading ? (
+          <Skeleton className="h-4 w-56" />
+        ) : contest ? (
+          <div className="flex flex-wrap items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+            <span>Week of {formatWeekLabel(contest.week_start)}</span>
+            <span className="text-border">/</span>
+            <span className={isFinal ? "text-muted-foreground" : "text-accent"}>
+              {isFinal ? "Final" : "Live"}
+            </span>
+            <span className="text-border">/</span>
+            <span>{contestQ.data?.entry_count ?? 0} entries</span>
           </div>
-          <div className="flex items-center gap-2">
-            {contestQ.isLoading ? (
-              <Skeleton className="h-4 w-40" />
-            ) : contest ? (
-              <div className="flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-                <span>Week of {formatWeekLabel(contest.week_start)}</span>
-                <span className="text-border">/</span>
-                <span className={isFinal ? "text-muted-foreground" : "text-accent"}>
-                  {isFinal ? "Final" : "Live"}
-                </span>
-                <span className="text-border">/</span>
-                <span>{contestQ.data?.entry_count ?? 0} entries</span>
-              </div>
-            ) : null}
-            <ChevronDown
-              className={`w-4 h-4 text-muted-foreground transition-transform ${collapsed ? "" : "rotate-180"}`}
-            />
-          </div>
-        </button>
+        ) : null}
       </header>
 
-      {collapsed ? null : contestQ.isLoading ? (
+      {contestQ.isLoading ? (
         <div className="p-4 space-y-2">
           {Array.from({ length: 3 }).map((_, i) => (
             <Skeleton key={i} className="h-12 w-full" />
           ))}
         </div>
       ) : (
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-px bg-border">
           <div className="col-span-1 lg:col-span-2 bg-background border-b border-border px-4 py-3">
             <Collapsible>
