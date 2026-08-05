@@ -513,12 +513,21 @@ function VaultPage() {
         <div className="sticky top-16 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-2 mb-4 bg-background/90 backdrop-blur-md lg:hidden">
           <MobileNavTabs />
         </div>
-
+        <header className="mb-6">
+          <div className="flex items-center gap-3">
+            <Vault className="w-7 h-7 md:w-8 md:h-8 text-accent shrink-0" />
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">My Vault</h1>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            Every card you own, valued from real completed sales and sorted however you like.
+          </p>
+        </header>
 
         <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
           <section className={`lg:col-span-7 animate-in-up [animation-delay:100ms] ${mobileDetail ? "hidden lg:block" : ""}`}>
             <div className="flex flex-wrap items-center justify-between mb-6 gap-3">
-              <h3 className="text-sm font-mono uppercase tracking-widest">My Vault</h3>
+              <h3 className="text-sm font-mono uppercase tracking-widest">Holdings</h3>
+
               <div className="flex items-center gap-3">
                 <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
                   <SelectTrigger className="text-xs font-mono uppercase tracking-widest border-border bg-background rounded-sm focus:ring-accent focus:ring-1 px-3 py-1 w-32 sm:w-36 shadow-none">
