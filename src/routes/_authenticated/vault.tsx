@@ -578,7 +578,7 @@ function VaultPage() {
           </section>
 
           <aside className={`lg:col-span-5 animate-in-up [animation-delay:200ms] ${mobileDetail ? "" : "hidden lg:block"}`}>
-            <div className="lg:sticky lg:top-28">
+            <div className="lg:sticky lg:top-28 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
               {selectedCard ? (
                 <CardDetail card={selectedCard} onDeleted={(id) => { removeCard(id); setMobileDetail(false); }} onUpdate={updateCard} />
               ) : (
