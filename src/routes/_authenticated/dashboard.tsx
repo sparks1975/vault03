@@ -143,8 +143,8 @@ function DashboardPage() {
               <SmallStat label="1st Bowman" value={String(cards.filter((c) => c.is_first_bowman).length)} />
             </div>
 
-            <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-8">
-              <section className="lg:col-span-7 animate-in-up">
+            <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
+              <section className="lg:col-span-7 animate-in-up flex flex-col">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-sm font-mono uppercase tracking-widest">Top 5 by value</h2>
                   <Link to="/vault" className="text-[10px] font-mono uppercase tracking-widest text-accent hover:underline">
