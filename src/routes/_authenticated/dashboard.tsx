@@ -207,7 +207,7 @@ function DashboardPage() {
                   </p>
                   <Link
                     to="/showdown"
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-accent transition-colors mt-auto"
+                    className="self-start inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-accent transition-colors mt-auto"
                   >
                     Play Weekly Showdown
                   </Link>
