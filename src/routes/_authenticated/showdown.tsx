@@ -37,11 +37,15 @@ function ShowdownPage() {
         </div>
 
         <header className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Weekly Showdown</h1>
+          <div className="flex items-center gap-3">
+            <Trophy className="w-7 h-7 md:w-8 md:h-8 text-accent shrink-0" />
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">Weekly Showdown</h1>
+          </div>
           <p className="text-sm text-muted-foreground mt-1">
             Enter five cards from your vault. Real MLB stats plus your card multipliers decide the winner.
           </p>
         </header>
+
 
         {cardsQ.isLoading ? (
           <div className="space-y-2">
