@@ -123,13 +123,3 @@
 
 }
 
-/* Keep this outside @layer so Tailwind text-size utilities cannot override it. */
-@media (max-width: 768px) {
-  input,
-  select,
-  textarea,
-  button,
-  [contenteditable="true"] {
-    font-size: 16px !important;
-  }
-}
