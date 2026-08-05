@@ -433,6 +433,17 @@ function titleHasPhrase(titleNorm: string, phrase: string): boolean {
 }
 
 const SET_TITLE_ALIASES: Record<string, string[]> = {
+  "Upper Deck": ["upper deck", "ud"],
+  "Upper Deck Collector's Choice": ["upper deck collectors choice", "collectors choice"],
+  "Upper Deck SP Authentic": ["sp authentic", "upper deck sp authentic"],
+  "Upper Deck SPx": ["spx", "upper deck spx"],
+  "Upper Deck Sweet Spot": ["sweet spot"],
+  "Upper Deck Ultimate Collection": ["ultimate collection"],
+  "Upper Deck Exquisite Collection": ["exquisite collection", "upper deck exquisite"],
+  "Upper Deck Black Diamond": ["black diamond", "upper deck black diamond"],
+  "Upper Deck Artifacts": ["artifacts", "upper deck artifacts"],
+  "Upper Deck Goudey": ["goudey", "upper deck goudey"],
+  "Upper Deck Masterpieces": ["masterpieces", "upper deck masterpieces"],
   "Topps Black and White": ["topps black and white", "topps black white", "topps b w", "topps bw"],
   "Topps Complete/Factory Sets": ["topps complete", "topps factory"],
   "Topps Allen & Ginter": ["topps allen ginter", "allen ginter", "allen and ginter"],
@@ -496,7 +507,7 @@ function strictSetTitleMatches(title: string, setName: string | null | undefined
   const setNorm = normalizeText(approved);
   if (titleHasPhrase(titleNorm, setNorm)) return true;
 
-  const brandTokens = ["topps", "bowman", "panini", "donruss", "bbm", "epoch", "calbee", "prizm", "select", "fleer", "ultra"];
+  const brandTokens = ["topps", "bowman", "panini", "donruss", "bbm", "epoch", "calbee", "prizm", "select", "fleer", "ultra", "upper", "deck"];
   const common = new Set(["base", "card", "cards", "set", "sets", "series", "and", "the", "collection", "edition"]);
   const setTokens = setNorm.split(" ").filter(Boolean);
   const brands = setTokens.filter((token) => brandTokens.includes(token));
