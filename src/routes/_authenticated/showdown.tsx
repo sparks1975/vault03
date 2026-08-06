@@ -42,7 +42,7 @@ function ShowdownPage() {
             <img
               src={weeklyShowdownAsset.url}
               alt="Weekly Showdown"
-              className="w-8 h-8 md:w-9 md:h-9 shrink-0"
+              className="w-12 h-12 md:w-16 md:h-16 shrink-0"
             />
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight font-mono uppercase">Weekly Showdown</h1>
           </div>
