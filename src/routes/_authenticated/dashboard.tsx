@@ -143,11 +143,11 @@ function DashboardPage() {
                 <SmallStat label="1st Bowman" value={String(cards.filter((c) => c.is_first_bowman).length)} />
               </div>
 
-              <div className="lg:col-span-3 border-t lg:border-t-0 lg:border-l border-border bg-secondary/40 flex items-end justify-between gap-4 px-5 pt-5 lg:px-4 lg:pt-6 overflow-hidden">
-                <p className="text-[10px] font-mono uppercase tracking-widest leading-relaxed text-muted-foreground max-w-[9rem] pb-5">
+              <div className="lg:col-span-3 border-t lg:border-t-0 lg:border-l border-border bg-secondary/40 flex items-center justify-between gap-4 px-5 py-5 lg:px-4 lg:py-6 overflow-hidden">
+                <p className="text-[10px] font-mono uppercase tracking-widest leading-relaxed text-muted-foreground max-w-[9rem]">
                   A real-time snapshot of your collection.
                 </p>
-                <CollectorIllustration className="h-28 lg:h-40 w-auto shrink-0 text-foreground -mb-px" />
+                <CollectorIllustration className="h-28 lg:h-40 w-auto shrink-0 object-contain" />
               </div>
             </header>
 
