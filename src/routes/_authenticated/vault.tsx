@@ -519,7 +519,7 @@ function VaultPage() {
             <img
               src={vaultStatsAsset.url}
               alt="Vault statistics illustration"
-              className="w-16 h-auto md:w-20 object-contain shrink-0"
+              className="w-[4.8rem] h-auto md:w-24 object-contain shrink-0"
             />
             <h1 className="text-2xl md:text-[50px] font-extrabold tracking-tight font-display uppercase leading-none">My Vault</h1>
           </div>
