@@ -155,7 +155,7 @@ function AuthPage() {
           <p className="text-xl font-extrabold tracking-tighter italic text-foreground">
             VAULT.03
           </p>
-          <h1 className="mt-5 text-3xl font-extrabold tracking-tighter italic text-foreground font-display">
+          <h1 className="mt-5 text-3xl md:text-[50px] font-extrabold tracking-tighter italic text-foreground font-display leading-none">
             Your baseball card portfolio
           </h1>
           <p className="mt-3 text-sm text-muted-foreground">
