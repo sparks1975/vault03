@@ -130,8 +130,8 @@ function DashboardPage() {
         ) : (
           <>
             <header className="border border-border animate-in-up grid grid-cols-1 lg:grid-cols-12">
-              <div className="order-first lg:order-last lg:col-span-3 border-b lg:border-b-0 lg:border-l border-border flex items-center justify-center px-5 py-8 sm:py-10 md:py-12 lg:px-4 lg:py-6 overflow-hidden">
-                <CollectorIllustration className="h-52 sm:h-60 md:h-72 lg:h-56 w-auto object-contain" />
+              <div className="order-first lg:order-last lg:col-span-3 border-b lg:border-b-0 lg:border-l border-border flex items-center justify-center px-3 py-4 sm:py-6 md:py-8 lg:px-4 lg:py-6 overflow-hidden">
+                <CollectorIllustration className="h-56 sm:h-64 md:h-80 lg:h-56 w-auto object-contain" />
               </div>
 
               <div className="lg:col-span-9 grid grid-cols-2 lg:grid-cols-4 gap-px bg-border">
