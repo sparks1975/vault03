@@ -44,7 +44,7 @@ function ShowdownPage() {
               alt="Weekly Showdown"
               className="w-[calc(var(--spacing)*30)] h-auto shrink-0"
             />
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight font-mono uppercase">Weekly Showdown</h1>
+            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight font-display uppercase">Weekly Showdown</h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             Enter five cards from your vault. Real MLB stats plus your card multipliers decide the winner.
