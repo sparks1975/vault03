@@ -144,7 +144,7 @@ function DashboardPage() {
               </div>
 
               <div className="lg:col-span-3 border-t lg:border-t-0 lg:border-l border-border bg-secondary/40 flex items-center justify-center px-5 py-5 lg:px-4 lg:py-6 overflow-hidden">
-                <CollectorIllustration className="h-28 lg:h-40 w-auto object-contain" />
+                <CollectorIllustration className="h-40 sm:h-48 lg:h-56 w-auto object-contain" />
               </div>
             </header>
 
