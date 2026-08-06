@@ -130,6 +130,10 @@ function DashboardPage() {
         ) : (
           <>
             <header className="border border-border animate-in-up grid grid-cols-1 lg:grid-cols-12">
+              <div className="order-first lg:order-last lg:col-span-3 border-b lg:border-b-0 lg:border-l border-border flex items-center justify-center px-5 py-8 sm:py-10 md:py-12 lg:px-4 lg:py-6 overflow-hidden">
+                <CollectorIllustration className="h-52 sm:h-60 md:h-72 lg:h-56 w-auto object-contain" />
+              </div>
+
               <div className="lg:col-span-9 grid grid-cols-2 lg:grid-cols-4 gap-px bg-border">
                 <StatCell label="Total Value" value={fmt(s.totalValue)} sub={s.count ? "Live" : "Add your first card"} subAccent={s.count > 0} />
                 <StatCell label="Assets" value={String(s.count)} sub={s.count ? `Graded: ${s.gradedPct}%` : "—"} />
@@ -143,10 +147,6 @@ function DashboardPage() {
                 <SmallStat label="Autographs" value={String(s.autos)} />
                 <SmallStat label="Rookies" value={String(s.rookies)} />
                 <SmallStat label="1st Bowman" value={String(cards.filter((c) => c.is_first_bowman).length)} />
-              </div>
-
-              <div className="lg:col-span-3 border-t lg:border-t-0 lg:border-l border-border bg-secondary/40 flex items-center justify-center px-5 py-5 lg:px-4 lg:py-6 overflow-hidden">
-                <CollectorIllustration className="h-40 sm:h-48 lg:h-56 w-auto object-contain" />
               </div>
             </header>
 
