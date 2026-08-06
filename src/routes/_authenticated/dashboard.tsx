@@ -117,9 +117,6 @@ function DashboardPage() {
           <MobileNavTabs />
         </div>
 
-        <header className="mb-6">
-          <h1 className="text-2xl md:text-[50px] font-extrabold tracking-tight font-display uppercase leading-none">Dashboard</h1>
-        </header>
 
         {cardsQ.isLoading ? (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border">
