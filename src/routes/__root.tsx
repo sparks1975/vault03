@@ -17,7 +17,7 @@ function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-7xl font-extrabold text-foreground tracking-tighter">404</h1>
+        <h1 className="text-7xl font-extrabold text-foreground tracking-tighter font-display">404</h1>
         <p className="mt-4 text-sm font-mono uppercase tracking-widest text-muted-foreground">
           Asset not found
         </p>
@@ -42,7 +42,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <p className="text-xs font-mono uppercase tracking-widest text-muted-foreground">System error</p>
-        <h1 className="mt-2 text-xl font-extrabold tracking-tight">This page didn't load</h1>
+        <h1 className="mt-2 text-xl font-extrabold tracking-tight font-display">This page didn't load</h1>
         <div className="mt-6 flex gap-2 justify-center">
           <button
             onClick={() => { router.invalidate(); reset(); }}
@@ -83,7 +83,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500;800&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500;800&family=Bangers&display=swap",
       },
     ],
   }),

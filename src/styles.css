@@ -32,7 +32,7 @@
   --color-negative: var(--negative);
   --color-first-bowman: var(--first-bowman);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-
+  --font-display: "Bangers", cursive;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
   --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
 }
