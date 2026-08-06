@@ -9,6 +9,7 @@ import { getCurrentShowdown, getMyShowdownEntry } from "@/lib/showdown.functions
 import { AppNav, MobileNavTabs } from "@/components/AppNav";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CollectorIllustration } from "@/components/CollectorIllustration";
+import topMoverAsset from "@/assets/dashboard.svg.asset.json";
 
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -222,26 +223,35 @@ function DashboardPage() {
 
               <aside className="lg:col-span-5 space-y-8 animate-in-up [animation-delay:100ms]">
                 <div className="border border-border p-6">
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Top Mover</p>
-                  {s.topMover ? (
-                    <div className="space-y-1">
-                      <h3 className="font-bold leading-tight break-words">
-                        {[s.topMover.card.year, s.topMover.card.set_name, s.topMover.card.player_name].filter(Boolean).join(" ")}
-                      </h3>
-                      <p className="text-xs text-muted-foreground">
-                        {[s.topMover.card.grader, s.topMover.card.grade].filter(Boolean).join(" ") || "Raw"}
-                      </p>
-                      <p
-                        className={`font-mono font-bold ${s.topMover.dollars >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}
-                      >
-                        {s.topMover.dollars >= 0 ? "+" : ""}
-                        {fmt(s.topMover.dollars)}
-                        {s.topMover.pct != null && ` (${fmtPct(s.topMover.pct)})`}
-                      </p>
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={topMoverAsset.url}
+                      alt="Top mover illustration"
+                      className="h-24 w-auto shrink-0 object-contain"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Top Mover</p>
+                      {s.topMover ? (
+                        <div className="space-y-1">
+                          <h3 className="font-bold leading-tight break-words">
+                            {[s.topMover.card.year, s.topMover.card.set_name, s.topMover.card.player_name].filter(Boolean).join(" ")}
+                          </h3>
+                          <p className="text-xs text-muted-foreground">
+                            {[s.topMover.card.grader, s.topMover.card.grade].filter(Boolean).join(" ") || "Raw"}
+                          </p>
+                          <p
+                            className={`font-mono font-bold ${s.topMover.dollars >= 0 ? "text-[color:var(--positive)]" : "text-[color:var(--negative)]"}`}
+                          >
+                            {s.topMover.dollars >= 0 ? "+" : ""}
+                            {fmt(s.topMover.dollars)}
+                            {s.topMover.pct != null && ` (${fmtPct(s.topMover.pct)})`}
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">Add purchase prices to track gains.</p>
+                      )}
                     </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Add purchase prices to track gains.</p>
-                  )}
+                  </div>
                 </div>
 
                 <div className="border border-border p-6">
