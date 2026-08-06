@@ -118,7 +118,7 @@ function DashboardPage() {
         </div>
 
         <header className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight font-display uppercase">Dashboard</h1>
+          <h1 className="text-2xl md:text-[50px] font-extrabold tracking-tight font-display uppercase leading-none">Dashboard</h1>
         </header>
 
         {cardsQ.isLoading ? (
