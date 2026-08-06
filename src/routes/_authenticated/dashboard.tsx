@@ -8,6 +8,8 @@ import { listCards } from "@/lib/cards.functions";
 import { getCurrentShowdown, getMyShowdownEntry } from "@/lib/showdown.functions";
 import { AppNav, MobileNavTabs } from "@/components/AppNav";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CollectorIllustration } from "@/components/CollectorIllustration";
+
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   ssr: false,
