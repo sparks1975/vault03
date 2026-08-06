@@ -205,20 +205,27 @@ function DashboardPage() {
                   </ol>
                 )}
 
-                <div className="mt-6 border border-border p-6 md:p-8 animate-in-up [animation-delay:150ms] flex-1 flex flex-col">
-                  <p className="text-[10px] font-mono uppercase tracking-widest text-accent mb-3">From the vault</p>
-                  <h3 className="text-lg md:text-xl font-bold leading-tight mb-2">
-                    Track. Compare. Compete.
-                  </h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-4 max-w-md">
-                    Your vault is more than a list — it's a living portfolio. Build a five-card lineup each week and climb the Weekly Showdown leaderboard.
-                  </p>
-                  <Link
-                    to="/showdown"
-                    className="self-start inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-accent transition-colors mt-auto"
-                  >
-                    Play Weekly Showdown
-                  </Link>
+                <div className="mt-6 border border-border p-6 md:p-8 animate-in-up [animation-delay:150ms] flex-1 flex flex-col md:flex-row items-center gap-6">
+                  <img
+                    src={showdownAsset.url}
+                    alt="Weekly Showdown illustration"
+                    className="h-32 w-auto shrink-0 object-contain"
+                  />
+                  <div className="flex flex-col">
+                    <p className="text-[10px] font-mono uppercase tracking-widest text-accent mb-3">From the vault</p>
+                    <h3 className="text-lg md:text-xl font-bold leading-tight mb-2">
+                      Track. Compare. Compete.
+                    </h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed mb-4 max-w-md">
+                      Your vault is more than a list — it's a living portfolio. Build a five-card lineup each week and climb the Weekly Showdown leaderboard.
+                    </p>
+                    <Link
+                      to="/showdown"
+                      className="self-start inline-flex items-center gap-2 px-4 py-2 bg-foreground text-background text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-accent transition-colors"
+                    >
+                      Play Weekly Showdown
+                    </Link>
+                  </div>
                 </div>
               </section>
 
