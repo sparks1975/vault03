@@ -1,57 +1,13 @@
-import { Trophy, Medal, Flame, Star } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+import championAsset from "@/assets/badge-champion.svg.asset.json";
+import podiumAsset from "@/assets/badge-podium.svg.asset.json";
+import topTenAsset from "@/assets/badge-top_10.svg.asset.json";
+import firstEntryAsset from "@/assets/badge-first_entry.svg.asset.json";
 
-export type BadgeShape = "shield" | "hexagon" | "circle" | "ribbon";
-
-const ICONS: Record<string, LucideIcon> = {
-  champion: Trophy,
-  podium: Medal,
-  top_10_pct: Flame,
-  first_entry: Star,
-};
-
-const SHAPES: Record<string, BadgeShape> = {
-  champion: "shield",
-  podium: "hexagon",
-  top_10_pct: "ribbon",
-  first_entry: "circle",
-};
-
-// Every plate stays well inside the viewBox so outlines cannot clip.
-const PATHS: Record<BadgeShape, string> = {
-  shield: "M18 18H102V82C102 100 77 111 60 119C43 111 18 100 18 82Z",
-  hexagon: "M60 16L102 39V93L60 116L18 93V39Z",
-  circle: "M60 16A50 50 0 1 0 60 116A50 50 0 1 0 60 16Z",
-  ribbon: "M20 16H100V116L60 94L20 116Z",
-};
-
-type Tone = {
-  outline: string;
-  face: string;
-  icon: string;
-};
-
-const TONES: Record<string, Tone> = {
-  champion: {
-    outline: "var(--badge-champion)",
-    face: "var(--badge-face)",
-    icon: "var(--badge-icon)",
-  },
-  podium: {
-    outline: "var(--badge-podium)",
-    face: "var(--badge-face)",
-    icon: "var(--badge-icon)",
-  },
-  top_10_pct: {
-    outline: "var(--badge-top-ten)",
-    face: "var(--badge-face)",
-    icon: "var(--badge-icon)",
-  },
-  first_entry: {
-    outline: "var(--badge-first-entry)",
-    face: "var(--badge-face)",
-    icon: "var(--badge-icon)",
-  },
+const ART: Record<string, string> = {
+  champion: championAsset.url,
+  podium: podiumAsset.url,
+  top_10_pct: topTenAsset.url,
+  first_entry: firstEntryAsset.url,
 };
 
 export function AchievementBadge({
@@ -67,10 +23,7 @@ export function AchievementBadge({
   title?: string;
   size?: number;
 }) {
-  const shape = SHAPES[type] ?? "shield";
-  const Icon = ICONS[type] ?? Star;
-  const t = TONES[type] ?? TONES.first_entry;
-  const d = PATHS[shape];
+  const src = ART[type] ?? ART.first_entry;
 
   return (
     <div
@@ -78,39 +31,15 @@ export function AchievementBadge({
       title={title}
     >
       <div
-        className="relative"
-        style={{ width: size, height: (size * 132) / 120 }}
+        className="flex items-center justify-center"
+        style={{ width: size, height: size }}
       >
-        <svg viewBox="0 0 120 132" className="h-full w-full">
-          {/* Flat outer plate and thin inset line, matching the reference. */}
-          <path
-            d={d}
-            fill={t.face}
-            stroke={t.outline}
-            strokeWidth="4"
-            strokeLinejoin="round"
-          />
-          <g transform="translate(60 66) scale(0.84) translate(-60 -66)">
-            <path
-              d={d}
-              fill="none"
-              stroke={t.outline}
-              strokeWidth="2.5"
-              strokeLinejoin="round"
-            />
-          </g>
-        </svg>
-
-        <span className="absolute inset-0 flex items-center justify-center" aria-hidden="true">
-          <Icon
-            style={{
-              width: size * 0.32,
-              height: size * 0.32,
-              color: t.icon,
-            }}
-            strokeWidth={3}
-          />
-        </span>
+        <img
+          src={src}
+          alt={`${label} award`}
+          loading="lazy"
+          className="h-full w-full object-contain"
+        />
       </div>
 
       {sublabel ? (
