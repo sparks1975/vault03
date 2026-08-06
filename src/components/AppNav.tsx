@@ -23,7 +23,7 @@ export function SignOutButton() {
       onClick={handle}
       disabled={busy}
       title="Sign out"
-      className="p-2 rounded-sm border border-border hover:bg-secondary transition-colors disabled:opacity-60"
+      className="p-2 rounded-sm border border-white/20 hover:bg-white/10 transition-colors disabled:opacity-60 text-white"
     >
       <LogOut className="size-4" />
     </button>
