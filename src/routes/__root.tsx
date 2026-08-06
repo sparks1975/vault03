@@ -73,10 +73,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: "Vault.03 — Baseball Card Portfolio" },
       { name: "twitter:description", content: "Catalogue your baseball cards, track live market values, comparable sales, and current player statistics in one collector-grade portfolio." },
+      { property: "og:image", content: "https://vault03.app/og-image.png" },
+      { name: "twitter:image", content: "https://vault03.app/og-image.png" },
+
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "icon", type: "image/png", href: "/favicon.png" },
       { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -86,6 +89,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;500;800&family=Bangers&display=swap",
       },
     ],
+
   }),
   shellComponent: RootShell,
   component: RootComponent,
