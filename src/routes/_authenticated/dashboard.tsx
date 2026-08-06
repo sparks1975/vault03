@@ -8,6 +8,8 @@ import { listCards } from "@/lib/cards.functions";
 import { getCurrentShowdown, getMyShowdownEntry } from "@/lib/showdown.functions";
 import { AppNav, MobileNavTabs } from "@/components/AppNav";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CollectorIllustration } from "@/components/CollectorIllustration";
+
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   ssr: false,
@@ -125,23 +127,30 @@ function DashboardPage() {
           </div>
         ) : (
           <>
-            <header className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border animate-in-up">
-              <StatCell label="Total Value" value={fmt(s.totalValue)} sub={s.count ? "Live" : "Add your first card"} subAccent={s.count > 0} />
-              <StatCell label="Assets" value={String(s.count)} sub={s.count ? `Graded: ${s.gradedPct}%` : "—"} />
-              <StatCell label="Cost Basis" value={fmt(s.totalCost)} sub={`${s.valued} valued`} />
-              <StatCell
-                label="Total Gain"
-                value={s.totalGain == null ? "—" : `${s.totalGain >= 0 ? "+" : ""}${fmt(s.totalGain)}`}
-                sub={s.totalGainPct != null ? `${fmtPct(s.totalGainPct)} vs. cost` : "Add purchase prices"}
-              />
+            <header className="border border-border animate-in-up grid grid-cols-1 lg:grid-cols-12">
+              <div className="lg:col-span-9 grid grid-cols-2 lg:grid-cols-4 gap-px bg-border">
+                <StatCell label="Total Value" value={fmt(s.totalValue)} sub={s.count ? "Live" : "Add your first card"} subAccent={s.count > 0} />
+                <StatCell label="Assets" value={String(s.count)} sub={s.count ? `Graded: ${s.gradedPct}%` : "—"} />
+                <StatCell label="Cost Basis" value={fmt(s.totalCost)} sub={`${s.valued} valued`} />
+                <StatCell
+                  label="Total Gain"
+                  value={s.totalGain == null ? "—" : `${s.totalGain >= 0 ? "+" : ""}${fmt(s.totalGain)}`}
+                  sub={s.totalGainPct != null ? `${fmtPct(s.totalGainPct)} vs. cost` : "Add purchase prices"}
+                />
+                <SmallStat label="Avg Card Value" value={fmt(s.avgValue)} />
+                <SmallStat label="Autographs" value={String(s.autos)} />
+                <SmallStat label="Rookies" value={String(s.rookies)} />
+                <SmallStat label="1st Bowman" value={String(cards.filter((c) => c.is_first_bowman).length)} />
+              </div>
+
+              <div className="lg:col-span-3 border-t lg:border-t-0 lg:border-l border-border bg-secondary/40 flex items-end justify-between gap-4 px-5 pt-5 lg:px-4 lg:pt-6 overflow-hidden">
+                <p className="text-[10px] font-mono uppercase tracking-widest leading-relaxed text-muted-foreground max-w-[9rem] pb-5">
+                  A real-time snapshot of your collection.
+                </p>
+                <CollectorIllustration className="h-28 lg:h-40 w-auto shrink-0 text-foreground -mb-px" />
+              </div>
             </header>
 
-            <div className="mt-6 lg:mt-px grid grid-cols-2 lg:grid-cols-4 gap-px bg-border border border-border">
-              <SmallStat label="Avg Card Value" value={fmt(s.avgValue)} />
-              <SmallStat label="Autographs" value={String(s.autos)} />
-              <SmallStat label="Rookies" value={String(s.rookies)} />
-              <SmallStat label="1st Bowman" value={String(cards.filter((c) => c.is_first_bowman).length)} />
-            </div>
 
             <div className="mt-8 md:mt-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
               <section className="lg:col-span-7 animate-in-up flex flex-col">
