@@ -49,7 +49,7 @@ export function AppNav({ actions, leading }: { actions?: ReactNode; leading?: Re
             <Link
               key={l.to}
               to={l.to}
-              activeProps={{ className: "text-accent" }}
+              activeProps={{ className: "text-accent-light" }}
               className="hover:text-white transition-colors"
             >
               {l.label}
