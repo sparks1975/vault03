@@ -481,7 +481,7 @@ function VaultPage() {
           mobileDetail ? (
             <button
               onClick={() => setMobileDetail(false)}
-              className="lg:hidden p-2 -ml-2 rounded-sm border border-border hover:bg-secondary"
+              className="lg:hidden p-2 -ml-2 rounded-sm border border-white/20 hover:bg-white/10 text-white"
               aria-label="Back to list"
             >
               <ChevronLeft className="size-4" />
@@ -511,7 +511,7 @@ function VaultPage() {
       />
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 pt-4 md:pt-12">
-        <div className="sticky top-16 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-2 mb-4 bg-background/90 backdrop-blur-md lg:hidden">
+        <div className="sticky top-16 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-2 mb-4 bg-black lg:hidden">
           <MobileNavTabs />
         </div>
         <header className="mb-6">
