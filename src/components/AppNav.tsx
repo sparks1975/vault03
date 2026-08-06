@@ -4,6 +4,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { LogOut } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import logoWhite from "@/assets/logo-white.svg";
+
 
 export function SignOutButton() {
   const navigate = useNavigate();
