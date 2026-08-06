@@ -232,12 +232,7 @@ function DashboardPage() {
               <aside className="lg:col-span-5 space-y-8 animate-in-up [animation-delay:100ms]">
                 <div className="border border-border p-6">
                   <div className="flex flex-col md:flex-row items-center gap-4">
-                    <img
-                      src={topMoverAsset.url}
-                      alt="Top mover illustration"
-                      className="w-full h-auto md:h-24 md:w-auto shrink-0 object-contain"
-                    />
-                    <div className="flex-1 min-w-0 w-full">
+                    <div className="flex-1 min-w-0 w-full order-first md:order-last">
                       <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">Top Mover</p>
                       {s.topMover ? (
                         <div className="space-y-1">
@@ -259,6 +254,11 @@ function DashboardPage() {
                         <p className="text-sm text-muted-foreground">Add purchase prices to track gains.</p>
                       )}
                     </div>
+                    <img
+                      src={topMoverAsset.url}
+                      alt="Top mover illustration"
+                      className="w-full h-auto md:h-24 md:w-auto shrink-0 object-contain order-last md:order-first"
+                    />
                   </div>
                 </div>
 
