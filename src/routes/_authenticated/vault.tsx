@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Camera, Loader2, Pencil, Check, X, ChevronLeft, RefreshCw, GripVertical, Vault } from "lucide-react";
+import { Plus, Trash2, Camera, Loader2, Pencil, Check, X, ChevronLeft, RefreshCw, GripVertical } from "lucide-react";
 
 import {
   DndContext,
@@ -47,6 +47,7 @@ import { Button } from "@/components/ui/button";
 
 import { ShareDialog } from "@/components/ShareDialog";
 import { AppNav, MobileNavTabs } from "@/components/AppNav";
+import vaultStatsAsset from "@/assets/vault_stats.svg.asset.json";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
@@ -515,7 +516,11 @@ function VaultPage() {
         </div>
         <header className="mb-6">
           <div className="flex items-center gap-3">
-            <Vault className="w-7 h-7 md:w-8 md:h-8 text-accent shrink-0" />
+            <img
+              src={vaultStatsAsset.url}
+              alt="Vault statistics illustration"
+              className="w-16 h-auto md:w-20 object-contain shrink-0"
+            />
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight font-mono uppercase">My Vault</h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
