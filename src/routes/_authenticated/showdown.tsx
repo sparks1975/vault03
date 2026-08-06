@@ -1,9 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Trophy } from "lucide-react";
 
-
+import weeklyShowdownAsset from "@/assets/weekly_showdown.svg.asset.json";
 import { listCards } from "@/lib/cards.functions";
 import { AppNav, MobileNavTabs } from "@/components/AppNav";
 import { ShowdownPanel, type ShowdownCard } from "@/components/ShowdownPanel";
@@ -40,7 +39,11 @@ function ShowdownPage() {
 
         <header className="mb-6">
           <div className="flex items-center gap-3">
-            <Trophy className="w-7 h-7 md:w-8 md:h-8 text-accent shrink-0" />
+            <img
+              src={weeklyShowdownAsset.url}
+              alt="Weekly Showdown"
+              className="w-8 h-8 md:w-9 md:h-9 shrink-0"
+            />
             <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight font-mono uppercase">Weekly Showdown</h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
