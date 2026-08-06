@@ -67,13 +67,13 @@ export function AppNav({ actions, leading }: { actions?: ReactNode; leading?: Re
 
 export function MobileNavTabs() {
   return (
-    <div className="lg:hidden flex gap-px bg-border border border-border text-[10px] font-black uppercase tracking-widest">
+    <div className="lg:hidden flex gap-px bg-black border border-black text-[10px] font-black uppercase tracking-widest">
       {links.map((l) => (
         <Link
           key={l.to}
           to={l.to}
-          activeProps={{ className: "text-accent" }}
-          className="flex-1 bg-background py-2 text-center text-muted-foreground whitespace-nowrap"
+          activeProps={{ className: "bg-white/10 text-white" }}
+          className="flex-1 bg-black py-2 text-center text-white/70 whitespace-nowrap hover:text-white hover:bg-white/5 transition-colors"
         >
           {l.label}
         </Link>
