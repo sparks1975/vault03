@@ -42,7 +42,7 @@ export function AppNav({ actions, leading }: { actions?: ReactNode; leading?: Re
       <div className="flex items-center gap-4 md:gap-8 min-w-0">
         {leading}
         <Link to="/dashboard" className="shrink-0 pr-1">
-          <img src={logoWhite} alt="VAULT.03" className="h-7 md:h-8 w-auto" />
+          <img src={logoAsset.url} alt="VAULT.03" className="h-[31px] md:h-[35px] w-auto" />
         </Link>
         <div className="hidden lg:flex gap-6 whitespace-nowrap text-xs font-black uppercase tracking-widest text-white/70">
           {links.map((l) => (
