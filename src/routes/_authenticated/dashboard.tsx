@@ -9,6 +9,7 @@ import { getCurrentShowdown, getMyShowdownEntry } from "@/lib/showdown.functions
 import { AppNav, MobileNavTabs } from "@/components/AppNav";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CollectorIllustration } from "@/components/CollectorIllustration";
+import topMoverAsset from "@/assets/dashboard.svg.asset.json";
 
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
