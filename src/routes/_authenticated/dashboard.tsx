@@ -298,9 +298,11 @@ function DashboardPage() {
 
 function StatCell({ label, value, sub, subAccent }: { label: string; value: string; sub?: string; subAccent?: boolean }) {
   return (
-    <div className="min-w-0 bg-background p-5 md:p-6 lg:p-8">
+    <div className="@container min-w-0 bg-background p-5 md:p-6 lg:p-8">
       <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-2">{label}</p>
-      <h2 className="text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-tight truncate">{value}</h2>
+      <h2 className="font-extrabold tracking-tight leading-tight text-[clamp(1.15rem,11cqw,2.25rem)] whitespace-nowrap overflow-hidden">
+        {value}
+      </h2>
       {sub && <p className={`text-xs font-mono mt-2 ${subAccent ? "text-accent" : "text-muted-foreground"}`}>{sub}</p>}
     </div>
   );
@@ -308,9 +310,11 @@ function StatCell({ label, value, sub, subAccent }: { label: string; value: stri
 
 function SmallStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 bg-background p-4">
+    <div className="@container min-w-0 bg-background p-4">
       <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">{label}</p>
-      <p className="text-lg font-bold tracking-tight truncate">{value}</p>
+      <p className="font-bold tracking-tight leading-tight text-[clamp(0.95rem,9cqw,1.125rem)] whitespace-nowrap overflow-hidden">
+        {value}
+      </p>
     </div>
   );
 }
