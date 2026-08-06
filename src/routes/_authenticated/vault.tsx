@@ -481,7 +481,7 @@ function VaultPage() {
           mobileDetail ? (
             <button
               onClick={() => setMobileDetail(false)}
-              className="lg:hidden p-2 -ml-2 rounded-sm border border-border hover:bg-secondary"
+              className="lg:hidden p-2 -ml-2 rounded-sm border border-white/20 hover:bg-white/10 text-white"
               aria-label="Back to list"
             >
               <ChevronLeft className="size-4" />
