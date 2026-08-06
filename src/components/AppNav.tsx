@@ -38,19 +38,19 @@ const links = [
 
 export function AppNav({ actions, leading }: { actions?: ReactNode; leading?: ReactNode }) {
   return (
-    <nav className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border px-4 md:px-6 h-16 flex items-center justify-between gap-3">
+    <nav className="sticky top-0 z-40 bg-black text-white px-4 md:px-6 h-16 flex items-center justify-between gap-3">
       <div className="flex items-center gap-4 md:gap-8 min-w-0">
         {leading}
-        <Link to="/dashboard" className="font-extrabold tracking-tighter text-lg md:text-xl italic shrink-0 pr-1">
-          VAULT.03
+        <Link to="/dashboard" className="shrink-0 pr-1">
+          <img src={logoWhite} alt="VAULT.03" className="h-7 md:h-8 w-auto" />
         </Link>
-        <div className="hidden lg:flex gap-6 whitespace-nowrap text-xs font-black uppercase tracking-widest text-muted-foreground">
+        <div className="hidden lg:flex gap-6 whitespace-nowrap text-xs font-black uppercase tracking-widest text-white/70">
           {links.map((l) => (
             <Link
               key={l.to}
               to={l.to}
               activeProps={{ className: "text-accent" }}
-              className="hover:text-foreground transition-colors"
+              className="hover:text-white transition-colors"
             >
               {l.label}
             </Link>
