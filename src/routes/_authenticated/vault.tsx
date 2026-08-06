@@ -521,7 +521,7 @@ function VaultPage() {
               alt="Vault statistics illustration"
               className="w-16 h-auto md:w-20 object-contain shrink-0"
             />
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight font-display uppercase">My Vault</h1>
+            <h1 className="text-2xl md:text-[50px] font-extrabold tracking-tight font-display uppercase leading-none">My Vault</h1>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             Every card you own, valued from real completed sales and sorted however you like.
