@@ -210,7 +210,7 @@ function DashboardPage() {
                   <img
                     src={showdownAsset.url}
                     alt="Weekly Showdown illustration"
-                    className="h-32 w-auto shrink-0 object-contain"
+                    className="h-44 sm:h-52 md:h-40 w-auto shrink-0 object-contain"
                   />
                   <div className="flex flex-col">
                     <p className="text-[10px] font-mono uppercase tracking-widest text-accent mb-3">From the vault</p>
