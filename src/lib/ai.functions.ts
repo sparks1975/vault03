@@ -1036,11 +1036,11 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       }
     };
 
-    // Real sold data first, CardSight catalog pricing only as a backstop.
-    // PT130_ENABLED is a temporary discovery flag; when false we run CardSight alone.
+    // Use the fast structured catalog pricing first. 130point is the fallback
+    // when CardSight has no verified sales; it must not delay every valuation.
     const { PT130_ENABLED } = await import("./valuation-flags");
-    if (PT130_ENABLED) await ebaySoldPass();
-    if (!usedCardsight) await cardsightPass();
+    await cardsightPass();
+    if (PT130_ENABLED && !usedCardsight) await ebaySoldPass();
 
 
     if (!usedCardsight) {

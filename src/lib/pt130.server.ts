@@ -218,9 +218,12 @@ export async function refreshPt130ForCard(
       : sales.some((s) => String(s.title ?? "").replace(/[^a-z0-9]/gi, "").toLowerCase().includes(numberToken));
     if (hasNumberMatch) break;
   }
+  // A zero-result crawl can mean selector drift, blocking, or a transient
+  // provider failure. Preserve the last known-good cache instead of replacing
+  // it with nothing.
+  if (sales.length === 0) return { stored: 0, scraped: 0 };
   const del = await supabase.from("pt130_comps").delete().eq("card_id", args.card_id);
   if (del.error) throw del.error;
-  if (sales.length === 0) return { stored: 0, scraped: 0 };
   const rows = sales.map((s) => ({
     card_id: args.card_id,
     user_id: args.user_id,
