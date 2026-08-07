@@ -631,6 +631,10 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     // matching comps. The UI uses this to decide between "Valuation temporarily
     // unavailable" and "No comps available".
     let pipelineError = false;
+    // A source can answer successfully while returning no exact matches. If at
+    // least one source answered, a later fallback error must not turn that
+    // legitimate empty result into a temporary-outage message.
+    let pricingSourceResponded = false;
 
     let resolvedGradeId: string | null = data.cardsight_grade_id ?? null;
     let resolvedCardId: string | null = data.cardsight_card_id ?? null;
@@ -766,6 +770,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
 
 
     const priceFromSlice = async (slice: Awaited<ReturnType<typeof import("./cardsight.server").fetchPricing>>) => {
+      pricingSourceResponded = true;
       const { median, trimOutliersIQR } = await import("./cardsight.server");
       const auctions = slice.auctionSales
         .filter((r) => Number.isFinite(r.price) && r.price > 0)
@@ -1013,6 +1018,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           compsNote =
             "Found sold listings but none matched this exact card — open Manage Comps to pick the right ones.";
         }
+        pricingSourceResponded = true;
 
       } catch (err) {
         console.error("eBay sold pass failed:", err);
@@ -1088,7 +1094,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       history: [],
       source: "ai" as const,
       note: compsNote ?? `No verified sold comps found for ${descriptor}. Enter a value manually.`,
-      valuation_error: pipelineError,
+      valuation_error: pipelineError && !pricingSourceResponded,
       resolved_cardsight_card_id: resolvedCardId,
       resolved_cardsight_grade_id: resolvedGradeId,
     };
