@@ -1362,7 +1362,7 @@ function isNonSingleSaleTitle(title: string | null | undefined) {
   return nonSingle.test(raw) || (sealedWords.test(raw) && containers.test(raw));
 }
 
-function RecentComparables({ sales, cardId }: { sales: SaleRow[]; cardId: string }) {
+function RecentComparables({ sales, cardId, valuationFailed }: { sales: SaleRow[]; cardId: string; valuationFailed?: boolean }) {
   const [manageOpen, setManageOpen] = useState(false);
   const valid = (sales ?? []).filter((s) => Number.isFinite(Number(s.price)) && Number(s.price) > 0 && !isNonSingleSaleTitle(s.title));
   const headerBtn = (
@@ -1381,7 +1381,9 @@ function RecentComparables({ sales, cardId }: { sales: SaleRow[]; cardId: string
           {headerBtn}
         </div>
         <p className="text-xs text-muted-foreground">
-          No comparable sales found. The card value shown is an AI market estimate.
+          {valuationFailed
+            ? "Valuation temporarily unavailable, try again in 10-20 min."
+            : "No comparable sales found. The card value shown is an AI market estimate."}
         </p>
         {manageOpen && <ManageCompsDialog cardId={cardId} onClose={() => setManageOpen(false)} />}
       </div>
