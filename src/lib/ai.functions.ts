@@ -1012,7 +1012,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     };
 
     // Real sold data first, CardSight catalog pricing only as a backstop.
-    await ebaySoldPass();
+    // PT130_ENABLED is a temporary discovery flag; when false we run CardSight alone.
+    const { PT130_ENABLED } = await import("./valuation-flags");
+    if (PT130_ENABLED) await ebaySoldPass();
     if (!usedCardsight) await cardsightPass();
 
 
