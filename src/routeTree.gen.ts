@@ -17,7 +17,6 @@ import { Route as AuthenticatedVaultRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedShowdownRouteImport } from './routes/_authenticated/showdown'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as ApiPublicHooksScoreShowdownRouteImport } from './routes/api/public/hooks/score-showdown'
-import { Route as ApiPublicHooksRefresh130pointRouteImport } from './routes/api/public/hooks/refresh-130point'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -59,12 +58,6 @@ const ApiPublicHooksScoreShowdownRoute =
     path: '/api/public/hooks/score-showdown',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicHooksRefresh130pointRoute =
-  ApiPublicHooksRefresh130pointRouteImport.update({
-    id: '/api/public/hooks/refresh-130point',
-    path: '/api/public/hooks/refresh-130point',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -73,7 +66,6 @@ export interface FileRoutesByFullPath {
   '/showdown': typeof AuthenticatedShowdownRoute
   '/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
-  '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
   '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
 }
 export interface FileRoutesByTo {
@@ -83,7 +75,6 @@ export interface FileRoutesByTo {
   '/showdown': typeof AuthenticatedShowdownRoute
   '/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
-  '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
   '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
 }
 export interface FileRoutesById {
@@ -95,7 +86,6 @@ export interface FileRoutesById {
   '/_authenticated/showdown': typeof AuthenticatedShowdownRoute
   '/_authenticated/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
-  '/api/public/hooks/refresh-130point': typeof ApiPublicHooksRefresh130pointRoute
   '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
 }
 export interface FileRouteTypes {
@@ -107,7 +97,6 @@ export interface FileRouteTypes {
     | '/showdown'
     | '/vault'
     | '/s/$slug'
-    | '/api/public/hooks/refresh-130point'
     | '/api/public/hooks/score-showdown'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -117,7 +106,6 @@ export interface FileRouteTypes {
     | '/showdown'
     | '/vault'
     | '/s/$slug'
-    | '/api/public/hooks/refresh-130point'
     | '/api/public/hooks/score-showdown'
   id:
     | '__root__'
@@ -128,7 +116,6 @@ export interface FileRouteTypes {
     | '/_authenticated/showdown'
     | '/_authenticated/vault'
     | '/s/$slug'
-    | '/api/public/hooks/refresh-130point'
     | '/api/public/hooks/score-showdown'
   fileRoutesById: FileRoutesById
 }
@@ -137,7 +124,6 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
   SSlugRoute: typeof SSlugRoute
-  ApiPublicHooksRefresh130pointRoute: typeof ApiPublicHooksRefresh130pointRoute
   ApiPublicHooksScoreShowdownRoute: typeof ApiPublicHooksScoreShowdownRoute
 }
 
@@ -199,13 +185,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksScoreShowdownRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/hooks/refresh-130point': {
-      id: '/api/public/hooks/refresh-130point'
-      path: '/api/public/hooks/refresh-130point'
-      fullPath: '/api/public/hooks/refresh-130point'
-      preLoaderRoute: typeof ApiPublicHooksRefresh130pointRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -229,9 +208,18 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
   SSlugRoute: SSlugRoute,
-  ApiPublicHooksRefresh130pointRoute: ApiPublicHooksRefresh130pointRoute,
   ApiPublicHooksScoreShowdownRoute: ApiPublicHooksScoreShowdownRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

@@ -208,82 +208,9 @@ function VaultPage() {
   });
   const cardData = (cardsQ.data ?? []) as Card[];
 
-  // Recalculate card values only if stale (>30 days since last valuation).
-  const revaluedRef = useRef(false);
-  useEffect(() => {
-    if (revaluedRef.current) return;
-    if (cardsQ.isLoading || cardData.length === 0) return;
-    revaluedRef.current = true;
-    const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
-    const FAILED_RETRY_MS = 3 * 24 * 60 * 60 * 1000;
-    const now = Date.now();
-    const stale = cardData.filter((c) => {
-      if (!c.last_valued_at) {
-        // Never successfully valued. If a recent attempt failed, wait out the
-        // retry cooldown instead of re-attempting on every page load.
-        if (c.last_valuation_failed_at) {
-          const failedTs = new Date(c.last_valuation_failed_at).getTime();
-          if (Number.isFinite(failedTs) && now - failedTs < FAILED_RETRY_MS) return false;
-        }
-        return true;
-      }
-      const ts = new Date(c.last_valued_at).getTime();
-      return !Number.isFinite(ts) || now - ts >= THIRTY_DAYS_MS;
-    });
-    if (stale.length === 0) return;
-    (async () => {
-      for (const c of stale) {
-        try {
-          const est = await estimateFn({
-            data: {
-              player_name: c.player_name,
-              year: c.year,
-              set_name: c.set_name,
-              card_number: c.card_number,
-              grade: c.grade,
-              grader: c.grader,
-              is_autograph: c.is_autograph,
-              is_first_bowman: c.is_first_bowman,
-              serial_number: c.serial_number,
-              cardsight_card_id: c.cardsight_card_id,
-              cardsight_parallel_id: c.cardsight_parallel_id,
-              cardsight_grade_id: c.cardsight_grade_id,
-              cardsight_lookup_failed_at: c.cardsight_lookup_failed_at,
-              card_id: c.id,
-            },
-          });
-          await replaceValFn({
-            data: {
-              card_id: c.id,
-              current_value: est.current_value,
-              value_delta_pct: est.value_delta_pct,
-              sales: est.sales,
-              history: est.history,
-            },
-          });
-          const idPatch: Partial<Card> = {};
-          // Persist the resolved id whenever the server produced one AND it
-          // differs from what we sent — this clears/corrects stale IDs from
-          // an earlier mismatched match.
-          if (est.resolved_cardsight_card_id && est.resolved_cardsight_card_id !== c.cardsight_card_id) {
-            idPatch.cardsight_card_id = est.resolved_cardsight_card_id;
-            idPatch.cardsight_lookup_failed_at = null;
-          }
-          if (est.resolved_cardsight_grade_id && est.resolved_cardsight_grade_id !== c.cardsight_grade_id) {
-            idPatch.cardsight_grade_id = est.resolved_cardsight_grade_id;
-          }
-          if (Object.keys(idPatch).length > 0) {
-            await updateFn({
-              data: { id: c.id, patch: idPatch },
-            });
-          }
-        } catch (err) {
-          console.error("Auto-revalue failed for", c.player_name, err);
-        }
-      }
-      qc.invalidateQueries({ queryKey: ["cards"] });
-    })();
-  }, [cardsQ.isLoading, cardData, estimateFn, replaceValFn, updateFn, qc]);
+  // Values are never refreshed automatically — the user triggers a refresh with
+  // the "Re-value" button in the header. This keeps comp-scraping costs bounded.
+
 
 
   const updateMut = useMutation({
