@@ -1016,7 +1016,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
 
       } catch (err) {
         console.error("eBay sold pass failed:", err);
+        pipelineError = true;
       }
+
     };
 
     // Real sold data first, CardSight catalog pricing only as a backstop.
