@@ -973,11 +973,17 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         }
 
         type CompRow = { title: string | null; price: number | string; sold_at: string | null; url: string | null };
-        const usable = (rows: CompRow[] | null | undefined) =>
-          (rows ?? []).filter((row) => {
+        const usable = (rows: CompRow[] | null | undefined) => {
+          const seen = new Set<string>();
+          return (rows ?? []).filter((row) => {
             const price = Number(row.price);
-            return Number.isFinite(price) && price > 0;
+            if (!Number.isFinite(price) || price <= 0) return false;
+            const key = [row.url, row.title, row.sold_at, price].map((v) => String(v ?? "")).join("|");
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
           });
+        };
         const passes = (rows: CompRow[], relaxedSetMatch: boolean) =>
           rows.filter((row) =>
             verifyCompTitle(row.title ?? "", {
