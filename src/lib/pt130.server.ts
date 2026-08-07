@@ -8,7 +8,7 @@
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/apify";
 const ACTOR_ID = "caffein.dev~ebay-sold-listings";
 const DAYS_TO_SCRAPE = 90; // actor maximum
-const RESULTS_PER_SEARCH = 10; // keeps cost ~$0.03–$0.04 per card
+const RESULTS_PER_SEARCH = 20; // ~$0.05–$0.08 per card; fewer than this loses real comps
 
 export type Pt130Sale = {
   title: string | null;
@@ -181,6 +181,7 @@ export async function refreshPt130ForCard(
     user_id: string;
     descriptor: string | string[];
     card_number?: string | null;
+    append?: boolean;
   },
 ): Promise<{ stored: number; scraped: number }> {
   const descriptors = (Array.isArray(args.descriptor) ? args.descriptor : [args.descriptor])
@@ -197,8 +198,10 @@ export async function refreshPt130ForCard(
     sales.push(sale);
   }
 
-  const del = await supabase.from("pt130_comps").delete().eq("card_id", args.card_id);
-  if (del.error) throw del.error;
+  if (!args.append) {
+    const del = await supabase.from("pt130_comps").delete().eq("card_id", args.card_id);
+    if (del.error) throw del.error;
+  }
   if (sales.length === 0) return { stored: 0, scraped: scrapedSales.length };
   const rows = sales.map((s) => ({
     card_id: args.card_id,
