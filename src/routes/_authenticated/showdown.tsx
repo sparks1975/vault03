@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import weeklyShowdownAsset from "@/assets/weekly_showdown.svg.asset.json";
 import { listCards } from "@/lib/cards.functions";
 import { AppNav, MobileNavTabs } from "@/components/AppNav";
+import { ShareDialog } from "@/components/ShareDialog";
 import { ShowdownPanel, type ShowdownCard } from "@/components/ShowdownPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 
