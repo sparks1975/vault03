@@ -1,4 +1,4 @@
-// Nightly refresh of the eBay sold-listings cache (via Apify) for every card in the app.
+// Nightly refresh of the eBay sold-listings cache (via Apify caffein.dev actor) for every card in the app.
 // Triggered by pg_cron via HTTP POST with the Supabase publishable key in the
 // `apikey` header. The route validates that key against the environment before
 // doing any work.
