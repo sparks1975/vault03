@@ -308,8 +308,7 @@ function VaultPage() {
     setRevalueProgress({ isRunning: true, processed: 0, failed: 0, total: cardData.length, currentName: null });
     let processed = 0;
     let failed = 0;
-    let nextIndex = 0;
-    const revalueCard = async (c: Card) => {
+    for (const c of cardData) {
       setRevalueProgress((prev) => ({ ...prev, currentName: c.player_name }));
       try {
         const est = await estimateFn({
@@ -358,18 +357,7 @@ function VaultPage() {
         failed++;
       }
       setRevalueProgress((prev) => ({ ...prev, processed, failed }));
-    };
-    // A small worker pool cuts the many request/response round trips without
-    // flooding the catalog and completed-sales providers.
-    const worker = async () => {
-      while (nextIndex < cardData.length) {
-        const index = nextIndex;
-        nextIndex += 1;
-        const card = cardData[index];
-        if (card) await revalueCard(card);
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(3, cardData.length) }, () => worker()));
+    }
     await qc.invalidateQueries({ queryKey: ["cards"] });
     toast.success(`Re-valued ${processed} card${processed === 1 ? "" : "s"}${failed > 0 ? ` (${failed} failed)` : ""}`);
     setRevalueProgress({ isRunning: false, processed: 0, failed: 0, total: 0, currentName: null });

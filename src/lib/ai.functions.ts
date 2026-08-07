@@ -12,38 +12,23 @@ const MODEL = "google/gemini-3.5-flash";
 // don't re-pay the full cost for a card that isn't in the catalog.
 const LOOKUP_RETRY_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Vision calls occasionally stall on the provider side. Without a deadline the
-// scan request hangs open and the UI just spins, so cap every AI call and turn
-// a stall into a real error the user can retry.
-const AI_TIMEOUT_MS = 60_000;
-
 async function callAI(body: unknown): Promise<string> {
   const apiKey = process.env.LOVABLE_API_KEY;
   if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
-  let res: Response;
-  try {
-    res = await fetch(AI_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(AI_TIMEOUT_MS),
-    });
-  } catch (err) {
-    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
-      throw new Error("The card read timed out. Please try again.");
-    }
-    throw err;
-  }
+  const res = await fetch(AI_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
   if (res.status === 429) throw new Error("Rate limit — try again in a moment.");
   if (res.status === 402) throw new Error("AI credits exhausted. Please add credits.");
   if (!res.ok) throw new Error(`AI request failed: ${res.status} ${await res.text()}`);
   const j = await res.json();
   return j.choices?.[0]?.message?.content ?? "";
 }
-
 
 function extractJson<T>(text: string): T {
   let cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
@@ -945,11 +930,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         const cacheFresh =
           !data.force_refresh && newestScrape > 0 && Date.now() - newestScrape < 24 * 60 * 60 * 1000;
 
-        // Never block valuation on a refresh when we already have completed-sale
-        // data. The nightly job refreshes stale rows; valuations use the last
-        // known-good cache so a temporary crawler outage cannot turn a card into
-        // a slow zero-value result.
-        if (!cacheFresh && (cachedRows?.length ?? 0) === 0) {
+        if (!cacheFresh) {
           const { buildPt130Descriptors, refreshPt130ForCard } = await import("./pt130.server");
           const descriptors = buildPt130Descriptors({
             player_name: valuationLookup.player_name,
@@ -962,25 +943,19 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             grade: data.grade,
           });
           if (descriptors.length > 0) {
-            try {
-              await refreshPt130ForCard(context.supabase as never, {
-                card_id: data.card_id,
-                user_id: context.userId,
-                descriptor: descriptors,
-                card_number: valuationLookup.card_number,
-              });
-              const refreshed = await context.supabase
-                .from("pt130_comps")
-                .select("title, price, sold_at, url, scraped_at")
-                .eq("card_id", data.card_id)
-                .order("sold_at", { ascending: false });
-              if (refreshed.error) throw refreshed.error;
-              cachedRows = refreshed.data;
-            } catch (err) {
-              // Continue to CardSight below when a brand-new card cannot be
-              // crawled. Existing caches never enter this branch.
-              console.error("eBay sold refresh failed; continuing with available sources:", err);
-            }
+            await refreshPt130ForCard(context.supabase as never, {
+              card_id: data.card_id,
+              user_id: context.userId,
+              descriptor: descriptors,
+              card_number: valuationLookup.card_number,
+            });
+            const refreshed = await context.supabase
+              .from("pt130_comps")
+              .select("title, price, sold_at, url, scraped_at")
+              .eq("card_id", data.card_id)
+              .order("sold_at", { ascending: false });
+            if (refreshed.error) throw refreshed.error;
+            cachedRows = refreshed.data;
           }
         }
 
@@ -1036,11 +1011,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       }
     };
 
-    // Use the fast structured catalog pricing first. 130point is the fallback
-    // when CardSight has no verified sales; it must not delay every valuation.
-    const { PT130_ENABLED } = await import("./valuation-flags");
-    await cardsightPass();
-    if (PT130_ENABLED && !usedCardsight) await ebaySoldPass();
+    // Real sold data first, CardSight catalog pricing only as a backstop.
+    await ebaySoldPass();
+    if (!usedCardsight) await cardsightPass();
 
 
     if (!usedCardsight) {

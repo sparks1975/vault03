@@ -11,13 +11,6 @@ export const Route = createFileRoute("/api/public/hooks/refresh-130point")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const { PT130_ENABLED } = await import("@/lib/valuation-flags");
-        if (!PT130_ENABLED) {
-          return new Response(JSON.stringify({ skipped: true, reason: "130point temporarily disabled" }), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
-        }
         const provided = request.headers.get("apikey");
         const expected = process.env.SUPABASE_PUBLISHABLE_KEY;
         if (!expected || provided !== expected) {

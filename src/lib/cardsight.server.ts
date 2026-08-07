@@ -56,14 +56,12 @@ async function csFetchUncached<T>(path: string, init?: RequestInit): Promise<T> 
     await reserveSlot();
     const res = await fetch(`${REST_BASE}${path}`, {
       ...init,
-      signal: AbortSignal.timeout(45_000),
       headers: {
         "X-API-Key": apiKey(),
         Accept: "application/json",
         ...(init?.headers ?? {}),
       },
     });
-
     if (res.ok) return (await res.json()) as T;
     lastStatus = res.status;
     lastBody = await res.text().catch(() => "");
@@ -271,19 +269,11 @@ export async function identifyCardRest(
   const form = new FormData();
   form.append("image", blob, "card.jpg");
 
-  let res: Response;
-  try {
-    res = await fetch(`${REST_BASE}/v1/identify/card/baseball`, {
-      method: "POST",
-      headers: { "X-Api-Key": apiKey(), Accept: "application/json" },
-      body: form,
-      signal: AbortSignal.timeout(45_000),
-    });
-  } catch (err) {
-    console.error("Cardsight identify request failed", err);
-    return null;
-  }
-
+  const res = await fetch(`${REST_BASE}/v1/identify/card/baseball`, {
+    method: "POST",
+    headers: { "X-Api-Key": apiKey(), Accept: "application/json" },
+    body: form,
+  });
   if (!res.ok) {
     console.error("Cardsight identify failed", res.status, (await res.text()).slice(0, 300));
     return null;
