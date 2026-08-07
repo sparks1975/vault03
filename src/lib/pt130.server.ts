@@ -118,12 +118,12 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        keywords,
-        daysToScrape: DAYS_TO_SCRAPE,
-        count: RESULTS_PER_SEARCH,
+        searchQueries: keywords,
+        soldWithinDays: DAYS_TO_SCRAPE,
+        maxItemsPerQuery: RESULTS_PER_SEARCH,
         ebaySite: "ebay.com",
-        sortOrder: "endedRecently",
-        includeCompletedListings: true,
+        sort: "recently_ended",
+        listingType: "all",
       }),
     },
   );
@@ -138,19 +138,22 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
 
   const out: Pt130Sale[] = [];
   for (const item of items) {
+    // The actor emits one "summary" row per query alongside the item rows.
+    if (item.type && item.type !== "item") continue;
     // Only USD sales — mixing currencies would corrupt the valuation math.
-    if (item.soldCurrency && item.soldCurrency !== "USD") continue;
+    if (item.currency && item.currency !== "USD") continue;
     const price = Number(item.soldPrice);
     if (!Number.isFinite(price) || price <= 0) continue;
     out.push({
       title: item.title?.trim() || null,
-      image_url: item.fullResThumbnailUrl || item.thumbnailUrl || null,
+      image_url: item.imageUrl || null,
       price,
-      sold_at: toIsoDate(item.endedAt),
+      sold_at: toIsoDate(item.saleEndDate),
       listing_type: normalizeListingType(item.listingType),
-      url: item.url || null,
+      url: item.itemUrl || null,
     });
   }
+
   return out;
 }
 
