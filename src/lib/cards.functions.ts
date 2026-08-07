@@ -309,9 +309,11 @@ async function applyValuation(
 
     current_value: number;
     value_delta_pct: number;
+    valuation_error?: boolean;
     sales: Array<{ sold_at: string | null; grade: string | null; price: number; source: string; url: string | null; title?: string | null }>;
     history: Array<{ recorded_at: string; value: number }>;
   },
+
 ) {
   const { data: cardIdentity, error: cardIdentityError } = await supabase
     .from("cards")
@@ -408,12 +410,22 @@ async function applyValuation(
         last_valuation_failed_at: null,
       })
       .eq("id", cardId);
-  } else {
+  } else if (valuation.valuation_error) {
+    // A pricing source actually errored (rate limit, credits, network) — flag
+    // it so the UI can say "Valuation temporarily unavailable".
     await supabase
       .from("cards")
       .update({ last_valuation_failed_at: new Date().toISOString() })
       .eq("id", cardId);
+  } else {
+    // Sources answered fine, there just are no matching comps for this card.
+    // Clear any stale failure flag so the UI shows "No comps available".
+    await supabase
+      .from("cards")
+      .update({ last_valuation_failed_at: null })
+      .eq("id", cardId);
   }
+
 }
 
 
@@ -427,6 +439,7 @@ export const replaceValuation = createServerFn({ method: "POST" })
         card_id: z.string().uuid(),
         current_value: z.number(),
         value_delta_pct: z.number(),
+        valuation_error: z.boolean().optional(),
         sales: z.array(
           z.object({
             sold_at: z.string().nullable(),
@@ -446,11 +459,13 @@ export const replaceValuation = createServerFn({ method: "POST" })
     await applyValuation(supabase as never, userId, data.card_id, {
       current_value: data.current_value,
       value_delta_pct: data.value_delta_pct,
+      valuation_error: data.valuation_error ?? false,
       sales: data.sales,
       history: data.history,
     });
     return { ok: true };
   });
+
 
 // ---------- Compress existing stored images via TinyPNG ----------
 export const compressExistingPhotos = createServerFn({ method: "POST" })

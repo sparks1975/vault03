@@ -626,6 +626,12 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     let deltaPct = 0;
     let compsNote: string | null = null;
     let usedCardsight = false;
+    // True only when a pricing source actually errored out (network failure,
+    // rate limit, exhausted credits) — NOT when the sources simply returned no
+    // matching comps. The UI uses this to decide between "Valuation temporarily
+    // unavailable" and "No comps available".
+    let pipelineError = false;
+
     let resolvedGradeId: string | null = data.cardsight_grade_id ?? null;
     let resolvedCardId: string | null = data.cardsight_card_id ?? null;
     let selectedParallelName: string | null = null;
@@ -894,8 +900,10 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         }
       } catch (err) {
         console.error("Cardsight pricing failed:", err);
+        pipelineError = true;
         compsNote = err instanceof Error ? err.message : String(err);
       }
+
     }
 
     // Do not fan out into repeated catalog corrections and broad pricing
@@ -1008,7 +1016,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
 
       } catch (err) {
         console.error("eBay sold pass failed:", err);
+        pipelineError = true;
       }
+
     };
 
     // Real sold data first, CardSight catalog pricing only as a backstop.
@@ -1045,9 +1055,11 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         history: fallbackHistory(currentValue),
         source: "cardsight" as const,
         note: compsNote,
+        valuation_error: false,
         resolved_cardsight_card_id: resolvedCardId,
         resolved_cardsight_grade_id: resolvedGradeId,
       };
+
     }
 
     // No verified sold data means there is no defensible automatic value.
@@ -1076,7 +1088,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       history: [],
       source: "ai" as const,
       note: compsNote ?? `No verified sold comps found for ${descriptor}. Enter a value manually.`,
+      valuation_error: pipelineError,
       resolved_cardsight_card_id: resolvedCardId,
       resolved_cardsight_grade_id: resolvedGradeId,
     };
   });
+
