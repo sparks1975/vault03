@@ -159,7 +159,7 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
       title: item.title?.trim() || null,
       image_url: item.thumbnailUrl || null,
       price,
-      sold_at: toIsoDate(item.endedAt),
+      sold_at: endedIso,
       listing_type: normalizeListingType(item.listingType, item.isBestOfferAccepted),
       url: item.url || null,
     });
