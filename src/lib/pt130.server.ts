@@ -5,6 +5,7 @@
 // SERVER-ONLY module — never import from client code.
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/firecrawl/v2/scrape";
+const SCRAPE_TIMEOUT_MS = 20_000;
 
 export type Pt130Sale = {
   title: string | null;
@@ -136,15 +137,24 @@ export async function scrapePt130(descriptor: string): Promise<Pt130Sale[]> {
     ],
   };
 
-  const res = await fetch(GATEWAY_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${lovableKey}`,
-      "X-Connection-Api-Key": firecrawlKey,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(GATEWAY_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${lovableKey}`,
+        "X-Connection-Api-Key": firecrawlKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(SCRAPE_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new Error("130point search timed out");
+    }
+    throw err;
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Firecrawl 130point scrape failed [${res.status}]: ${text}`);
