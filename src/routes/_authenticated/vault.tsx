@@ -852,13 +852,18 @@ function CardDetail({
       qc.invalidateQueries({ queryKey: ["cards"] });
       if (est.note) toast.warning(est.note);
       const soldCount = est.sales.filter((s) => s.source.includes("eBay sold")).length;
-      toast.success(
-        soldCount > 0
-          ? `Valuation refreshed — ${soldCount} sold comp${soldCount === 1 ? "" : "s"}`
-          : "Valuation refreshed — AI estimate (no sold comps yet)",
-      );
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed");
+      const valued = Number.isFinite(Number(est.current_value)) && Number(est.current_value) > 0;
+      if (!valued) {
+        toast.error("Valuation temporarily unavailable, try again in 10-20 min.");
+      } else {
+        toast.success(
+          soldCount > 0
+            ? `Valuation refreshed — ${soldCount} sold comp${soldCount === 1 ? "" : "s"}`
+            : "Valuation refreshed — AI estimate (no sold comps yet)",
+        );
+      }
+    } catch {
+      toast.error("Valuation temporarily unavailable, try again in 10-20 min.");
     } finally {
       setValuing(false);
     }
@@ -1216,7 +1221,15 @@ function CardDetail({
           )}
         </div>
 
-        <RecentComparables sales={sales} cardId={card.id} />
+        <RecentComparables
+          sales={sales}
+          cardId={card.id}
+          valuationFailed={Boolean(
+            card.last_valuation_failed_at &&
+              (!card.last_valued_at ||
+                new Date(card.last_valuation_failed_at).getTime() > new Date(card.last_valued_at).getTime()),
+          )}
+        />
       </div>
       </div>
     </div>
@@ -1354,7 +1367,7 @@ function isNonSingleSaleTitle(title: string | null | undefined) {
   return nonSingle.test(raw) || (sealedWords.test(raw) && containers.test(raw));
 }
 
-function RecentComparables({ sales, cardId }: { sales: SaleRow[]; cardId: string }) {
+function RecentComparables({ sales, cardId, valuationFailed }: { sales: SaleRow[]; cardId: string; valuationFailed?: boolean }) {
   const [manageOpen, setManageOpen] = useState(false);
   const valid = (sales ?? []).filter((s) => Number.isFinite(Number(s.price)) && Number(s.price) > 0 && !isNonSingleSaleTitle(s.title));
   const headerBtn = (
@@ -1373,7 +1386,9 @@ function RecentComparables({ sales, cardId }: { sales: SaleRow[]; cardId: string
           {headerBtn}
         </div>
         <p className="text-xs text-muted-foreground">
-          No comparable sales found. The card value shown is an AI market estimate.
+          {valuationFailed
+            ? "Valuation temporarily unavailable, try again in 10-20 min."
+            : "No comparable sales found. The card value shown is an AI market estimate."}
         </p>
         {manageOpen && <ManageCompsDialog cardId={cardId} onClose={() => setManageOpen(false)} />}
       </div>
@@ -2135,8 +2150,11 @@ function AddCardDialog({
         onCreated(created.id);
         onClose();
         const soldCount = est.sales.filter((s) => s.source.includes("eBay sold")).length;
+        const valued = Number.isFinite(Number(est.current_value)) && Number(est.current_value) > 0;
         if (soldCount > 0) {
           toast.success(`Valued — ${soldCount} sold comp${soldCount === 1 ? "" : "s"}`);
+        } else if (!valued) {
+          toast.error("Valuation temporarily unavailable, try again in 10-20 min.");
         } else {
           toast.warning("No verified sold comps found — enter a value manually.");
         }
@@ -2145,7 +2163,7 @@ function AddCardDialog({
         await qc.invalidateQueries({ queryKey: ["cards"] });
         onCreated(created.id);
         onClose();
-        toast.error("Valuation failed — use Refresh value on the card.");
+        toast.error("Valuation temporarily unavailable, try again in 10-20 min.");
       }
       void updateFn;
     } catch (e) {
