@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Share2, Copy, Check, Loader2, X } from "lucide-react";
 import { getShareSettings, updateShareSettings } from "@/lib/share.functions";
+import shareAsset from "@/assets/share.svg.asset.json";
 
 export function ShareDialog() {
   const [open, setOpen] = useState(false);
