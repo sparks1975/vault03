@@ -46,7 +46,7 @@ export const Route = createFileRoute("/api/public/hooks/refresh-130point")({
         let stored = 0;
         let failed = 0;
         for (const c of cards ?? []) {
-          const descriptors = buildPt130Descriptors(c);
+          const descriptors = buildPt130Descriptors({ ...c, selected_parallel_name: c.parallel });
           if (descriptors.length === 0) continue;
           try {
             const r = await refreshPt130ForCard(admin as never, {
