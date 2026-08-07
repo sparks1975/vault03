@@ -855,8 +855,10 @@ function CardDetail({
       if (est.note) toast.warning(est.note);
       const soldCount = est.sales.filter((s) => s.source.includes("eBay sold")).length;
       const valued = Number.isFinite(Number(est.current_value)) && Number(est.current_value) > 0;
-      if (!valued) {
+      if (est.valuation_error) {
         toast.error("Valuation temporarily unavailable, try again in 10-20 min.");
+      } else if (!valued) {
+        toast.warning(est.note ?? "No matching sold comps found for this exact card.");
       } else {
         toast.success(
           soldCount > 0
@@ -2156,8 +2158,10 @@ function AddCardDialog({
         const valued = Number.isFinite(Number(est.current_value)) && Number(est.current_value) > 0;
         if (soldCount > 0) {
           toast.success(`Valued — ${soldCount} sold comp${soldCount === 1 ? "" : "s"}`);
-        } else if (!valued) {
+        } else if (est.valuation_error) {
           toast.error("Valuation temporarily unavailable, try again in 10-20 min.");
+        } else if (!valued) {
+          toast.warning(est.note ?? "No matching sold comps found for this exact card.");
         } else {
           toast.warning("No verified sold comps found — enter a value manually.");
         }
