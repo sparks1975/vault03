@@ -1,4 +1,4 @@
-// Nightly refresh of the eBay sold-listings cache (via Apify) for every card in the app.
+// Nightly refresh of the eBay sold-listings cache (via Apify caffein.dev actor) for every card in the app.
 // Triggered by pg_cron via HTTP POST with the Supabase publishable key in the
 // `apikey` header. The route validates that key against the environment before
 // doing any work.
@@ -34,7 +34,7 @@ export const Route = createFileRoute("/api/public/hooks/refresh-130point")({
 
         const { data: cards, error } = await admin
           .from("cards")
-          .select("id, user_id, player_name, year, set_name, card_number, is_autograph, grader, grade");
+          .select("id, user_id, player_name, year, set_name, card_number, is_autograph, grader, grade, parallel");
         if (error) {
           return new Response(JSON.stringify({ error: error.message }), {
             status: 500,
@@ -46,7 +46,7 @@ export const Route = createFileRoute("/api/public/hooks/refresh-130point")({
         let stored = 0;
         let failed = 0;
         for (const c of cards ?? []) {
-          const descriptors = buildPt130Descriptors(c);
+          const descriptors = buildPt130Descriptors({ ...c, selected_parallel_name: c.parallel });
           if (descriptors.length === 0) continue;
           try {
             const r = await refreshPt130ForCard(admin as never, {
