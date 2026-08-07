@@ -410,12 +410,22 @@ async function applyValuation(
         last_valuation_failed_at: null,
       })
       .eq("id", cardId);
-  } else {
+  } else if (valuation.valuation_error) {
+    // A pricing source actually errored (rate limit, credits, network) — flag
+    // it so the UI can say "Valuation temporarily unavailable".
     await supabase
       .from("cards")
       .update({ last_valuation_failed_at: new Date().toISOString() })
       .eq("id", cardId);
+  } else {
+    // Sources answered fine, there just are no matching comps for this card.
+    // Clear any stale failure flag so the UI shows "No comps available".
+    await supabase
+      .from("cards")
+      .update({ last_valuation_failed_at: null })
+      .eq("id", cardId);
   }
+
 }
 
 
