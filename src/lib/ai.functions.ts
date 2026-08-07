@@ -945,7 +945,11 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         const cacheFresh =
           !data.force_refresh && newestScrape > 0 && Date.now() - newestScrape < 24 * 60 * 60 * 1000;
 
-        if (!cacheFresh) {
+        // Never block valuation on a refresh when we already have completed-sale
+        // data. The nightly job refreshes stale rows; valuations use the last
+        // known-good cache so a temporary crawler outage cannot turn a card into
+        // a slow zero-value result.
+        if (!cacheFresh && (cachedRows?.length ?? 0) === 0) {
           const { buildPt130Descriptors, refreshPt130ForCard } = await import("./pt130.server");
           const descriptors = buildPt130Descriptors({
             player_name: valuationLookup.player_name,
@@ -958,19 +962,25 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             grade: data.grade,
           });
           if (descriptors.length > 0) {
-            await refreshPt130ForCard(context.supabase as never, {
-              card_id: data.card_id,
-              user_id: context.userId,
-              descriptor: descriptors,
-              card_number: valuationLookup.card_number,
-            });
-            const refreshed = await context.supabase
-              .from("pt130_comps")
-              .select("title, price, sold_at, url, scraped_at")
-              .eq("card_id", data.card_id)
-              .order("sold_at", { ascending: false });
-            if (refreshed.error) throw refreshed.error;
-            cachedRows = refreshed.data;
+            try {
+              await refreshPt130ForCard(context.supabase as never, {
+                card_id: data.card_id,
+                user_id: context.userId,
+                descriptor: descriptors,
+                card_number: valuationLookup.card_number,
+              });
+              const refreshed = await context.supabase
+                .from("pt130_comps")
+                .select("title, price, sold_at, url, scraped_at")
+                .eq("card_id", data.card_id)
+                .order("sold_at", { ascending: false });
+              if (refreshed.error) throw refreshed.error;
+              cachedRows = refreshed.data;
+            } catch (err) {
+              // Continue to CardSight below when a brand-new card cannot be
+              // crawled. Existing caches never enter this branch.
+              console.error("eBay sold refresh failed; continuing with available sources:", err);
+            }
           }
         }
 
@@ -1026,11 +1036,11 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       }
     };
 
-    // Real sold data first, CardSight catalog pricing only as a backstop.
-    // PT130_ENABLED is a temporary discovery flag; when false we run CardSight alone.
+    // Use the fast structured catalog pricing first. 130point is the fallback
+    // when CardSight has no verified sales; it must not delay every valuation.
     const { PT130_ENABLED } = await import("./valuation-flags");
-    if (PT130_ENABLED) await ebaySoldPass();
-    if (!usedCardsight) await cardsightPass();
+    await cardsightPass();
+    if (PT130_ENABLED && !usedCardsight) await ebaySoldPass();
 
 
     if (!usedCardsight) {
