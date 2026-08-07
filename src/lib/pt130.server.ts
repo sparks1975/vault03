@@ -1,14 +1,14 @@
-// eBay completed-sales comps via Apify (actor: astronomical_reception/ebay-sold-lite).
-// This module replaced the old 130point/Firecrawl crawl. The cache table is
-// still named pt130_comps, but every row now comes from eBay sold listings
-// returned by the Apify actor.
+// eBay completed-sales comps via Apify (actor: caffein.dev/ebay-sold-listings).
+// The actor is paid per result (~$2.50–$4 / 1,000 results), so we keep
+// `count` low (20) and send a single descriptor per card to minimize cost.
+// The cache table is still named pt130_comps for backward compatibility.
 //
 // SERVER-ONLY module — never import from client code.
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/apify";
-const ACTOR_ID = "astronomical_reception~ebay-sold-lite";
+const ACTOR_ID = "caffein.dev~ebay-sold-listings";
 const DAYS_TO_SCRAPE = 90; // actor maximum
-const RESULTS_PER_SEARCH = 40;
+const RESULTS_PER_SEARCH = 20; // keeps cost ~$0.05–$0.08 per card
 
 export type Pt130Sale = {
   title: string | null;
@@ -20,14 +20,15 @@ export type Pt130Sale = {
 };
 
 type ApifyEbayItem = {
-  type?: string | null;
   title?: string | null;
   soldPrice?: string | number | null;
-  currency?: string | null;
-  saleEndDate?: string | null;
-  itemUrl?: string | null;
+  soldCurrency?: string | null;
+  endedAt?: string | null;
+  url?: string | null;
   listingType?: string | null;
-  imageUrl?: string | null;
+  isBestOfferAccepted?: boolean | null;
+  thumbnailUrl?: string | null;
+  keyword?: string | null;
 };
 
 function requireEnv(name: string): string {
@@ -36,9 +37,14 @@ function requireEnv(name: string): string {
   return v;
 }
 
-function normalizeListingType(raw: string | null | undefined): Pt130Sale["listing_type"] {
+function normalizeListingType(
+  raw: string | null | undefined,
+  isBestOffer: boolean | null | undefined,
+): Pt130Sale["listing_type"] {
+  // caffein.dev sets isBestOfferAccepted=true for Best Offer sales regardless
+  // of the underlying listingType, so check it first.
+  if (isBestOffer) return "best_offer";
   const v = (raw ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "");
-  if (v.includes("bestoffer")) return "best_offer";
   if (v.includes("auction")) return "auction";
   if (v.includes("buyitnow") || v.includes("fixed")) return "fixed";
   return "other";
@@ -87,12 +93,11 @@ export function buildPt130Descriptor(fields: {
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
+// Returns only the primary descriptor (with card number) to keep result count
+// — and therefore Apify cost — as low as possible.
 export function buildPt130Descriptors(fields: Parameters<typeof buildPt130Descriptor>[0]): string[] {
   const primary = buildPt130Descriptor(fields, { includeCardNumber: true });
-  const withoutNumber = fields.card_number
-    ? buildPt130Descriptor(fields, { includeCardNumber: false })
-    : "";
-  return [primary, withoutNumber].filter((value, index, all) => value && all.indexOf(value) === index);
+  return primary ? [primary] : [];
 }
 
 // Run the Apify eBay sold-listings actor for one or more search keywords.
@@ -118,12 +123,14 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        searchQueries: keywords,
-        soldWithinDays: DAYS_TO_SCRAPE,
-        maxItemsPerQuery: RESULTS_PER_SEARCH,
+        keywords,
+        count: RESULTS_PER_SEARCH,
+        daysToScrape: DAYS_TO_SCRAPE,
         ebaySite: "ebay.com",
-        sort: "recently_ended",
-        listingType: "all",
+        sortOrder: "endedRecently",
+        categoryId: "26376", // eBay Baseball Cards — filters boxes/lots/non-baseball at the source
+        includeCompletedListings: true,
+        itemCondition: "any",
       }),
     },
   );
@@ -138,19 +145,17 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
 
   const out: Pt130Sale[] = [];
   for (const item of items) {
-    // The actor emits one "summary" row per query alongside the item rows.
-    if (item.type && item.type !== "item") continue;
     // Only USD sales — mixing currencies would corrupt the valuation math.
-    if (item.currency && item.currency !== "USD") continue;
+    if (item.soldCurrency && item.soldCurrency !== "USD") continue;
     const price = Number(item.soldPrice);
     if (!Number.isFinite(price) || price <= 0) continue;
     out.push({
       title: item.title?.trim() || null,
-      image_url: item.imageUrl || null,
+      image_url: item.thumbnailUrl || null,
       price,
-      sold_at: toIsoDate(item.saleEndDate),
-      listing_type: normalizeListingType(item.listingType),
-      url: item.itemUrl || null,
+      sold_at: toIsoDate(item.endedAt),
+      listing_type: normalizeListingType(item.listingType, item.isBestOfferAccepted),
+      url: item.url || null,
     });
   }
 
