@@ -309,9 +309,11 @@ async function applyValuation(
 
     current_value: number;
     value_delta_pct: number;
+    valuation_error?: boolean;
     sales: Array<{ sold_at: string | null; grade: string | null; price: number; source: string; url: string | null; title?: string | null }>;
     history: Array<{ recorded_at: string; value: number }>;
   },
+
 ) {
   const { data: cardIdentity, error: cardIdentityError } = await supabase
     .from("cards")
