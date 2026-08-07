@@ -34,7 +34,7 @@ export const Route = createFileRoute("/api/public/hooks/refresh-130point")({
 
         const { data: cards, error } = await admin
           .from("cards")
-          .select("id, user_id, player_name, year, set_name, card_number, is_autograph, grader, grade");
+          .select("id, user_id, player_name, year, set_name, card_number, is_autograph, grader, grade, parallel");
         if (error) {
           return new Response(JSON.stringify({ error: error.message }), {
             status: 500,
