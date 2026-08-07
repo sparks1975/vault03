@@ -900,8 +900,10 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         }
       } catch (err) {
         console.error("Cardsight pricing failed:", err);
+        pipelineError = true;
         compsNote = err instanceof Error ? err.message : String(err);
       }
+
     }
 
     // Do not fan out into repeated catalog corrections and broad pricing
