@@ -1603,7 +1603,31 @@ export async function searchPricingComps(
   };
 }
 
+// ---------- Sold-only gate ----------
+// Comps must be completed sales. Anything that looks like an active/ask
+// listing (no sale date, a future end date, or a source/type that reads as a
+// live listing) is dropped before it can reach valuation or the comp list.
+const ACTIVE_LISTING_RE =
+  /\b(ask|asking|active|live|current|available|for\s*sale|listing price|buy it now price|bin ask|open)\b/i;
+
+export function isSoldPricingRecord(r: {
+  date?: string | null;
+  source?: string | null;
+  price?: number;
+}): boolean {
+  const price = Number(r.price);
+  if (!Number.isFinite(price) || price <= 0) return false;
+  if (!r.date) return false;
+  const t = new Date(r.date).getTime();
+  if (Number.isNaN(t)) return false;
+  // Allow a day of clock skew, then reject anything that hasn't ended yet.
+  if (t > Date.now() + 24 * 60 * 60 * 1000) return false;
+  if (r.source && ACTIVE_LISTING_RE.test(r.source)) return false;
+  return true;
+}
+
 // ---------- Stats helpers used by the valuation pipeline ----------
+
 export function median(values: number[]): number {
   if (values.length === 0) return 0;
   const s = [...values].sort((a, b) => a - b);
