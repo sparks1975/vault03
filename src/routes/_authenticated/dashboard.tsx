@@ -130,12 +130,12 @@ function DashboardPage() {
           </div>
         ) : (
           <>
-            <header className="border border-border animate-in-up grid grid-cols-1 lg:grid-cols-12">
-              <div className="order-first lg:order-last lg:col-span-3 border-b lg:border-b-0 lg:border-l border-border flex items-center justify-center px-2 py-3 sm:py-4 md:py-6 lg:px-4 lg:py-6 overflow-hidden">
-                <CollectorIllustration className="h-60 sm:h-64 md:h-80 lg:h-56 w-auto object-contain" />
+            <header className="border border-border animate-in-up">
+              <div className="border-b border-border flex items-center justify-center px-2 py-3 sm:py-4 md:py-6 overflow-hidden">
+                <CollectorIllustration className="w-full h-auto max-h-48 sm:max-h-56 md:max-h-72 object-contain" />
               </div>
 
-              <div className="lg:col-span-9 grid grid-cols-2 lg:grid-cols-4 gap-px bg-border">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-border">
                 <StatCell label="Total Value" value={fmt(s.totalValue)} sub={s.count ? "Live" : "Add your first card"} subAccent={s.count > 0} />
                 <StatCell label="Assets" value={String(s.count)} sub={s.count ? `Graded: ${s.gradedPct}%` : "—"} />
                 <StatCell label="Cost Basis" value={fmt(s.totalCost)} sub={`${s.valued} valued`} />
