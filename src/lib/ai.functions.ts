@@ -972,12 +972,14 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           }
         }
 
-        const usableRows = (cachedRows ?? []).filter((row) => {
-          const price = Number(row.price);
-          return Number.isFinite(price) && price > 0;
-        });
-        const passes = (relaxedSetMatch: boolean) =>
-          usableRows.filter((row) =>
+        type CompRow = { title: string | null; price: number | string; sold_at: string | null; url: string | null };
+        const usable = (rows: CompRow[] | null | undefined) =>
+          (rows ?? []).filter((row) => {
+            const price = Number(row.price);
+            return Number.isFinite(price) && price > 0;
+          });
+        const passes = (rows: CompRow[], relaxedSetMatch: boolean) =>
+          rows.filter((row) =>
             verifyCompTitle(row.title ?? "", {
               player_name: valuationLookup.player_name,
               year: valuationLookup.year,
@@ -994,8 +996,50 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         // match — the listing still has to match player, year, card number,
         // autograph, serial and parallel, so this recovers real comps whose
         // seller wrote the set name differently instead of falling to AI.
-        let matchedRows = passes(false);
-        if (matchedRows.length === 0) matchedRows = passes(true);
+        let usableRows = usable(cachedRows as CompRow[] | null);
+        let matchedRows = passes(usableRows, false);
+        if (matchedRows.length === 0) matchedRows = passes(usableRows, true);
+
+        // Still nothing? Many sellers omit the card number entirely, so the
+        // narrow keyword never surfaced the real sales. Run one broader search
+        // (same card, no card number in the query) and append those results.
+        if (matchedRows.length === 0 && valuationLookup.card_number && !cacheFresh) {
+          const { buildPt130Descriptor, refreshPt130ForCard } = await import("./pt130.server");
+          const broad = buildPt130Descriptor(
+            {
+              player_name: valuationLookup.player_name,
+              year: valuationLookup.year,
+              set_name: valuationLookup.set_name,
+              card_number: valuationLookup.card_number,
+              is_autograph: valuationLookup.is_autograph,
+              selected_parallel_name: selectedParallelName,
+              grader: data.grader,
+              grade: data.grade,
+            },
+            { includeCardNumber: false },
+          );
+          if (broad) {
+            await refreshPt130ForCard(context.supabase as never, {
+              card_id: data.card_id,
+              user_id: context.userId,
+              descriptor: [broad],
+              card_number: valuationLookup.card_number,
+              append: true,
+            });
+            const widened = await context.supabase
+              .from("pt130_comps")
+              .select("title, price, sold_at, url, scraped_at")
+              .eq("card_id", data.card_id)
+              .order("sold_at", { ascending: false });
+            if (!widened.error) {
+              cachedRows = widened.data;
+              usableRows = usable(cachedRows as CompRow[] | null);
+              matchedRows = passes(usableRows, false);
+              if (matchedRows.length === 0) matchedRows = passes(usableRows, true);
+            }
+          }
+        }
+
 
         const cachedSales = matchedRows.map((row) => ({
           sold_at: row.sold_at ?? null,
