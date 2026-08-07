@@ -77,7 +77,7 @@ export function ShareDialog() {
       <button
         onClick={() => setOpen(true)}
         title="Share collection"
-        className="px-3 md:px-4 py-2 border border-border text-foreground text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-secondary transition-colors inline-flex items-center gap-2"
+        className="px-3 md:px-4 py-2 border border-white/20 text-white text-xs font-bold uppercase tracking-widest rounded-sm hover:bg-white/10 transition-colors inline-flex items-center gap-2"
       >
         <Share2 className="size-3.5" />
         <span className="hidden sm:inline">Share</span>
