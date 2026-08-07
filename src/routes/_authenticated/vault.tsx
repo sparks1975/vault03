@@ -1216,7 +1216,15 @@ function CardDetail({
           )}
         </div>
 
-        <RecentComparables sales={sales} cardId={card.id} />
+        <RecentComparables
+          sales={sales}
+          cardId={card.id}
+          valuationFailed={Boolean(
+            card.last_valuation_failed_at &&
+              (!card.last_valued_at ||
+                new Date(card.last_valuation_failed_at).getTime() > new Date(card.last_valued_at).getTime()),
+          )}
+        />
       </div>
       </div>
     </div>
