@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import weeklyShowdownAsset from "@/assets/weekly_showdown.svg.asset.json";
 import { listCards } from "@/lib/cards.functions";
 import { AppNav, MobileNavTabs } from "@/components/AppNav";
+import { ShareDialog } from "@/components/ShareDialog";
 import { ShowdownPanel, type ShowdownCard } from "@/components/ShowdownPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -30,7 +31,7 @@ function ShowdownPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-20 overflow-x-clip">
-      <AppNav />
+      <AppNav actions={<ShareDialog />} />
 
       <main className="max-w-7xl mx-auto px-4 md:px-6 pt-0 md:pt-12">
         <div className="sticky top-16 z-30 -mx-4 md:-mx-6 px-4 md:px-6 py-2 mb-4 bg-black lg:hidden">
