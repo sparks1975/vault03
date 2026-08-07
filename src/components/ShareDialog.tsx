@@ -101,8 +101,16 @@ export function ShareDialog() {
               <X className="size-4" />
             </button>
 
-            <h2 className="text-lg font-bold mb-1">Share your collection</h2>
-            <p className="text-xs text-muted-foreground mb-6">
+            <img
+              src={shareAsset.url}
+              alt="Share your collection"
+              className="w-full max-w-[260px] mx-auto mb-4"
+            />
+
+            <h2 className="text-xl md:text-3xl font-extrabold tracking-tight font-display uppercase leading-none text-center mb-2">
+              Share your collection
+            </h2>
+            <p className="text-xs text-muted-foreground mb-6 text-center">
               Anyone with the link can view your cards and values. Purchase price stays private.
             </p>
 
