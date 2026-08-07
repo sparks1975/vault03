@@ -626,6 +626,12 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     let deltaPct = 0;
     let compsNote: string | null = null;
     let usedCardsight = false;
+    // True only when a pricing source actually errored out (network failure,
+    // rate limit, exhausted credits) — NOT when the sources simply returned no
+    // matching comps. The UI uses this to decide between "Valuation temporarily
+    // unavailable" and "No comps available".
+    let pipelineError = false;
+
     let resolvedGradeId: string | null = data.cardsight_grade_id ?? null;
     let resolvedCardId: string | null = data.cardsight_card_id ?? null;
     let selectedParallelName: string | null = null;
