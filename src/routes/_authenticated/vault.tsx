@@ -852,13 +852,18 @@ function CardDetail({
       qc.invalidateQueries({ queryKey: ["cards"] });
       if (est.note) toast.warning(est.note);
       const soldCount = est.sales.filter((s) => s.source.includes("eBay sold")).length;
-      toast.success(
-        soldCount > 0
-          ? `Valuation refreshed — ${soldCount} sold comp${soldCount === 1 ? "" : "s"}`
-          : "Valuation refreshed — AI estimate (no sold comps yet)",
-      );
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed");
+      const valued = Number.isFinite(Number(est.current_value)) && Number(est.current_value) > 0;
+      if (!valued) {
+        toast.error("Valuation temporarily unavailable, try again in 10-20 min.");
+      } else {
+        toast.success(
+          soldCount > 0
+            ? `Valuation refreshed — ${soldCount} sold comp${soldCount === 1 ? "" : "s"}`
+            : "Valuation refreshed — AI estimate (no sold comps yet)",
+        );
+      }
+    } catch {
+      toast.error("Valuation temporarily unavailable, try again in 10-20 min.");
     } finally {
       setValuing(false);
     }
@@ -2145,8 +2150,11 @@ function AddCardDialog({
         onCreated(created.id);
         onClose();
         const soldCount = est.sales.filter((s) => s.source.includes("eBay sold")).length;
+        const valued = Number.isFinite(Number(est.current_value)) && Number(est.current_value) > 0;
         if (soldCount > 0) {
           toast.success(`Valued — ${soldCount} sold comp${soldCount === 1 ? "" : "s"}`);
+        } else if (!valued) {
+          toast.error("Valuation temporarily unavailable, try again in 10-20 min.");
         } else {
           toast.warning("No verified sold comps found — enter a value manually.");
         }
@@ -2155,7 +2163,7 @@ function AddCardDialog({
         await qc.invalidateQueries({ queryKey: ["cards"] });
         onCreated(created.id);
         onClose();
-        toast.error("Valuation failed — use Refresh value on the card.");
+        toast.error("Valuation temporarily unavailable, try again in 10-20 min.");
       }
       void updateFn;
     } catch (e) {
