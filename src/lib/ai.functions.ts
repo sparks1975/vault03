@@ -12,23 +12,38 @@ const MODEL = "google/gemini-3.5-flash";
 // don't re-pay the full cost for a card that isn't in the catalog.
 const LOOKUP_RETRY_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Vision calls occasionally stall on the provider side. Without a deadline the
+// scan request hangs open and the UI just spins, so cap every AI call and turn
+// a stall into a real error the user can retry.
+const AI_TIMEOUT_MS = 60_000;
+
 async function callAI(body: unknown): Promise<string> {
   const apiKey = process.env.LOVABLE_API_KEY;
   if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
-  const res = await fetch(AI_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  let res: Response;
+  try {
+    res = await fetch(AI_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(AI_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError")) {
+      throw new Error("The card read timed out. Please try again.");
+    }
+    throw err;
+  }
   if (res.status === 429) throw new Error("Rate limit — try again in a moment.");
   if (res.status === 402) throw new Error("AI credits exhausted. Please add credits.");
   if (!res.ok) throw new Error(`AI request failed: ${res.status} ${await res.text()}`);
   const j = await res.json();
   return j.choices?.[0]?.message?.content ?? "";
 }
+
 
 function extractJson<T>(text: string): T {
   let cleaned = text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim();
