@@ -1055,9 +1055,11 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         history: fallbackHistory(currentValue),
         source: "cardsight" as const,
         note: compsNote,
+        valuation_error: false,
         resolved_cardsight_card_id: resolvedCardId,
         resolved_cardsight_grade_id: resolvedGradeId,
       };
+
     }
 
     // No verified sold data means there is no defensible automatic value.
