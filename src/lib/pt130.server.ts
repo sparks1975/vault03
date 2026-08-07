@@ -149,11 +149,17 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
     if (item.soldCurrency && item.soldCurrency !== "USD") continue;
     const price = Number(item.soldPrice);
     if (!Number.isFinite(price) || price <= 0) continue;
+    // Sold-only: a completed sale always has an end date in the past. Anything
+    // missing or future-dated is an active listing and must never be a comp.
+    const endedIso = toIsoDate(item.endedAt);
+    if (!endedIso) continue;
+    if (new Date(item.endedAt as string).getTime() > Date.now() + 24 * 60 * 60 * 1000) continue;
+
     out.push({
       title: item.title?.trim() || null,
       image_url: item.thumbnailUrl || null,
       price,
-      sold_at: toIsoDate(item.endedAt),
+      sold_at: endedIso,
       listing_type: normalizeListingType(item.listingType, item.isBestOfferAccepted),
       url: item.url || null,
     });
