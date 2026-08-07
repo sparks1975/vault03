@@ -1,4 +1,4 @@
-// eBay completed-sales comps via Apify (actor: caffein.dev/ebay-sold-listings).
+// eBay completed-sales comps via Apify (actor: astronomical_reception/ebay-sold-lite).
 // This module replaced the old 130point/Firecrawl crawl. The cache table is
 // still named pt130_comps, but every row now comes from eBay sold listings
 // returned by the Apify actor.
@@ -6,9 +6,9 @@
 // SERVER-ONLY module — never import from client code.
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/apify";
-const ACTOR_ID = "caffein.dev~ebay-sold-listings";
+const ACTOR_ID = "astronomical_reception~ebay-sold-lite";
 const DAYS_TO_SCRAPE = 90; // actor maximum
-const RESULTS_PER_SEARCH = 100;
+const RESULTS_PER_SEARCH = 40;
 
 export type Pt130Sale = {
   title: string | null;
@@ -20,14 +20,14 @@ export type Pt130Sale = {
 };
 
 type ApifyEbayItem = {
+  type?: string | null;
   title?: string | null;
   soldPrice?: string | number | null;
-  soldCurrency?: string | null;
-  endedAt?: string | null;
-  url?: string | null;
+  currency?: string | null;
+  saleEndDate?: string | null;
+  itemUrl?: string | null;
   listingType?: string | null;
-  thumbnailUrl?: string | null;
-  fullResThumbnailUrl?: string | null;
+  imageUrl?: string | null;
 };
 
 function requireEnv(name: string): string {
@@ -37,16 +37,11 @@ function requireEnv(name: string): string {
 }
 
 function normalizeListingType(raw: string | null | undefined): Pt130Sale["listing_type"] {
-  switch ((raw ?? "").trim().toLowerCase()) {
-    case "buy_it_now":
-      return "fixed";
-    case "auction":
-      return "auction";
-    case "best_offer_accepted":
-      return "best_offer";
-    default:
-      return "other";
-  }
+  const v = (raw ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+  if (v.includes("bestoffer")) return "best_offer";
+  if (v.includes("auction")) return "auction";
+  if (v.includes("buyitnow") || v.includes("fixed")) return "fixed";
+  return "other";
 }
 
 function toIsoDate(raw: string | null | undefined): string | null {
@@ -55,6 +50,7 @@ function toIsoDate(raw: string | null | undefined): string | null {
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString().slice(0, 10);
 }
+
 
 export function buildPt130Descriptor(fields: {
   year?: string | number | null;
