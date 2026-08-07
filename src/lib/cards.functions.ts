@@ -439,6 +439,7 @@ export const replaceValuation = createServerFn({ method: "POST" })
         card_id: z.string().uuid(),
         current_value: z.number(),
         value_delta_pct: z.number(),
+        valuation_error: z.boolean().optional(),
         sales: z.array(
           z.object({
             sold_at: z.string().nullable(),
@@ -458,11 +459,13 @@ export const replaceValuation = createServerFn({ method: "POST" })
     await applyValuation(supabase as never, userId, data.card_id, {
       current_value: data.current_value,
       value_delta_pct: data.value_delta_pct,
+      valuation_error: data.valuation_error ?? false,
       sales: data.sales,
       history: data.history,
     });
     return { ok: true };
   });
+
 
 // ---------- Compress existing stored images via TinyPNG ----------
 export const compressExistingPhotos = createServerFn({ method: "POST" })
