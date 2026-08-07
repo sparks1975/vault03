@@ -1469,7 +1469,9 @@ export async function fetchPricing(
     records = resp.raw?.records ?? [];
   }
 
-  records = records.filter((r) => pricingRecordMatchesStructured(r, opts));
+  records = records
+    .filter(isSoldPricingRecord)
+    .filter((r) => pricingRecordMatchesStructured(r, opts));
 
   return {
     auctionSales: records,
@@ -1667,6 +1669,6 @@ export async function fetchAllCompCandidates(
       }
     }
   }
-  return dedupePricingRecords(rows);
+  return dedupePricingRecords(rows.filter(isSoldPricingRecord));
 }
 
