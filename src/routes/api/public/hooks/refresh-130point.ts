@@ -1,4 +1,4 @@
-// Nightly refresh of the 130point sales cache for every card in the app.
+// Nightly refresh of the eBay sold-listings cache (via Apify) for every card in the app.
 // Triggered by pg_cron via HTTP POST with the Supabase publishable key in the
 // `apikey` header. The route validates that key against the environment before
 // doing any work.
@@ -61,7 +61,7 @@ export const Route = createFileRoute("/api/public/hooks/refresh-130point")({
             failed++;
             console.error("refresh-130point failed for card", c.id, err);
           }
-          // Gentle pacing so we don't hammer Firecrawl.
+          // Gentle pacing so we don't hammer the Apify actor.
           await new Promise((r) => setTimeout(r, 1500));
         }
 
