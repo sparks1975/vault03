@@ -56,12 +56,14 @@ async function csFetchUncached<T>(path: string, init?: RequestInit): Promise<T> 
     await reserveSlot();
     const res = await fetch(`${REST_BASE}${path}`, {
       ...init,
+      signal: AbortSignal.timeout(45_000),
       headers: {
         "X-API-Key": apiKey(),
         Accept: "application/json",
         ...(init?.headers ?? {}),
       },
     });
+
     if (res.ok) return (await res.json()) as T;
     lastStatus = res.status;
     lastBody = await res.text().catch(() => "");
