@@ -8,7 +8,7 @@
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/apify";
 const ACTOR_ID = "caffein.dev~ebay-sold-listings";
 const DAYS_TO_SCRAPE = 90; // actor maximum
-const RESULTS_PER_SEARCH = 20; // keeps cost ~$0.05–$0.08 per card
+const RESULTS_PER_SEARCH = 10; // keeps cost ~$0.03–$0.04 per card
 
 export type Pt130Sale = {
   title: string | null;
