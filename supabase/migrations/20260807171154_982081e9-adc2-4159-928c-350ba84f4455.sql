@@ -1,0 +1,1 @@
+UPDATE public.cards c SET last_valuation_failed_at = NULL WHERE c.last_valuation_failed_at IS NOT NULL AND EXISTS (SELECT 1 FROM public.pt130_comps p WHERE p.card_id = c.id AND p.scraped_at > now() - interval '24 hours');
