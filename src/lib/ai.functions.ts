@@ -1088,7 +1088,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       history: [],
       source: "ai" as const,
       note: compsNote ?? `No verified sold comps found for ${descriptor}. Enter a value manually.`,
+      valuation_error: pipelineError,
       resolved_cardsight_card_id: resolvedCardId,
       resolved_cardsight_grade_id: resolvedGradeId,
     };
   });
+
