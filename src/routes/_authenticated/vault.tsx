@@ -359,6 +359,38 @@ function VaultPage() {
 
   const [mobileDetail, setMobileDetail] = useState(false);
 
+  function goPrev() {
+    if (sorted.length <= 1) return;
+    const i = sorted.findIndex((c) => c.id === selected);
+    const prev = sorted[(i - 1 + sorted.length) % sorted.length];
+    if (prev) setSelectedId(prev.id);
+  }
+  function goNext() {
+    if (sorted.length <= 1) return;
+    const i = sorted.findIndex((c) => c.id === selected);
+    const next = sorted[(i + 1 + sorted.length) % sorted.length];
+    if (next) setSelectedId(next.id);
+  }
+
+  // Touch swipe for navigating between cards on mobile detail view.
+  const detailTouch = useRef<{ x: number; y: number; t: number } | null>(null);
+  function onDetailTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    detailTouch.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  }
+  function onDetailTouchEnd(e: React.TouchEvent) {
+    const start = detailTouch.current;
+    detailTouch.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // Require a mostly-horizontal, sufficiently long swipe.
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx > 0) goPrev();
+    else goNext();
+  }
+
   const reorderFn = useServerFn(reorderCards);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
