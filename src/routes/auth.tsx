@@ -72,10 +72,41 @@ function hasOAuthReturnParams() {
   return /(^|[?&#])(code|access_token|success|error|error_description)=/.test(search + hash);
 }
 
+// Mobile browsers block/partition storage for embedded frames (the editor
+// preview), so an OAuth session can never land there. Detect it and send the
+// user to a real tab instead of leaving them stuck on this screen.
+function isBlockedEmbeddedContext() {
+  if (typeof window === "undefined") return false;
+  let embedded = false;
+  try {
+    embedded = window.top !== window.self;
+  } catch {
+    embedded = true;
+  }
+  if (!embedded) return false;
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  let storageOk = true;
+  try {
+    const k = "__v03_probe";
+    window.localStorage.setItem(k, "1");
+    window.localStorage.removeItem(k);
+  } catch {
+    storageOk = false;
+  }
+  return !storageOk || isMobile;
+}
+
+
 function AuthPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState<"google" | "apple" | null>(null);
   const [checking, setChecking] = useState(true);
+  const [embeddedBlocked, setEmbeddedBlocked] = useState(false);
+
+  useEffect(() => {
+    setEmbeddedBlocked(isBlockedEmbeddedContext());
+  }, []);
+
 
   useEffect(() => {
     let mounted = true;
@@ -155,9 +186,32 @@ function AuthPage() {
     }
   }
 
+  if (embeddedBlocked) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
+        <div className="w-full max-w-md text-center">
+          <p className="text-xl font-extrabold tracking-tighter italic text-foreground">VAULT.03</p>
+          <h1 className="mt-5 font-display text-3xl md:text-[50px] font-extrabold leading-none tracking-tighter italic text-foreground">
+            Open in your browser to sign in
+          </h1>
+          <p className="mt-4 text-sm text-muted-foreground">
+            Your phone blocks sign-in inside an embedded preview window. Tap below to open Vault.03
+            in a real browser tab and sign in there.
+          </p>
+          <Button asChild className="mt-8 w-full py-5 text-sm font-semibold">
+            <a href={typeof window !== "undefined" ? window.location.href : "/auth"} target="_blank" rel="noreferrer">
+              Open Vault.03
+            </a>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (checking) {
     return <RouteLoading />;
   }
+
 
 
 
