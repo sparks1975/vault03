@@ -113,7 +113,7 @@ function AuthPage() {
       }
       timer = window.setTimeout(check, 500);
     };
-    void check();
+    timer = window.setTimeout(check, 0);
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
       if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session) go();
