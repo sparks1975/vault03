@@ -72,6 +72,31 @@ function hasOAuthReturnParams() {
   return /(^|[?&#])(code|access_token|success|error|error_description)=/.test(search + hash);
 }
 
+// Mobile browsers block/partition storage for embedded frames (the editor
+// preview), so an OAuth session can never land there. Detect it and send the
+// user to a real tab instead of leaving them stuck on this screen.
+function isBlockedEmbeddedContext() {
+  if (typeof window === "undefined") return false;
+  let embedded = false;
+  try {
+    embedded = window.top !== window.self;
+  } catch {
+    embedded = true;
+  }
+  if (!embedded) return false;
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  let storageOk = true;
+  try {
+    const k = "__v03_probe";
+    window.localStorage.setItem(k, "1");
+    window.localStorage.removeItem(k);
+  } catch {
+    storageOk = false;
+  }
+  return !storageOk || isMobile;
+}
+
+
 function AuthPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState<"google" | "apple" | null>(null);
