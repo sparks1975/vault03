@@ -513,7 +513,38 @@ function VaultPage() {
           <aside className={`lg:col-span-5 animate-in-up [animation-delay:200ms] ${mobileDetail ? "" : "hidden lg:block"}`}>
             <div className="lg:sticky lg:top-28 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
               {selectedCard ? (
-                <CardDetail card={selectedCard} onDeleted={(id) => { removeCard(id); setMobileDetail(false); }} onUpdate={updateCard} />
+                <>
+                  {sorted.length > 1 && (
+                    <div className="lg:hidden flex items-center justify-between gap-2 mb-3">
+                      <button
+                        onClick={() => {
+                          const i = sorted.findIndex((c) => c.id === selected);
+                          const prev = sorted[(i - 1 + sorted.length) % sorted.length];
+                          if (prev) setSelectedId(prev.id);
+                        }}
+                        className="flex-1 px-3 py-2 border border-border text-xs font-bold uppercase tracking-widest rounded-sm inline-flex items-center justify-center gap-1.5 hover:bg-secondary transition-colors"
+                        aria-label="Previous card"
+                      >
+                        <ChevronLeft className="size-3.5" /> Prev
+                      </button>
+                      <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground shrink-0">
+                        {sorted.findIndex((c) => c.id === selected) + 1} / {sorted.length}
+                      </span>
+                      <button
+                        onClick={() => {
+                          const i = sorted.findIndex((c) => c.id === selected);
+                          const next = sorted[(i + 1) % sorted.length];
+                          if (next) setSelectedId(next.id);
+                        }}
+                        className="flex-1 px-3 py-2 border border-border text-xs font-bold uppercase tracking-widest rounded-sm inline-flex items-center justify-center gap-1.5 hover:bg-secondary transition-colors"
+                        aria-label="Next card"
+                      >
+                        Next <ChevronRight className="size-3.5" />
+                      </button>
+                    </div>
+                  )}
+                  <CardDetail card={selectedCard} onDeleted={(id) => { removeCard(id); setMobileDetail(false); }} onUpdate={updateCard} />
+                </>
               ) : (
                 <div className="bg-card border border-border p-6 text-sm text-muted-foreground">
                   Select a card to see market data and player stats.
@@ -521,6 +552,7 @@ function VaultPage() {
               )}
             </div>
           </aside>
+
         </div>
       </main>
 
