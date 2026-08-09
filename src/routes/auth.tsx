@@ -98,7 +98,7 @@ function AuthPage() {
     // Coming back from the provider: give supabase-js a moment to hydrate the
     // session from the URL before deciding the user is signed out.
     const returning = hasOAuthReturnParams();
-    const deadline = Date.now() + (returning ? 12_000 : 2_500);
+    const deadline = Date.now() + (returning ? 12_000 : 0);
 
     const check = async () => {
       if (!mounted) return;
