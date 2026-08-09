@@ -1262,17 +1262,6 @@ function CardDetail({
       )}
 
       <div className="space-y-8">
-        {priceHistory.length >= 2 && (
-          <div>
-            <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4 border-b border-border pb-2">
-              Price Trend
-            </h3>
-            <SalesSparkline points={priceHistory} />
-          </div>
-        )}
-
-
-
         <div>
           <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4 border-b border-border pb-2">
             {stats.data
@@ -1289,6 +1278,16 @@ function CardDetail({
             <p className="text-xs text-muted-foreground">No stats available for this season.</p>
           )}
         </div>
+
+        {priceHistory.length >= 2 && (
+          <div>
+            <h3 className="text-xs font-mono uppercase tracking-widest text-muted-foreground mb-4 border-b border-border pb-2">
+              Price Trend
+            </h3>
+            <SalesSparkline points={priceHistory} />
+          </div>
+        )}
+
 
         <RecentComparables
           sales={sales}
