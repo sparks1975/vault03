@@ -65,6 +65,13 @@ function AppleIcon({ className }: { className?: string }) {
   );
 }
 
+function hasOAuthReturnParams() {
+  if (typeof window === "undefined") return false;
+  const search = window.location.search;
+  const hash = window.location.hash;
+  return /(^|[?&#])(code|access_token|success|error|error_description)=/.test(search + hash);
+}
+
 function AuthPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState<"google" | "apple" | null>(null);
@@ -72,73 +79,77 @@ function AuthPage() {
 
   useEffect(() => {
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
+    let timer: number | undefined;
+
+    const done = () => {
       if (!mounted) return;
+      setChecking(false);
+      // Drop any leftover OAuth params so a stale/failed attempt can't loop.
+      if (hasOAuthReturnParams()) {
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    };
+
+    const go = () => {
+      if (!mounted) return;
+      navigate({ to: "/dashboard", replace: true });
+    };
+
+    // Coming back from the provider: give supabase-js a moment to hydrate the
+    // session from the URL before deciding the user is signed out.
+    const returning = hasOAuthReturnParams();
+    const deadline = Date.now() + (returning ? 12_000 : 0);
+
+    const check = async () => {
+      if (!mounted) return;
+      const { data } = await supabase.auth.getSession();
       if (data.session) {
-        navigate({ to: "/dashboard", replace: true });
-      } else {
-        setChecking(false);
+        go();
+        return;
       }
-    });
+      if (Date.now() >= deadline) {
+        done();
+        return;
+      }
+      timer = window.setTimeout(check, 500);
+    };
+    timer = window.setTimeout(check, 0);
+
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) {
-        navigate({ to: "/dashboard", replace: true });
-      }
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session) go();
     });
+
     return () => {
       mounted = false;
+      if (timer) window.clearTimeout(timer);
       sub.subscription.unsubscribe();
     };
   }, [navigate]);
 
   async function handleOAuth(provider: "google" | "apple") {
     setLoading(provider);
-
-    // Poll for a session in parallel — if the popup postMessage handshake
-    // fails (mobile, popup blockers, cross-origin quirks) but tokens were
-    // still set on the supabase client, we still catch it and navigate.
-    let cancelled = false;
-    const pollStart = Date.now();
-    const poll = async () => {
-      while (!cancelled && Date.now() - pollStart < 120_000) {
-        await new Promise((r) => setTimeout(r, 800));
-        const { data } = await supabase.auth.getSession();
-        if (data.session) {
-          cancelled = true;
-          navigate({ to: "/dashboard", replace: true });
-          return;
-        }
-      }
-    };
-    void poll();
-
     try {
       const result = await lovable.auth.signInWithOAuth(provider, {
         redirect_uri: window.location.origin + "/auth",
       });
       if (result.error) {
-        cancelled = true;
         toast.error(result.error.message ?? "Sign-in failed");
         setLoading(null);
         return;
       }
+      // Full-page redirect in progress (typical on phones) — leave the button
+      // spinning; the page is about to unload.
       if (result.redirected) return;
+
       const { data } = await supabase.auth.getSession();
       if (data.session) {
-        cancelled = true;
         navigate({ to: "/dashboard", replace: true });
         return;
       }
-      // Leave polling running — some browsers deliver the session slightly
-      // after the popup resolves. Reset button after 10s if nothing lands.
-      setTimeout(() => {
-        if (!cancelled) {
-          cancelled = true;
-          setLoading(null);
-        }
-      }, 10_000);
+      // Popup closed without delivering a session: recover the button so the
+      // user is never stuck on a spinner.
+      setLoading(null);
     } catch (err) {
-      cancelled = true;
       toast.error(err instanceof Error ? err.message : "Sign-in failed");
       setLoading(null);
     }
@@ -147,6 +158,8 @@ function AuthPage() {
   if (checking) {
     return <RouteLoading />;
   }
+
+
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
