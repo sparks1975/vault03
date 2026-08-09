@@ -359,6 +359,38 @@ function VaultPage() {
 
   const [mobileDetail, setMobileDetail] = useState(false);
 
+  function goPrev() {
+    if (sorted.length <= 1) return;
+    const i = sorted.findIndex((c) => c.id === selected);
+    const prev = sorted[(i - 1 + sorted.length) % sorted.length];
+    if (prev) setSelectedId(prev.id);
+  }
+  function goNext() {
+    if (sorted.length <= 1) return;
+    const i = sorted.findIndex((c) => c.id === selected);
+    const next = sorted[(i + 1 + sorted.length) % sorted.length];
+    if (next) setSelectedId(next.id);
+  }
+
+  // Touch swipe for navigating between cards on mobile detail view.
+  const detailTouch = useRef<{ x: number; y: number; t: number } | null>(null);
+  function onDetailTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    detailTouch.current = { x: t.clientX, y: t.clientY, t: Date.now() };
+  }
+  function onDetailTouchEnd(e: React.TouchEvent) {
+    const start = detailTouch.current;
+    detailTouch.current = null;
+    if (!start) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - start.x;
+    const dy = t.clientY - start.y;
+    // Require a mostly-horizontal, sufficiently long swipe.
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+    if (dx > 0) goPrev();
+    else goNext();
+  }
+
   const reorderFn = useServerFn(reorderCards);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -510,18 +542,18 @@ function VaultPage() {
             )}
           </section>
 
-          <aside className={`lg:col-span-5 animate-in-up [animation-delay:200ms] ${mobileDetail ? "" : "hidden lg:block"}`}>
+          <aside
+            className={`lg:col-span-5 animate-in-up [animation-delay:200ms] ${mobileDetail ? "" : "hidden lg:block"}`}
+            onTouchStart={mobileDetail ? onDetailTouchStart : undefined}
+            onTouchEnd={mobileDetail ? onDetailTouchEnd : undefined}
+          >
             <div className="lg:sticky lg:top-28 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
               {selectedCard ? (
                 <>
                   {sorted.length > 1 && (
                     <div className="lg:hidden flex items-center justify-between gap-2 mb-3">
                       <button
-                        onClick={() => {
-                          const i = sorted.findIndex((c) => c.id === selected);
-                          const prev = sorted[(i - 1 + sorted.length) % sorted.length];
-                          if (prev) setSelectedId(prev.id);
-                        }}
+                        onClick={goPrev}
                         className="flex-1 px-3 py-2 border border-border text-xs font-bold uppercase tracking-widest rounded-sm inline-flex items-center justify-center gap-1.5 hover:bg-secondary transition-colors"
                         aria-label="Previous card"
                       >
@@ -531,11 +563,7 @@ function VaultPage() {
                         {sorted.findIndex((c) => c.id === selected) + 1} / {sorted.length}
                       </span>
                       <button
-                        onClick={() => {
-                          const i = sorted.findIndex((c) => c.id === selected);
-                          const next = sorted[(i + 1) % sorted.length];
-                          if (next) setSelectedId(next.id);
-                        }}
+                        onClick={goNext}
                         className="flex-1 px-3 py-2 border border-border text-xs font-bold uppercase tracking-widest rounded-sm inline-flex items-center justify-center gap-1.5 hover:bg-secondary transition-colors"
                         aria-label="Next card"
                       >
@@ -544,6 +572,11 @@ function VaultPage() {
                     </div>
                   )}
                   <CardDetail card={selectedCard} onDeleted={(id) => { removeCard(id); setMobileDetail(false); }} onUpdate={updateCard} />
+                  {sorted.length > 1 && mobileDetail && (
+                    <p className="lg:hidden text-center text-[10px] font-mono uppercase tracking-widest text-muted-foreground/70 mt-4">
+                      Swipe left / right to view other cards
+                    </p>
+                  )}
                 </>
               ) : (
                 <div className="bg-card border border-border p-6 text-sm text-muted-foreground">
