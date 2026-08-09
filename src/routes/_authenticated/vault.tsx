@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Plus, Trash2, Camera, Loader2, Pencil, Check, X, ChevronLeft, RefreshCw, GripVertical } from "lucide-react";
+import { Plus, Trash2, Camera, Loader2, Pencil, Check, X, ChevronLeft, ChevronRight, RefreshCw, GripVertical } from "lucide-react";
 
 import {
   DndContext,
