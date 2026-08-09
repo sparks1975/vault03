@@ -101,6 +101,12 @@ function AuthPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState<"google" | "apple" | null>(null);
   const [checking, setChecking] = useState(true);
+  const [embeddedBlocked, setEmbeddedBlocked] = useState(false);
+
+  useEffect(() => {
+    setEmbeddedBlocked(isBlockedEmbeddedContext());
+  }, []);
+
 
   useEffect(() => {
     let mounted = true;
