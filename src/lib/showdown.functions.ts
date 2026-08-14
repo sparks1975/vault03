@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { LINEUP_SIZE, cardMultiplier } from "@/lib/showdown-scoring";
+import { LINEUP_SIZE, cardMultiplier, type StatLine } from "@/lib/showdown-scoring";
 
 export type LeaderboardRow = {
   rank: number;
@@ -127,11 +127,21 @@ export const getShowdownLineup = createServerFn({ method: "GET" })
       .eq("user_id", data.user_id)
       .maybeSingle();
     if (error) throw error;
-    if (!entry) return { cards: [] as { player_name: string; detail: string; multiplier: number; points: number }[] };
+    if (!entry)
+      return {
+        cards: [] as {
+          player_name: string;
+          detail: string;
+          multiplier: number;
+          player_points: number;
+          points: number;
+          stats: StatLine | null;
+        }[],
+      };
 
     const { data: rows, error: cErr } = await supabaseAdmin
       .from("contest_entry_cards")
-      .select("card_id, player_points, multiplier, points")
+      .select("card_id, player_points, multiplier, points, stats")
       .eq("entry_id", entry.id);
     if (cErr) throw cErr;
 
@@ -157,7 +167,9 @@ export const getShowdownLineup = createServerFn({ method: "GET" })
           player_name: meta.get(r.card_id)?.player_name ?? "Unknown player",
           detail: meta.get(r.card_id)?.detail ?? "",
           multiplier: Number(r.multiplier),
+          player_points: Number(r.player_points),
           points: Number(r.points),
+          stats: (r.stats ?? null) as StatLine | null,
         }))
         .sort((a, b) => b.points - a.points),
     };

@@ -11,6 +11,7 @@ import {
   weekEnd,
   weekStart,
   type RawStats,
+  type StatLine,
 } from "@/lib/showdown-scoring";
 
 type Admin = SupabaseClient<Database>;
@@ -87,11 +88,11 @@ type StatGroupBlock = { group?: { displayName?: string }; splits?: StatSplit[] }
  * Total fantasy points a player earned between two dates, combining hitting and
  * pitching. One HTTP call per player.
  */
-export async function fetchPlayerWeekPoints(
+export async function fetchPlayerWeekStats(
   playerId: number,
   startDate: string,
   endDate: string,
-): Promise<number> {
+): Promise<{ points: number; stats: StatLine | null }> {
   const url =
     `https://statsapi.mlb.com/api/v1/people/${playerId}/stats` +
     `?stats=byDateRange&group=hitting,pitching` +
@@ -100,20 +101,80 @@ export async function fetchPlayerWeekPoints(
   try {
     body = await mlbJson(url);
   } catch {
-    return 0;
+    return { points: 0, stats: null };
   }
   const groups = ((body as { stats?: StatGroupBlock[] })?.stats ?? []) as StatGroupBlock[];
   let total = 0;
+  const hitting: RawStats = {};
+  const pitching: RawStats = {};
+  let sawHitting = false;
+  let sawPitching = false;
+
+  const accumulate = (target: RawStats, stat: RawStats, keys: string[]) => {
+    for (const key of keys) {
+      const raw = stat[key];
+      if (raw == null) continue;
+      if (key === "inningsPitched") {
+        // Innings are "12.2" style; keep the API string for display.
+        target[key] = String(raw);
+        continue;
+      }
+      const n = typeof raw === "number" ? raw : Number.parseFloat(String(raw));
+      if (!Number.isFinite(n)) continue;
+      target[key] = (Number(target[key] ?? 0) || 0) + n;
+    }
+  };
+
   for (const g of groups) {
     const group = (g.group?.displayName ?? "").toLowerCase();
     for (const split of g.splits ?? []) {
       const stat = split.stat;
       if (!stat) continue;
-      if (group === "hitting") total += hittingPoints(stat);
-      else if (group === "pitching") total += pitchingPoints(stat);
+      if (group === "hitting") {
+        total += hittingPoints(stat);
+        sawHitting = true;
+        accumulate(hitting, stat, [
+          "atBats",
+          "hits",
+          "doubles",
+          "triples",
+          "homeRuns",
+          "rbi",
+          "runs",
+          "baseOnBalls",
+          "stolenBases",
+          "strikeOuts",
+        ]);
+      } else if (group === "pitching") {
+        total += pitchingPoints(stat);
+        sawPitching = true;
+        accumulate(pitching, stat, [
+          "inningsPitched",
+          "strikeOuts",
+          "wins",
+          "saves",
+          "earnedRuns",
+          "hits",
+          "baseOnBalls",
+        ]);
+      }
     }
   }
-  return round2(total);
+
+  const stats: StatLine | null =
+    sawHitting || sawPitching
+      ? { hitting: sawHitting ? hitting : null, pitching: sawPitching ? pitching : null }
+      : null;
+  return { points: round2(total), stats };
+}
+
+/** Total fantasy points a player earned between two dates. */
+export async function fetchPlayerWeekPoints(
+  playerId: number,
+  startDate: string,
+  endDate: string,
+): Promise<number> {
+  return (await fetchPlayerWeekStats(playerId, startDate, endDate)).points;
 }
 
 /**
@@ -141,8 +202,11 @@ export async function scoreContest(admin: Admin, contest: ContestRow) {
   );
 
   const points = new Map<number, number>();
+  const statsById = new Map<number, StatLine | null>();
   for (const id of playerIds) {
-    points.set(id, await fetchPlayerWeekPoints(id, contest.week_start, contest.week_end));
+    const res = await fetchPlayerWeekStats(id, contest.week_start, contest.week_end);
+    points.set(id, res.points);
+    statsById.set(id, res.stats);
   }
 
   const perEntry = new Map<string, { score: number; multiplier: number }>();
@@ -152,7 +216,11 @@ export async function scoreContest(admin: Admin, contest: ContestRow) {
     const total = round2(pp * mult);
     await admin
       .from("contest_entry_cards")
-      .update({ player_points: pp, points: total })
+      .update({
+        player_points: pp,
+        points: total,
+        stats: row.mlb_player_id ? ((statsById.get(row.mlb_player_id) ?? null) as never) : null,
+      })
       .eq("id", row.id);
     const agg = perEntry.get(row.entry_id) ?? { score: 0, multiplier: 0 };
     agg.score += total;

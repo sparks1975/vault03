@@ -1,0 +1,1 @@
+ALTER TABLE public.contest_entry_cards ADD COLUMN IF NOT EXISTS stats jsonb;

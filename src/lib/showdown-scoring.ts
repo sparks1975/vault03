@@ -96,6 +96,55 @@ export function round2(n: number): number {
 }
 
 // ---------------------------------------------------------------------------
+// Stat lines (what generated a card's score)
+// ---------------------------------------------------------------------------
+
+/** Weekly stat totals stored alongside each scored lineup card. */
+export type StatLine = {
+  hitting?: RawStats | null;
+  pitching?: RawStats | null;
+};
+
+const fmtNum = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
+/** Human-readable stat chips, e.g. "2-for-8 · 1 HR · 3 RBI". */
+export function statLineParts(stats?: StatLine | null): string[] {
+  if (!stats) return [];
+  const parts: string[] = [];
+  const h = stats.hitting;
+  if (h) {
+    const ab = num(h.atBats);
+    const hits = num(h.hits);
+    if (ab > 0 || hits > 0) parts.push(`${fmtNum(hits)}-for-${fmtNum(ab)}`);
+    if (num(h.doubles) > 0) parts.push(`${fmtNum(num(h.doubles))} 2B`);
+    if (num(h.triples) > 0) parts.push(`${fmtNum(num(h.triples))} 3B`);
+    if (num(h.homeRuns) > 0) parts.push(`${fmtNum(num(h.homeRuns))} HR`);
+    if (num(h.rbi) > 0) parts.push(`${fmtNum(num(h.rbi))} RBI`);
+    if (num(h.runs) > 0) parts.push(`${fmtNum(num(h.runs))} R`);
+    if (num(h.baseOnBalls) > 0) parts.push(`${fmtNum(num(h.baseOnBalls))} BB`);
+    if (num(h.stolenBases) > 0) parts.push(`${fmtNum(num(h.stolenBases))} SB`);
+    if (num(h.strikeOuts) > 0) parts.push(`${fmtNum(num(h.strikeOuts))} K`);
+  }
+  const p = stats.pitching;
+  if (p) {
+    const ip = num(p.inningsPitched);
+    if (ip > 0) parts.push(`${p.inningsPitched} IP`);
+    if (num(p.strikeOuts) > 0) parts.push(`${fmtNum(num(p.strikeOuts))} K`);
+    if (num(p.wins) > 0) parts.push(`${fmtNum(num(p.wins))} W`);
+    if (num(p.saves) > 0) parts.push(`${fmtNum(num(p.saves))} SV`);
+    if (num(p.earnedRuns) > 0) parts.push(`${fmtNum(num(p.earnedRuns))} ER`);
+    if (num(p.hits) > 0) parts.push(`${fmtNum(num(p.hits))} H`);
+    if (num(p.baseOnBalls) > 0) parts.push(`${fmtNum(num(p.baseOnBalls))} BB`);
+  }
+  return parts;
+}
+
+export function hasStatLine(stats?: StatLine | null): boolean {
+  return !!stats && (!!stats.hitting || !!stats.pitching);
+}
+
+
+// ---------------------------------------------------------------------------
 // Contest weeks (Monday -> Sunday, UTC dates)
 // ---------------------------------------------------------------------------
 

@@ -24,6 +24,7 @@ import {
   cardBoosts,
   cardMultiplier,
   formatWeekLabel,
+  statLineParts,
 } from "@/lib/showdown-scoring";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -487,23 +488,34 @@ function OpponentLineup({ contestId, userId }: { contestId: string; userId: stri
     );
 
   return (
-    <ul className="pb-3 pl-9 pr-1 space-y-1">
-      {cards.map((c, i) => (
-        <li key={`${c.player_name}-${i}`} className="flex items-baseline gap-2 text-xs">
-          <span className="flex-1 min-w-0">
-            <span className="font-bold">{c.player_name}</span>
-            {c.detail ? (
-              <span className="block text-[10px] font-mono uppercase tracking-widest text-muted-foreground truncate">
-                {c.detail}
+    <ul className="pb-3 pl-9 pr-1 space-y-2">
+      {cards.map((c, i) => {
+        const stats = statLineParts(c.stats);
+        return (
+          <li key={`${c.player_name}-${i}`} className="text-xs">
+            <div className="flex items-baseline gap-2">
+              <span className="flex-1 min-w-0">
+                <span className="font-bold">{c.player_name}</span>
+                {c.detail ? (
+                  <span className="block text-[10px] font-mono uppercase tracking-widest text-muted-foreground truncate">
+                    {c.detail}
+                  </span>
+                ) : null}
               </span>
-            ) : null}
-          </span>
-          <span className="shrink-0 font-mono text-muted-foreground">
-            {c.multiplier.toFixed(2)}x
-          </span>
-          <span className="shrink-0 w-14 text-right font-mono font-bold">{fmtPts(c.points)}</span>
-        </li>
-      ))}
+              <span className="shrink-0 font-mono text-muted-foreground">
+                {c.multiplier.toFixed(2)}x
+              </span>
+              <span className="shrink-0 w-14 text-right font-mono font-bold">{fmtPts(c.points)}</span>
+            </div>
+            <p className="mt-0.5 text-[10px] font-mono text-muted-foreground">
+              {stats.length > 0 ? stats.join(" · ") : "No stats this week"}
+            </p>
+            <p className="text-[10px] font-mono text-muted-foreground/70">
+              {fmtPts(c.player_points)} player pts x {c.multiplier.toFixed(2)} = {fmtPts(c.points)}
+            </p>
+          </li>
+        );
+      })}
     </ul>
   );
 }
