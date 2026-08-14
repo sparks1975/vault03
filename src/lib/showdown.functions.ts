@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { LINEUP_SIZE, cardMultiplier } from "@/lib/showdown-scoring";
+import { LINEUP_SIZE, cardMultiplier, type StatLine } from "@/lib/showdown-scoring";
 
 export type LeaderboardRow = {
   rank: number;
