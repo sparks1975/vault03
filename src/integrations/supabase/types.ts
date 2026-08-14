@@ -267,6 +267,7 @@ export type Database = {
           multiplier: number
           player_points: number
           points: number
+          stats: Json | null
           user_id: string
         }
         Insert: {
@@ -278,6 +279,7 @@ export type Database = {
           multiplier?: number
           player_points?: number
           points?: number
+          stats?: Json | null
           user_id: string
         }
         Update: {
@@ -289,6 +291,7 @@ export type Database = {
           multiplier?: number
           player_points?: number
           points?: number
+          stats?: Json | null
           user_id?: string
         }
         Relationships: [
