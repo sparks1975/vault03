@@ -119,6 +119,7 @@ export const getShowdownLineup = createServerFn({ method: "GET" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { fetchPlayerWeekStats } = await import("@/lib/showdown.server");
 
     const { data: entry, error } = await supabaseAdmin
       .from("contest_entries")
@@ -139,11 +140,39 @@ export const getShowdownLineup = createServerFn({ method: "GET" })
         }[],
       };
 
+    const { data: contest, error: contestErr } = await supabaseAdmin
+      .from("contests")
+      .select("week_start, week_end")
+      .eq("id", data.contest_id)
+      .single();
+    if (contestErr) throw contestErr;
+
     const { data: rows, error: cErr } = await supabaseAdmin
       .from("contest_entry_cards")
-      .select("card_id, player_points, multiplier, points, stats")
+      .select("id, card_id, mlb_player_id, player_points, multiplier, points, stats")
       .eq("entry_id", entry.id);
     if (cErr) throw cErr;
+
+    const statCache = new Map<number, StatLine | null>();
+    for (const row of rows ?? []) {
+      if (row.stats || typeof row.mlb_player_id !== "number") continue;
+      let stats = statCache.get(row.mlb_player_id);
+      if (stats === undefined) {
+        stats = (await fetchPlayerWeekStats(
+          row.mlb_player_id,
+          contest.week_start,
+          contest.week_end,
+        )).stats;
+        statCache.set(row.mlb_player_id, stats);
+      }
+      if (stats) {
+        row.stats = stats as never;
+        await supabaseAdmin
+          .from("contest_entry_cards")
+          .update({ stats: stats as never })
+          .eq("id", row.id);
+      }
+    }
 
     const cardIds = (rows ?? []).map((r) => r.card_id);
     const meta = new Map<string, { player_name: string; detail: string }>();
