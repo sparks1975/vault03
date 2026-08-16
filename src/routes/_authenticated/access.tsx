@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Loader2, LogOut } from "lucide-react";
 
 import { getMyAccess, redeemInvite } from "@/lib/access.functions";
+import { INVITE_CODE_STORAGE_KEY } from "@/routes/auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
