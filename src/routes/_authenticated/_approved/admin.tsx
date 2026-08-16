@@ -138,7 +138,7 @@ function AdminPage() {
           </div>
         ) : (
           <Tabs defaultValue="invites" className="mt-8">
-            <TabsList className="flex-wrap">
+            <TabsList className="flex-wrap h-auto bg-secondary text-foreground">
               <TabsTrigger value="invites">Invites</TabsTrigger>
               <TabsTrigger value="requests">Requests ({pendingRequests.length})</TabsTrigger>
               <TabsTrigger value="users">Users</TabsTrigger>
