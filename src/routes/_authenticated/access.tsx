@@ -42,6 +42,16 @@ function AccessPage() {
   const [busy, setBusy] = useState(false);
   const [revoked, setRevoked] = useState(false);
 
+  function markDeviceRegistered() {
+    try {
+      window.localStorage.setItem(DEVICE_REGISTERED_KEY, "1");
+    } catch {
+      /* storage blocked */
+    }
+  }
+
+
+
   useEffect(() => {
     let mounted = true;
     let stored: string | null = null;
