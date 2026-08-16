@@ -1,10 +1,23 @@
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { LogOut } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { LogOut, Shield } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { getMyAccess } from "@/lib/access.functions";
 import logoAsset from "@/assets/logo-knockout.svg.asset.json";
+
+function useIsAdmin() {
+  const fetchAccess = useServerFn(getMyAccess);
+  const { data } = useQuery({
+    queryKey: ["my-access"],
+    queryFn: () => fetchAccess(),
+    staleTime: 5 * 60 * 1000,
+  });
+  return data?.isAdmin === true;
+}
+
 
 
 export function SignOutButton() {
@@ -37,6 +50,7 @@ const links = [
 ] as const;
 
 export function AppNav({ actions, leading }: { actions?: ReactNode; leading?: ReactNode }) {
+  const isAdmin = useIsAdmin();
   return (
     <nav className="sticky top-0 z-40 bg-black text-white px-4 md:px-6 h-16 flex items-center justify-between gap-3">
       <div className="flex items-center gap-4 md:gap-8 min-w-0">
@@ -55,15 +69,34 @@ export function AppNav({ actions, leading }: { actions?: ReactNode; leading?: Re
               {l.label}
             </Link>
           ))}
+          {isAdmin && (
+            <Link
+              to="/admin"
+              activeProps={{ className: "text-accent-light" }}
+              className="hover:text-white transition-colors"
+            >
+              Admin
+            </Link>
+          )}
         </div>
       </div>
       <div className="flex gap-2 md:gap-3 items-center shrink-0">
         {actions}
+        {isAdmin && (
+          <Link
+            to="/admin"
+            title="Admin"
+            className="lg:hidden p-2 rounded-sm border border-white/20 hover:bg-white/10 transition-colors text-white"
+          >
+            <Shield className="size-4" />
+          </Link>
+        )}
         <SignOutButton />
       </div>
     </nav>
   );
 }
+
 
 export function MobileNavTabs() {
   return (

@@ -14,7 +14,7 @@ import topMoverAsset from "@/assets/dashboard.svg.asset.json";
 import showdownAsset from "@/assets/showdown.svg.asset.json";
 
 
-export const Route = createFileRoute("/_authenticated/dashboard")({
+export const Route = createFileRoute("/_authenticated/_approved/dashboard")({
   ssr: false,
   head: () => ({
     meta: [

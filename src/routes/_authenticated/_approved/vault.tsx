@@ -86,7 +86,7 @@ function StatGridSkeleton() {
   );
 }
 
-export const Route = createFileRoute("/_authenticated/vault")({
+export const Route = createFileRoute("/_authenticated/_approved/vault")({
   ssr: false,
   head: () => ({
     meta: [
