@@ -6,7 +6,11 @@ import { toast } from "sonner";
 import { Loader2, LogOut } from "lucide-react";
 
 import { getMyAccess, redeemInvite } from "@/lib/access.functions";
-import { DEVICE_REGISTERED_KEY, INVITE_CODE_STORAGE_KEY } from "@/lib/invite-storage";
+import {
+  DEVICE_REGISTERED_KEY,
+  clearPendingInviteCode,
+  getPendingInviteCode,
+} from "@/lib/invite-storage";
 
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -54,17 +58,13 @@ function AccessPage() {
 
   useEffect(() => {
     let mounted = true;
-    let stored: string | null = null;
-    try {
-      stored = window.sessionStorage.getItem(INVITE_CODE_STORAGE_KEY);
-    } catch {
-      /* storage blocked */
-    }
+    const stored = getPendingInviteCode();
     (async () => {
       const access = await checkAccess();
       if (!mounted) return;
       if (access.accessStatus === "approved") {
         markDeviceRegistered();
+        clearPendingInviteCode();
         navigate({ to: "/dashboard", replace: true });
         return;
       }
@@ -72,26 +72,27 @@ function AccessPage() {
         setRevoked(true);
         return;
       }
-      // Code was already verified before sign-in — redeem it automatically.
+      // Code was verified before sign-in — redeem it automatically.
       if (stored) {
         const result = await redeem({ data: { code: stored } });
         if (!mounted) return;
-        try {
-          window.sessionStorage.removeItem(INVITE_CODE_STORAGE_KEY);
-        } catch {
-          /* storage blocked */
-        }
+        clearPendingInviteCode();
         if (result.ok) {
           markDeviceRegistered();
           await queryClient.invalidateQueries();
           navigate({ to: "/dashboard", replace: true });
+          return;
         }
+        toast.error("That invite code isn't valid anymore. Enter a new one to continue.");
       }
+      // Signed in but no invitation: this account doesn't exist in Vault.03.
+      // Sign back out and send them to the invite gate.
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      await supabase.auth.signOut();
+      if (!mounted) return;
+      navigate({ to: "/invite", replace: true });
     })();
-    const params = new URLSearchParams(window.location.search);
-    const preset = params.get("code");
-    if (preset) setCode(preset);
-    else if (stored) setCode(stored);
     return () => {
       mounted = false;
     };

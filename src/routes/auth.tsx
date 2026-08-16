@@ -1,5 +1,4 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Wallet, TrendingUp, Search, Activity } from "lucide-react";
@@ -9,7 +8,6 @@ import { lovable } from "@/integrations/lovable/index";
 import { getPendingInviteCode } from "@/lib/invite-storage";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { RouteLoading } from "@/components/RouteLoading";
 
 export const Route = createFileRoute("/auth")({
@@ -288,6 +286,12 @@ function AuthPage() {
             </Button>
             <p className="mt-4 text-center text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
               Secure OAuth sign-in
+            </p>
+            <p className="text-center text-sm text-muted-foreground">
+              New here?{" "}
+              <Link to="/invite" className="font-semibold text-accent underline-offset-4 hover:underline">
+                Enter your invite code
+              </Link>
             </p>
           </div>
         </div>
