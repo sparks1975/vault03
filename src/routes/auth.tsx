@@ -132,7 +132,11 @@ function AuthPage() {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email: address,
-        options: { shouldCreateUser: true },
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: window.location.origin + "/auth",
+        },
+
       });
       if (error) throw error;
       setCodeSent(true);
