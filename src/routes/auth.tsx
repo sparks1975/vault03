@@ -8,7 +8,10 @@ import { lovable } from "@/integrations/lovable/index";
 import { getPendingInviteCode } from "@/lib/invite-storage";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { RouteLoading } from "@/components/RouteLoading";
+
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -109,11 +112,64 @@ function AuthPage() {
   const [checking, setChecking] = useState(true);
   const [embeddedBlocked, setEmbeddedBlocked] = useState(false);
   const [hasPendingInvite, setHasPendingInvite] = useState(false);
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
 
   useEffect(() => {
     setEmbeddedBlocked(isBlockedEmbeddedContext());
     setHasPendingInvite(Boolean(getPendingInviteCode()));
   }, []);
+
+  async function sendEmailCode() {
+    const address = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    setEmailBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: address,
+        options: {
+          shouldCreateUser: true,
+          emailRedirectTo: window.location.origin + "/auth",
+        },
+
+      });
+      if (error) throw error;
+      setCodeSent(true);
+      toast.success("We emailed you a 6-digit sign-in code");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not send code");
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
+  async function verifyEmailCode() {
+    const token = code.trim();
+    if (token.length < 6) {
+      toast.error("Enter the 6-digit code from your email");
+      return;
+    }
+    setEmailBusy(true);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token,
+        type: "email",
+      });
+      if (error) throw error;
+      if (data.session) navigate({ to: "/dashboard", replace: true });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Invalid or expired code");
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
 
   useEffect(() => {
     let mounted = true;
@@ -284,9 +340,71 @@ function AuthPage() {
               )}
               Continue with Google
             </Button>
-            <p className="mt-4 text-center text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              Secure OAuth sign-in
-            </p>
+            <div className="flex items-center gap-3 pt-2">
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                or use your email
+              </span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="auth-email" className="text-xs">Email address</Label>
+                <Input
+                  id="auth-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setCodeSent(false);
+                  }}
+                  disabled={emailBusy || loading !== null}
+                />
+              </div>
+
+              {codeSent && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="auth-code" className="text-xs">6-digit code</Label>
+                  <Input
+                    id="auth-code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="123456"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                    disabled={emailBusy}
+                  />
+                </div>
+              )}
+
+              <Button
+                variant="secondary"
+                onClick={codeSent ? verifyEmailCode : sendEmailCode}
+                disabled={emailBusy || loading !== null}
+                className="w-full gap-3 py-5 text-sm font-semibold"
+              >
+                {emailBusy && <Loader2 className="size-4 animate-spin" />}
+                {codeSent ? "Verify code & sign in" : "Email me a sign-in code"}
+              </Button>
+
+              {codeSent && (
+                <button
+                  type="button"
+                  onClick={sendEmailCode}
+                  disabled={emailBusy}
+                  className="w-full text-center text-xs text-muted-foreground underline-offset-4 hover:underline"
+                >
+                  Didn't get it? Send another code
+                </button>
+              )}
+            </div>
+
+
             <p className="text-center text-sm text-muted-foreground">
               New here?{" "}
               <Link to="/invite" className="font-semibold text-accent underline-offset-4 hover:underline">
