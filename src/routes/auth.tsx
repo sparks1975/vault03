@@ -336,9 +336,71 @@ function AuthPage() {
               )}
               Continue with Google
             </Button>
-            <p className="mt-4 text-center text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-              Secure OAuth sign-in
-            </p>
+            <div className="flex items-center gap-3 pt-2">
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+                or use your email
+              </span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="auth-email" className="text-xs">Email address</Label>
+                <Input
+                  id="auth-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setCodeSent(false);
+                  }}
+                  disabled={emailBusy || loading !== null}
+                />
+              </div>
+
+              {codeSent && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="auth-code" className="text-xs">6-digit code</Label>
+                  <Input
+                    id="auth-code"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    placeholder="123456"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                    disabled={emailBusy}
+                  />
+                </div>
+              )}
+
+              <Button
+                variant="secondary"
+                onClick={codeSent ? verifyEmailCode : sendEmailCode}
+                disabled={emailBusy || loading !== null}
+                className="w-full gap-3 py-5 text-sm font-semibold"
+              >
+                {emailBusy && <Loader2 className="size-4 animate-spin" />}
+                {codeSent ? "Verify code & sign in" : "Email me a sign-in code"}
+              </Button>
+
+              {codeSent && (
+                <button
+                  type="button"
+                  onClick={sendEmailCode}
+                  disabled={emailBusy}
+                  className="w-full text-center text-xs text-muted-foreground underline-offset-4 hover:underline"
+                >
+                  Didn't get it? Send another code
+                </button>
+              )}
+            </div>
+
+
             <p className="text-center text-sm text-muted-foreground">
               New here?{" "}
               <Link to="/invite" className="font-semibold text-accent underline-offset-4 hover:underline">
