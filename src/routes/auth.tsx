@@ -8,7 +8,10 @@ import { lovable } from "@/integrations/lovable/index";
 import { getPendingInviteCode } from "@/lib/invite-storage";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { RouteLoading } from "@/components/RouteLoading";
+
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
