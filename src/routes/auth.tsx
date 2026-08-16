@@ -234,7 +234,13 @@ function AuthPage() {
           <p className="mt-3 text-sm text-muted-foreground">
             Catalogue your cards, track live market values, and stay on top of comparable sales — all in one collector-grade app.
           </p>
+          {hasPendingInvite && (
+            <p className="mt-4 rounded-md border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-foreground">
+              Invite code accepted. Sign in with the email your invitation was sent to.
+            </p>
+          )}
         </div>
+
 
         <div className="mt-8 rounded-lg border border-border bg-card p-6 shadow-sm">
           <ul className="space-y-4">
