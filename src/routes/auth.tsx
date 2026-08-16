@@ -1,16 +1,13 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Wallet, TrendingUp, Search, Activity, KeyRound } from "lucide-react";
+import { Loader2, Wallet, TrendingUp, Search, Activity } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
-import { verifyInviteCode } from "@/lib/access.functions";
-import { DEVICE_REGISTERED_KEY, INVITE_CODE_STORAGE_KEY } from "@/lib/invite-storage";
+import { getPendingInviteCode } from "@/lib/invite-storage";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { RouteLoading } from "@/components/RouteLoading";
 
 export const Route = createFileRoute("/auth")({
@@ -108,77 +105,15 @@ function isBlockedEmbeddedContext() {
 
 function AuthPage() {
   const navigate = useNavigate();
-  const verify = useServerFn(verifyInviteCode);
   const [loading, setLoading] = useState<"google" | "apple" | null>(null);
   const [checking, setChecking] = useState(true);
   const [embeddedBlocked, setEmbeddedBlocked] = useState(false);
-  const [codeUnlocked, setCodeUnlocked] = useState(false);
-  const [code, setCode] = useState("");
-  const [verifying, setVerifying] = useState(false);
+  const [hasPendingInvite, setHasPendingInvite] = useState(false);
 
   useEffect(() => {
     setEmbeddedBlocked(isBlockedEmbeddedContext());
+    setHasPendingInvite(Boolean(getPendingInviteCode()));
   }, []);
-
-  // A previously verified code (this tab) or an approved device keeps the
-  // sign-in options unlocked. A ?code= link pre-fills the field.
-  useEffect(() => {
-    let cancelled = false;
-    try {
-      if (
-        window.sessionStorage.getItem(INVITE_CODE_STORAGE_KEY) ||
-        window.localStorage.getItem(DEVICE_REGISTERED_KEY)
-      ) {
-        setCodeUnlocked(true);
-      }
-    } catch {
-      /* storage blocked */
-    }
-    const preset = new URLSearchParams(window.location.search).get("code");
-
-    if (preset) {
-      setCode(preset.toUpperCase());
-      (async () => {
-        const result = await verify({ data: { code: preset } });
-        if (cancelled || !result.ok) return;
-        try {
-          window.sessionStorage.setItem(INVITE_CODE_STORAGE_KEY, preset.toUpperCase());
-        } catch {
-          /* storage blocked */
-        }
-        setCodeUnlocked(true);
-      })();
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [verify]);
-
-  async function submitCode(e: React.FormEvent) {
-    e.preventDefault();
-    const value = code.trim();
-    if (!value) return;
-    setVerifying(true);
-    try {
-      const result = await verify({ data: { code: value } });
-      if (!result.ok) {
-        toast.error("That code isn't valid, has already been used, or has expired.");
-        return;
-      }
-      try {
-        window.sessionStorage.setItem(INVITE_CODE_STORAGE_KEY, value.toUpperCase());
-      } catch {
-        /* storage blocked */
-      }
-      setCodeUnlocked(true);
-    } catch {
-      toast.error("Something went wrong. Try again in a moment.");
-    } finally {
-      setVerifying(false);
-    }
-  }
-
-
 
   useEffect(() => {
     let mounted = true;
@@ -284,60 +219,6 @@ function AuthPage() {
     return <RouteLoading />;
   }
 
-  if (!codeUnlocked) {
-    return (
-      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
-        <div className="w-full max-w-md">
-          <div className="text-center">
-            <p className="text-xl font-extrabold tracking-tighter italic text-foreground">VAULT.03</p>
-            <h1 className="mt-5 font-display text-3xl md:text-[50px] font-extrabold leading-none tracking-tighter italic text-foreground">
-              Invite only
-            </h1>
-            <p className="mt-3 text-sm text-muted-foreground">
-              Vault.03 is limited access. Enter the single-use code from your invitation to continue
-              to sign-in.
-            </p>
-          </div>
-
-          <form onSubmit={submitCode} className="mt-8 rounded-lg border border-border bg-card p-6 space-y-4">
-            <div className="space-y-2">
-              <label
-                htmlFor="gate-code"
-                className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground"
-              >
-                Invite code
-              </label>
-              <Input
-                id="gate-code"
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="V03-XXXX-XXXX"
-                autoCapitalize="characters"
-                autoComplete="off"
-                className="font-mono tracking-widest"
-              />
-            </div>
-            <Button type="submit" disabled={verifying || !code.trim()} className="w-full gap-2 py-5 text-sm font-semibold">
-              {verifying ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
-              Continue
-            </Button>
-            <p className="text-center text-sm text-muted-foreground">
-              Don&apos;t have a code?{" "}
-              <Link to="/request-access" className="font-semibold text-accent underline-offset-4 hover:underline">
-                Request an invitation
-              </Link>
-            </p>
-          </form>
-        </div>
-      </div>
-    );
-  }
-
-
-
-
-
-
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
       <div className="w-full max-w-md">
@@ -351,7 +232,13 @@ function AuthPage() {
           <p className="mt-3 text-sm text-muted-foreground">
             Catalogue your cards, track live market values, and stay on top of comparable sales — all in one collector-grade app.
           </p>
+          {hasPendingInvite && (
+            <p className="mt-4 rounded-md border border-accent/40 bg-accent/10 px-4 py-3 text-sm text-foreground">
+              Invite code accepted. Sign in with the email your invitation was sent to.
+            </p>
+          )}
         </div>
+
 
         <div className="mt-8 rounded-lg border border-border bg-card p-6 shadow-sm">
           <ul className="space-y-4">
@@ -399,6 +286,12 @@ function AuthPage() {
             </Button>
             <p className="mt-4 text-center text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
               Secure OAuth sign-in
+            </p>
+            <p className="text-center text-sm text-muted-foreground">
+              New here?{" "}
+              <Link to="/invite" className="font-semibold text-accent underline-offset-4 hover:underline">
+                Enter your invite code
+              </Link>
             </p>
           </div>
         </div>
