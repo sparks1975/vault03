@@ -1,12 +1,17 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Loader2, Wallet, TrendingUp, Search, Activity } from "lucide-react";
+import { Loader2, Wallet, TrendingUp, Search, Activity, KeyRound } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
+import { verifyInviteCode } from "@/lib/access.functions";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { RouteLoading } from "@/components/RouteLoading";
+
+export const INVITE_CODE_STORAGE_KEY = "v03_invite_code";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
