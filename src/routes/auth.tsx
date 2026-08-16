@@ -109,11 +109,60 @@ function AuthPage() {
   const [checking, setChecking] = useState(true);
   const [embeddedBlocked, setEmbeddedBlocked] = useState(false);
   const [hasPendingInvite, setHasPendingInvite] = useState(false);
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
 
   useEffect(() => {
     setEmbeddedBlocked(isBlockedEmbeddedContext());
     setHasPendingInvite(Boolean(getPendingInviteCode()));
   }, []);
+
+  async function sendEmailCode() {
+    const address = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+      toast.error("Enter a valid email address");
+      return;
+    }
+    setEmailBusy(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: address,
+        options: { shouldCreateUser: true },
+      });
+      if (error) throw error;
+      setCodeSent(true);
+      toast.success("We emailed you a 6-digit sign-in code");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not send code");
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
+  async function verifyEmailCode() {
+    const token = code.trim();
+    if (token.length < 6) {
+      toast.error("Enter the 6-digit code from your email");
+      return;
+    }
+    setEmailBusy(true);
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token,
+        type: "email",
+      });
+      if (error) throw error;
+      if (data.session) navigate({ to: "/dashboard", replace: true });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Invalid or expired code");
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
 
   useEffect(() => {
     let mounted = true;
