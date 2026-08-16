@@ -7,11 +7,10 @@ import { Loader2, Wallet, TrendingUp, Search, Activity, KeyRound } from "lucide-
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { verifyInviteCode } from "@/lib/access.functions";
+import { INVITE_CODE_STORAGE_KEY } from "@/lib/invite-storage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RouteLoading } from "@/components/RouteLoading";
-
-export const INVITE_CODE_STORAGE_KEY = "v03_invite_code";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
