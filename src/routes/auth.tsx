@@ -104,13 +104,70 @@ function isBlockedEmbeddedContext() {
 
 function AuthPage() {
   const navigate = useNavigate();
+  const verify = useServerFn(verifyInviteCode);
   const [loading, setLoading] = useState<"google" | "apple" | null>(null);
   const [checking, setChecking] = useState(true);
   const [embeddedBlocked, setEmbeddedBlocked] = useState(false);
+  const [codeUnlocked, setCodeUnlocked] = useState(false);
+  const [code, setCode] = useState("");
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     setEmbeddedBlocked(isBlockedEmbeddedContext());
   }, []);
+
+  // A previously verified code (this tab) keeps the sign-in options unlocked
+  // across the OAuth round-trip. A ?code= link pre-fills the field.
+  useEffect(() => {
+    let cancelled = false;
+    try {
+      if (window.sessionStorage.getItem(INVITE_CODE_STORAGE_KEY)) setCodeUnlocked(true);
+    } catch {
+      /* storage blocked */
+    }
+    const preset = new URLSearchParams(window.location.search).get("code");
+    if (preset) {
+      setCode(preset.toUpperCase());
+      (async () => {
+        const result = await verify({ data: { code: preset } });
+        if (cancelled || !result.ok) return;
+        try {
+          window.sessionStorage.setItem(INVITE_CODE_STORAGE_KEY, preset.toUpperCase());
+        } catch {
+          /* storage blocked */
+        }
+        setCodeUnlocked(true);
+      })();
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [verify]);
+
+  async function submitCode(e: React.FormEvent) {
+    e.preventDefault();
+    const value = code.trim();
+    if (!value) return;
+    setVerifying(true);
+    try {
+      const result = await verify({ data: { code: value } });
+      if (!result.ok) {
+        toast.error("That code isn't valid, has already been used, or has expired.");
+        return;
+      }
+      try {
+        window.sessionStorage.setItem(INVITE_CODE_STORAGE_KEY, value.toUpperCase());
+      } catch {
+        /* storage blocked */
+      }
+      setCodeUnlocked(true);
+    } catch {
+      toast.error("Something went wrong. Try again in a moment.");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
 
 
   useEffect(() => {
