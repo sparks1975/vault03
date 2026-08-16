@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Loader2, LogOut } from "lucide-react";
 
 import { getMyAccess, redeemInvite } from "@/lib/access.functions";
+import { INVITE_CODE_STORAGE_KEY } from "@/lib/invite-storage";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,19 +43,47 @@ function AccessPage() {
 
   useEffect(() => {
     let mounted = true;
+    let stored: string | null = null;
+    try {
+      stored = window.sessionStorage.getItem(INVITE_CODE_STORAGE_KEY);
+    } catch {
+      /* storage blocked */
+    }
     (async () => {
       const access = await checkAccess();
       if (!mounted) return;
-      if (access.accessStatus === "approved") navigate({ to: "/dashboard", replace: true });
-      if (access.accessStatus === "revoked") setRevoked(true);
+      if (access.accessStatus === "approved") {
+        navigate({ to: "/dashboard", replace: true });
+        return;
+      }
+      if (access.accessStatus === "revoked") {
+        setRevoked(true);
+        return;
+      }
+      // Code was already verified before sign-in — redeem it automatically.
+      if (stored) {
+        const result = await redeem({ data: { code: stored } });
+        if (!mounted) return;
+        try {
+          window.sessionStorage.removeItem(INVITE_CODE_STORAGE_KEY);
+        } catch {
+          /* storage blocked */
+        }
+        if (result.ok) {
+          await queryClient.invalidateQueries();
+          navigate({ to: "/dashboard", replace: true });
+        }
+      }
     })();
     const params = new URLSearchParams(window.location.search);
     const preset = params.get("code");
     if (preset) setCode(preset);
+    else if (stored) setCode(stored);
     return () => {
       mounted = false;
     };
-  }, [checkAccess, navigate]);
+  }, [checkAccess, navigate, redeem, queryClient]);
+
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();

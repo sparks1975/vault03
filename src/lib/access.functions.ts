@@ -48,6 +48,37 @@ export const redeemInvite = createServerFn({ method: "POST" })
     return { ok: payload.ok === true, reason: payload.reason };
   });
 
+/**
+ * Public pre-signup check: confirms an invite code is real and still
+ * redeemable WITHOUT consuming it, so the sign-in options can stay hidden
+ * from anyone without an invitation.
+ */
+export const verifyInviteCode = createServerFn({ method: "POST" })
+  .inputValidator((data: { code: string }) =>
+    z.object({ code: z.string().trim().min(4).max(40) }).parse(data),
+  )
+  .handler(async ({ data }): Promise<{ ok: boolean }> => {
+    const { hashInviteCode } = await import("./access.server");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    const { data: invite, error } = await supabaseAdmin
+      .from("invites")
+      .select("id,status,expires_at")
+      .eq("code_hash", hashInviteCode(data.code))
+      .in("status", ["pending", "sent"])
+      .maybeSingle();
+
+    if (error) {
+      console.error("[verifyInviteCode]", error);
+      return { ok: false };
+    }
+    if (!invite) return { ok: false };
+    if (invite.expires_at && new Date(invite.expires_at).getTime() <= Date.now()) {
+      return { ok: false };
+    }
+    return { ok: true };
+  });
+
 export const submitAccessRequest = createServerFn({ method: "POST" })
   .inputValidator((data: { name: string; email: string }) =>
     z
