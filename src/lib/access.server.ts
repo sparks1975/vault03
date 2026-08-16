@@ -19,8 +19,9 @@ export function hashInviteCode(raw: string): string {
 }
 
 export function inviteLink(origin: string, code: string): string {
-  return `${origin}/access?code=${encodeURIComponent(code)}`;
+  return `${origin}/auth?code=${encodeURIComponent(code)}`;
 }
+
 
 /**
  * Sends the invite email when the project has email sending configured.
