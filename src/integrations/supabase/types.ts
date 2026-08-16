@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      access_requests: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string
+          notes: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       card_sales: {
         Row: {
           card_id: string
@@ -344,8 +374,54 @@ export type Database = {
         }
         Relationships: []
       }
+      invites: {
+        Row: {
+          code_hash: string
+          code_preview: string | null
+          created_at: string
+          email: string
+          email_sent_at: string | null
+          expires_at: string | null
+          id: string
+          invited_by: string | null
+          status: string
+          updated_at: string
+          used_at: string | null
+          used_by: string | null
+        }
+        Insert: {
+          code_hash: string
+          code_preview?: string | null
+          created_at?: string
+          email: string
+          email_sent_at?: string | null
+          expires_at?: string | null
+          id?: string
+          invited_by?: string | null
+          status?: string
+          updated_at?: string
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Update: {
+          code_hash?: string
+          code_preview?: string | null
+          created_at?: string
+          email?: string
+          email_sent_at?: string | null
+          expires_at?: string | null
+          id?: string
+          invited_by?: string | null
+          status?: string
+          updated_at?: string
+          used_at?: string | null
+          used_by?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
+          access_status: string
           avatar_url: string | null
           created_at: string
           display_name: string | null
@@ -355,6 +431,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          access_status?: string
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
@@ -364,6 +441,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          access_status?: string
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
@@ -453,15 +531,46 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      redeem_invite: {
+        Args: { _code_hash: string; _user_id: string }
+        Returns: Json
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "member"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -588,6 +697,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "member"],
+    },
   },
 } as const
