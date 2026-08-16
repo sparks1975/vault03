@@ -14,11 +14,11 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SSlugRouteImport } from './routes/s.$slug'
-import { Route as AuthenticatedVaultRouteImport } from './routes/_authenticated/vault'
-import { Route as AuthenticatedShowdownRouteImport } from './routes/_authenticated/showdown'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedAccessRouteImport } from './routes/_authenticated/access'
 import { Route as AuthenticatedApprovedRouteRouteImport } from './routes/_authenticated/_approved/route'
+import { Route as AuthenticatedApprovedVaultRouteImport } from './routes/_authenticated/_approved/vault'
+import { Route as AuthenticatedApprovedShowdownRouteImport } from './routes/_authenticated/_approved/showdown'
+import { Route as AuthenticatedApprovedDashboardRouteImport } from './routes/_authenticated/_approved/dashboard'
 import { Route as AuthenticatedApprovedAdminRouteImport } from './routes/_authenticated/_approved/admin'
 import { Route as ApiPublicHooksScoreShowdownRouteImport } from './routes/api/public/hooks/score-showdown'
 
@@ -46,21 +46,6 @@ const SSlugRoute = SSlugRouteImport.update({
   path: '/s/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedVaultRoute = AuthenticatedVaultRouteImport.update({
-  id: '/vault',
-  path: '/vault',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedShowdownRoute = AuthenticatedShowdownRouteImport.update({
-  id: '/showdown',
-  path: '/showdown',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
 const AuthenticatedAccessRoute = AuthenticatedAccessRouteImport.update({
   id: '/access',
   path: '/access',
@@ -70,6 +55,24 @@ const AuthenticatedApprovedRouteRoute =
   AuthenticatedApprovedRouteRouteImport.update({
     id: '/_approved',
     getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedApprovedVaultRoute =
+  AuthenticatedApprovedVaultRouteImport.update({
+    id: '/vault',
+    path: '/vault',
+    getParentRoute: () => AuthenticatedApprovedRouteRoute,
+  } as any)
+const AuthenticatedApprovedShowdownRoute =
+  AuthenticatedApprovedShowdownRouteImport.update({
+    id: '/showdown',
+    path: '/showdown',
+    getParentRoute: () => AuthenticatedApprovedRouteRoute,
+  } as any)
+const AuthenticatedApprovedDashboardRoute =
+  AuthenticatedApprovedDashboardRouteImport.update({
+    id: '/dashboard',
+    path: '/dashboard',
+    getParentRoute: () => AuthenticatedApprovedRouteRoute,
   } as any)
 const AuthenticatedApprovedAdminRoute =
   AuthenticatedApprovedAdminRouteImport.update({
@@ -89,11 +92,11 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/request-access': typeof RequestAccessRoute
   '/access': typeof AuthenticatedAccessRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
-  '/showdown': typeof AuthenticatedShowdownRoute
-  '/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
   '/admin': typeof AuthenticatedApprovedAdminRoute
+  '/dashboard': typeof AuthenticatedApprovedDashboardRoute
+  '/showdown': typeof AuthenticatedApprovedShowdownRoute
+  '/vault': typeof AuthenticatedApprovedVaultRoute
   '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
 }
 export interface FileRoutesByTo {
@@ -101,11 +104,11 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/request-access': typeof RequestAccessRoute
   '/access': typeof AuthenticatedAccessRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
-  '/showdown': typeof AuthenticatedShowdownRoute
-  '/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
   '/admin': typeof AuthenticatedApprovedAdminRoute
+  '/dashboard': typeof AuthenticatedApprovedDashboardRoute
+  '/showdown': typeof AuthenticatedApprovedShowdownRoute
+  '/vault': typeof AuthenticatedApprovedVaultRoute
   '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
 }
 export interface FileRoutesById {
@@ -116,11 +119,11 @@ export interface FileRoutesById {
   '/request-access': typeof RequestAccessRoute
   '/_authenticated/_approved': typeof AuthenticatedApprovedRouteRouteWithChildren
   '/_authenticated/access': typeof AuthenticatedAccessRoute
-  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
-  '/_authenticated/showdown': typeof AuthenticatedShowdownRoute
-  '/_authenticated/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
   '/_authenticated/_approved/admin': typeof AuthenticatedApprovedAdminRoute
+  '/_authenticated/_approved/dashboard': typeof AuthenticatedApprovedDashboardRoute
+  '/_authenticated/_approved/showdown': typeof AuthenticatedApprovedShowdownRoute
+  '/_authenticated/_approved/vault': typeof AuthenticatedApprovedVaultRoute
   '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
 }
 export interface FileRouteTypes {
@@ -130,11 +133,11 @@ export interface FileRouteTypes {
     | '/auth'
     | '/request-access'
     | '/access'
+    | '/s/$slug'
+    | '/admin'
     | '/dashboard'
     | '/showdown'
     | '/vault'
-    | '/s/$slug'
-    | '/admin'
     | '/api/public/hooks/score-showdown'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -142,11 +145,11 @@ export interface FileRouteTypes {
     | '/auth'
     | '/request-access'
     | '/access'
+    | '/s/$slug'
+    | '/admin'
     | '/dashboard'
     | '/showdown'
     | '/vault'
-    | '/s/$slug'
-    | '/admin'
     | '/api/public/hooks/score-showdown'
   id:
     | '__root__'
@@ -156,11 +159,11 @@ export interface FileRouteTypes {
     | '/request-access'
     | '/_authenticated/_approved'
     | '/_authenticated/access'
-    | '/_authenticated/dashboard'
-    | '/_authenticated/showdown'
-    | '/_authenticated/vault'
     | '/s/$slug'
     | '/_authenticated/_approved/admin'
+    | '/_authenticated/_approved/dashboard'
+    | '/_authenticated/_approved/showdown'
+    | '/_authenticated/_approved/vault'
     | '/api/public/hooks/score-showdown'
   fileRoutesById: FileRoutesById
 }
@@ -210,27 +213,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/vault': {
-      id: '/_authenticated/vault'
-      path: '/vault'
-      fullPath: '/vault'
-      preLoaderRoute: typeof AuthenticatedVaultRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/showdown': {
-      id: '/_authenticated/showdown'
-      path: '/showdown'
-      fullPath: '/showdown'
-      preLoaderRoute: typeof AuthenticatedShowdownRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/dashboard': {
-      id: '/_authenticated/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/access': {
       id: '/_authenticated/access'
       path: '/access'
@@ -244,6 +226,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedApprovedRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/_approved/vault': {
+      id: '/_authenticated/_approved/vault'
+      path: '/vault'
+      fullPath: '/vault'
+      preLoaderRoute: typeof AuthenticatedApprovedVaultRouteImport
+      parentRoute: typeof AuthenticatedApprovedRouteRoute
+    }
+    '/_authenticated/_approved/showdown': {
+      id: '/_authenticated/_approved/showdown'
+      path: '/showdown'
+      fullPath: '/showdown'
+      preLoaderRoute: typeof AuthenticatedApprovedShowdownRouteImport
+      parentRoute: typeof AuthenticatedApprovedRouteRoute
+    }
+    '/_authenticated/_approved/dashboard': {
+      id: '/_authenticated/_approved/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedApprovedDashboardRouteImport
+      parentRoute: typeof AuthenticatedApprovedRouteRoute
     }
     '/_authenticated/_approved/admin': {
       id: '/_authenticated/_approved/admin'
@@ -264,11 +267,17 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedApprovedRouteRouteChildren {
   AuthenticatedApprovedAdminRoute: typeof AuthenticatedApprovedAdminRoute
+  AuthenticatedApprovedDashboardRoute: typeof AuthenticatedApprovedDashboardRoute
+  AuthenticatedApprovedShowdownRoute: typeof AuthenticatedApprovedShowdownRoute
+  AuthenticatedApprovedVaultRoute: typeof AuthenticatedApprovedVaultRoute
 }
 
 const AuthenticatedApprovedRouteRouteChildren: AuthenticatedApprovedRouteRouteChildren =
   {
     AuthenticatedApprovedAdminRoute: AuthenticatedApprovedAdminRoute,
+    AuthenticatedApprovedDashboardRoute: AuthenticatedApprovedDashboardRoute,
+    AuthenticatedApprovedShowdownRoute: AuthenticatedApprovedShowdownRoute,
+    AuthenticatedApprovedVaultRoute: AuthenticatedApprovedVaultRoute,
   }
 
 const AuthenticatedApprovedRouteRouteWithChildren =
@@ -279,17 +288,11 @@ const AuthenticatedApprovedRouteRouteWithChildren =
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedApprovedRouteRoute: typeof AuthenticatedApprovedRouteRouteWithChildren
   AuthenticatedAccessRoute: typeof AuthenticatedAccessRoute
-  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
-  AuthenticatedShowdownRoute: typeof AuthenticatedShowdownRoute
-  AuthenticatedVaultRoute: typeof AuthenticatedVaultRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedApprovedRouteRoute: AuthenticatedApprovedRouteRouteWithChildren,
   AuthenticatedAccessRoute: AuthenticatedAccessRoute,
-  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
-  AuthenticatedShowdownRoute: AuthenticatedShowdownRoute,
-  AuthenticatedVaultRoute: AuthenticatedVaultRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =

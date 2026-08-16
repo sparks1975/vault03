@@ -1,10 +1,23 @@
 import { useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { LogOut } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { LogOut, Shield } from "lucide-react";
 
 import { supabase } from "@/integrations/supabase/client";
+import { getMyAccess } from "@/lib/access.functions";
 import logoAsset from "@/assets/logo-knockout.svg.asset.json";
+
+function useIsAdmin() {
+  const fetchAccess = useServerFn(getMyAccess);
+  const { data } = useQuery({
+    queryKey: ["my-access"],
+    queryFn: () => fetchAccess(),
+    staleTime: 5 * 60 * 1000,
+  });
+  return data?.isAdmin === true;
+}
+
 
 
 export function SignOutButton() {
