@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as RequestAccessRouteImport } from './routes/request-access'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -16,8 +17,16 @@ import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as AuthenticatedVaultRouteImport } from './routes/_authenticated/vault'
 import { Route as AuthenticatedShowdownRouteImport } from './routes/_authenticated/showdown'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
+import { Route as AuthenticatedAccessRouteImport } from './routes/_authenticated/access'
+import { Route as AuthenticatedApprovedRouteRouteImport } from './routes/_authenticated/_approved/route'
+import { Route as AuthenticatedApprovedAdminRouteImport } from './routes/_authenticated/_approved/admin'
 import { Route as ApiPublicHooksScoreShowdownRouteImport } from './routes/api/public/hooks/score-showdown'
 
+const RequestAccessRoute = RequestAccessRouteImport.update({
+  id: '/request-access',
+  path: '/request-access',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -52,6 +61,22 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAccessRoute = AuthenticatedAccessRouteImport.update({
+  id: '/access',
+  path: '/access',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedApprovedRouteRoute =
+  AuthenticatedApprovedRouteRouteImport.update({
+    id: '/_approved',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
+const AuthenticatedApprovedAdminRoute =
+  AuthenticatedApprovedAdminRouteImport.update({
+    id: '/admin',
+    path: '/admin',
+    getParentRoute: () => AuthenticatedApprovedRouteRoute,
+  } as any)
 const ApiPublicHooksScoreShowdownRoute =
   ApiPublicHooksScoreShowdownRouteImport.update({
     id: '/api/public/hooks/score-showdown',
@@ -62,19 +87,25 @@ const ApiPublicHooksScoreShowdownRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/request-access': typeof RequestAccessRoute
+  '/access': typeof AuthenticatedAccessRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/showdown': typeof AuthenticatedShowdownRoute
   '/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
+  '/admin': typeof AuthenticatedApprovedAdminRoute
   '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/request-access': typeof RequestAccessRoute
+  '/access': typeof AuthenticatedAccessRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/showdown': typeof AuthenticatedShowdownRoute
   '/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
+  '/admin': typeof AuthenticatedApprovedAdminRoute
   '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
 }
 export interface FileRoutesById {
@@ -82,10 +113,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/request-access': typeof RequestAccessRoute
+  '/_authenticated/_approved': typeof AuthenticatedApprovedRouteRouteWithChildren
+  '/_authenticated/access': typeof AuthenticatedAccessRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/showdown': typeof AuthenticatedShowdownRoute
   '/_authenticated/vault': typeof AuthenticatedVaultRoute
   '/s/$slug': typeof SSlugRoute
+  '/_authenticated/_approved/admin': typeof AuthenticatedApprovedAdminRoute
   '/api/public/hooks/score-showdown': typeof ApiPublicHooksScoreShowdownRoute
 }
 export interface FileRouteTypes {
@@ -93,29 +128,39 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/request-access'
+    | '/access'
     | '/dashboard'
     | '/showdown'
     | '/vault'
     | '/s/$slug'
+    | '/admin'
     | '/api/public/hooks/score-showdown'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
+    | '/request-access'
+    | '/access'
     | '/dashboard'
     | '/showdown'
     | '/vault'
     | '/s/$slug'
+    | '/admin'
     | '/api/public/hooks/score-showdown'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/request-access'
+    | '/_authenticated/_approved'
+    | '/_authenticated/access'
     | '/_authenticated/dashboard'
     | '/_authenticated/showdown'
     | '/_authenticated/vault'
     | '/s/$slug'
+    | '/_authenticated/_approved/admin'
     | '/api/public/hooks/score-showdown'
   fileRoutesById: FileRoutesById
 }
@@ -123,12 +168,20 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  RequestAccessRoute: typeof RequestAccessRoute
   SSlugRoute: typeof SSlugRoute
   ApiPublicHooksScoreShowdownRoute: typeof ApiPublicHooksScoreShowdownRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/request-access': {
+      id: '/request-access'
+      path: '/request-access'
+      fullPath: '/request-access'
+      preLoaderRoute: typeof RequestAccessRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -178,6 +231,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedDashboardRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/access': {
+      id: '/_authenticated/access'
+      path: '/access'
+      fullPath: '/access'
+      preLoaderRoute: typeof AuthenticatedAccessRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/_approved': {
+      id: '/_authenticated/_approved'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedApprovedRouteRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/_approved/admin': {
+      id: '/_authenticated/_approved/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedApprovedAdminRouteImport
+      parentRoute: typeof AuthenticatedApprovedRouteRoute
+    }
     '/api/public/hooks/score-showdown': {
       id: '/api/public/hooks/score-showdown'
       path: '/api/public/hooks/score-showdown'
@@ -188,13 +262,31 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AuthenticatedApprovedRouteRouteChildren {
+  AuthenticatedApprovedAdminRoute: typeof AuthenticatedApprovedAdminRoute
+}
+
+const AuthenticatedApprovedRouteRouteChildren: AuthenticatedApprovedRouteRouteChildren =
+  {
+    AuthenticatedApprovedAdminRoute: AuthenticatedApprovedAdminRoute,
+  }
+
+const AuthenticatedApprovedRouteRouteWithChildren =
+  AuthenticatedApprovedRouteRoute._addFileChildren(
+    AuthenticatedApprovedRouteRouteChildren,
+  )
+
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedApprovedRouteRoute: typeof AuthenticatedApprovedRouteRouteWithChildren
+  AuthenticatedAccessRoute: typeof AuthenticatedAccessRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedShowdownRoute: typeof AuthenticatedShowdownRoute
   AuthenticatedVaultRoute: typeof AuthenticatedVaultRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedApprovedRouteRoute: AuthenticatedApprovedRouteRouteWithChildren,
+  AuthenticatedAccessRoute: AuthenticatedAccessRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedShowdownRoute: AuthenticatedShowdownRoute,
   AuthenticatedVaultRoute: AuthenticatedVaultRoute,
@@ -207,6 +299,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  RequestAccessRoute: RequestAccessRoute,
   SSlugRoute: SSlugRoute,
   ApiPublicHooksScoreShowdownRoute: ApiPublicHooksScoreShowdownRoute,
 }

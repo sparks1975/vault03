@@ -9,7 +9,7 @@ import { ShareDialog } from "@/components/ShareDialog";
 import { ShowdownPanel, type ShowdownCard } from "@/components/ShowdownPanel";
 import { Skeleton } from "@/components/ui/skeleton";
 
-export const Route = createFileRoute("/_authenticated/showdown")({
+export const Route = createFileRoute("/_authenticated/_approved/showdown")({
   ssr: false,
   head: () => ({
     meta: [
