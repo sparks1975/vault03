@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { Loader2, LogOut } from "lucide-react";
 
 import { getMyAccess, redeemInvite } from "@/lib/access.functions";
-import { INVITE_CODE_STORAGE_KEY } from "@/lib/invite-storage";
+import { DEVICE_REGISTERED_KEY, INVITE_CODE_STORAGE_KEY } from "@/lib/invite-storage";
+
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,16 @@ function AccessPage() {
   const [busy, setBusy] = useState(false);
   const [revoked, setRevoked] = useState(false);
 
+  function markDeviceRegistered() {
+    try {
+      window.localStorage.setItem(DEVICE_REGISTERED_KEY, "1");
+    } catch {
+      /* storage blocked */
+    }
+  }
+
+
+
   useEffect(() => {
     let mounted = true;
     let stored: string | null = null;
@@ -53,6 +64,7 @@ function AccessPage() {
       const access = await checkAccess();
       if (!mounted) return;
       if (access.accessStatus === "approved") {
+        markDeviceRegistered();
         navigate({ to: "/dashboard", replace: true });
         return;
       }
@@ -70,6 +82,7 @@ function AccessPage() {
           /* storage blocked */
         }
         if (result.ok) {
+          markDeviceRegistered();
           await queryClient.invalidateQueries();
           navigate({ to: "/dashboard", replace: true });
         }
@@ -83,6 +96,7 @@ function AccessPage() {
       mounted = false;
     };
   }, [checkAccess, navigate, redeem, queryClient]);
+
 
 
   async function submit(e: React.FormEvent) {

@@ -7,7 +7,8 @@ import { Loader2, Wallet, TrendingUp, Search, Activity, KeyRound } from "lucide-
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { verifyInviteCode } from "@/lib/access.functions";
-import { INVITE_CODE_STORAGE_KEY } from "@/lib/invite-storage";
+import { DEVICE_REGISTERED_KEY, INVITE_CODE_STORAGE_KEY } from "@/lib/invite-storage";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RouteLoading } from "@/components/RouteLoading";
@@ -73,8 +74,12 @@ function hasOAuthReturnParams() {
   if (typeof window === "undefined") return false;
   const search = window.location.search;
   const hash = window.location.hash;
-  return /(^|[?&#])(code|access_token|success|error|error_description)=/.test(search + hash);
+  // Invite links use ?code=... on /auth; real OAuth returns carry state,
+  // access_token, or error parameters. Only wait for session hydration when
+  // those are present.
+  return /(^|[?&#])(state|access_token|error|error_description)=/.test(search + hash);
 }
+
 
 // Mobile browsers block/partition storage for embedded frames (the editor
 // preview), so an OAuth session can never land there. Detect it and send the
@@ -115,16 +120,22 @@ function AuthPage() {
     setEmbeddedBlocked(isBlockedEmbeddedContext());
   }, []);
 
-  // A previously verified code (this tab) keeps the sign-in options unlocked
-  // across the OAuth round-trip. A ?code= link pre-fills the field.
+  // A previously verified code (this tab) or an approved device keeps the
+  // sign-in options unlocked. A ?code= link pre-fills the field.
   useEffect(() => {
     let cancelled = false;
     try {
-      if (window.sessionStorage.getItem(INVITE_CODE_STORAGE_KEY)) setCodeUnlocked(true);
+      if (
+        window.sessionStorage.getItem(INVITE_CODE_STORAGE_KEY) ||
+        window.localStorage.getItem(DEVICE_REGISTERED_KEY)
+      ) {
+        setCodeUnlocked(true);
+      }
     } catch {
       /* storage blocked */
     }
     const preset = new URLSearchParams(window.location.search).get("code");
+
     if (preset) {
       setCode(preset.toUpperCase());
       (async () => {
