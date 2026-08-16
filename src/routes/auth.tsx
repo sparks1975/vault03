@@ -120,16 +120,22 @@ function AuthPage() {
     setEmbeddedBlocked(isBlockedEmbeddedContext());
   }, []);
 
-  // A previously verified code (this tab) keeps the sign-in options unlocked
-  // across the OAuth round-trip. A ?code= link pre-fills the field.
+  // A previously verified code (this tab) or an approved device keeps the
+  // sign-in options unlocked. A ?code= link pre-fills the field.
   useEffect(() => {
     let cancelled = false;
     try {
-      if (window.sessionStorage.getItem(INVITE_CODE_STORAGE_KEY)) setCodeUnlocked(true);
+      if (
+        window.sessionStorage.getItem(INVITE_CODE_STORAGE_KEY) ||
+        window.localStorage.getItem(DEVICE_REGISTERED_KEY)
+      ) {
+        setCodeUnlocked(true);
+      }
     } catch {
       /* storage blocked */
     }
     const preset = new URLSearchParams(window.location.search).get("code");
+
     if (preset) {
       setCode(preset.toUpperCase());
       (async () => {
