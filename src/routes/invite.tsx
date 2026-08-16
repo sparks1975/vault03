@@ -58,7 +58,7 @@ function InvitePage() {
       }
       setPendingInviteCode(value);
       toast.success("Code accepted — sign in to activate your account.");
-      navigate({ to: "/auth", search: { invited: "1" }, replace: true });
+      navigate({ to: "/auth", replace: true });
     } catch {
       toast.error("Something went wrong. Try again in a moment.");
     } finally {

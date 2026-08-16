@@ -19,7 +19,7 @@ export function hashInviteCode(raw: string): string {
 }
 
 export function inviteLink(origin: string, code: string): string {
-  return `${origin}/auth?code=${encodeURIComponent(code)}`;
+  return `${origin}/invite?code=${encodeURIComponent(code)}`;
 }
 
 
