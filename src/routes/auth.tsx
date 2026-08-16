@@ -274,6 +274,57 @@ function AuthPage() {
     return <RouteLoading />;
   }
 
+  if (!codeUnlocked) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6 py-12">
+        <div className="w-full max-w-md">
+          <div className="text-center">
+            <p className="text-xl font-extrabold tracking-tighter italic text-foreground">VAULT.03</p>
+            <h1 className="mt-5 font-display text-3xl md:text-[50px] font-extrabold leading-none tracking-tighter italic text-foreground">
+              Invite only
+            </h1>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Vault.03 is limited access. Enter the single-use code from your invitation to continue
+              to sign-in.
+            </p>
+          </div>
+
+          <form onSubmit={submitCode} className="mt-8 rounded-lg border border-border bg-card p-6 space-y-4">
+            <div className="space-y-2">
+              <label
+                htmlFor="gate-code"
+                className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground"
+              >
+                Invite code
+              </label>
+              <Input
+                id="gate-code"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="V03-XXXX-XXXX"
+                autoCapitalize="characters"
+                autoComplete="off"
+                className="font-mono tracking-widest"
+              />
+            </div>
+            <Button type="submit" disabled={verifying || !code.trim()} className="w-full gap-2 py-5 text-sm font-semibold">
+              {verifying ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
+              Continue
+            </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              Don&apos;t have a code?{" "}
+              <Link to="/request-access" className="font-semibold text-accent underline-offset-4 hover:underline">
+                Request an invitation
+              </Link>
+            </p>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+
+
 
 
 
