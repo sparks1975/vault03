@@ -343,11 +343,13 @@ async function applyValuation(
     .eq("is_manual", true);
   const nonSingleRe = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
   const invalidManualIds: string[] = [];
+  let validManualCount = 0;
   for (const m of manualRows ?? []) {
     const p = Number(m.price);
     const title = String(m.title ?? "");
     if (Number.isFinite(p) && p > 0 && !nonSingleRe.test(title) && verifyCompTitle(title, cardIdentity).verified) {
       validSalePrices.push(p);
+      validManualCount++;
     } else {
       invalidManualIds.push(m.id);
     }
@@ -426,6 +428,11 @@ async function applyValuation(
       .eq("id", cardId);
   }
 
+  // Number of comp rows actually persisted (and therefore visible in
+  // Recent Comparables) so the UI never claims comps it cannot show.
+  return { saved_comp_count: singleCardSales.length + validManualCount };
+
+
 }
 
 
@@ -456,14 +463,14 @@ export const replaceValuation = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    await applyValuation(supabase as never, userId, data.card_id, {
+    const result = await applyValuation(supabase as never, userId, data.card_id, {
       current_value: data.current_value,
       value_delta_pct: data.value_delta_pct,
       valuation_error: data.valuation_error ?? false,
       sales: data.sales,
       history: data.history,
     });
-    return { ok: true };
+    return { ok: true, saved_comp_count: result.saved_comp_count };
   });
 
 
