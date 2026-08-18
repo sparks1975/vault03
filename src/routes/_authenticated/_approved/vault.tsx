@@ -918,7 +918,9 @@ function CardDetail({
       }
       qc.invalidateQueries({ queryKey: ["cards"] });
       if (est.note) toast.warning(est.note);
-      const soldCount = est.sales.filter((s) => s.source.includes("eBay sold")).length;
+      // Count only the comps that were actually saved (and are therefore
+      // visible in Recent Comparables) — not the raw, unverified pull.
+      const soldCount = Number(saveRes?.saved_comp_count ?? 0);
       const valued = Number.isFinite(Number(est.current_value)) && Number(est.current_value) > 0;
       if (est.valuation_error) {
         toast.error("Valuation temporarily unavailable, try again in 10-20 min.");
