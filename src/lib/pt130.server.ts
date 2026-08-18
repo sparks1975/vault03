@@ -103,8 +103,8 @@ export function buildPt130Descriptors(fields: Parameters<typeof buildPt130Descri
 }
 
 // Run the Apify eBay sold-listings actor for one or more search keywords.
-// The actor accepts up to 6 keywords per run, so all descriptors for a card are
-// searched in a single run.
+// Each keyword becomes one sold-search URL; maxItems is applied per search, so
+// keep the descriptor list to one or two entries to control cost.
 export async function scrapePt130(descriptor: string | string[]): Promise<Pt130Sale[]> {
   const lovableKey = requireEnv("LOVABLE_API_KEY");
   const apifyKey = requireEnv("APIFY_API_KEY");
@@ -112,7 +112,7 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
   const keywords = (Array.isArray(descriptor) ? descriptor : [descriptor])
     .map((k) => k.trim())
     .filter(Boolean)
-    .slice(0, 6);
+    .slice(0, 2);
   if (keywords.length === 0) return [];
 
   const headers = {
@@ -121,14 +121,17 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
     "Content-Type": "application/json",
   };
   const input = {
-    keywords,
-    count: RESULTS_PER_SEARCH,
-    daysToScrape: DAYS_TO_SCRAPE,
-    ebaySite: "ebay.com",
-    sortOrder: "endedRecently",
-    categoryId: "26376", // eBay Baseball Cards — filters boxes/lots/non-baseball at the source
-    includeCompletedListings: true,
-    itemCondition: "any",
+    // Sold search URLs (LH_Sold/LH_Complete) scoped to Baseball Cards, sorted
+    // by most recently ended.
+    startUrls: keywords.map((k) => ({
+      url:
+        `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(k)}` +
+        `&_sacat=${BASEBALL_CARDS_CATEGORY}&LH_Sold=1&LH_Complete=1&_sop=13`,
+    })),
+    mode: "sold",
+    detailedItems: false, // sold rows come from search results; avoids 3x request cost
+    maxItems: RESULTS_PER_SEARCH,
+    marketplace: "ebay.com",
   };
 
   // The connector gateway cuts requests off at ~60s, so run-sync-get-dataset-items
