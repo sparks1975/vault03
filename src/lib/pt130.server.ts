@@ -1,14 +1,17 @@
-// eBay completed-sales comps via Apify (actor: caffein.dev/ebay-sold-listings).
-// The actor is paid per result (~$2.50–$4 / 1,000 results), so we keep
-// `count` low (20) and send a single descriptor per card to minimize cost.
+// eBay completed-sales comps via Apify (actor: memo23/ebay-search-scraper-ppe).
+// Cheapest actor that actually returns sold listings today: $0.003 per sold row
+// ("fast-item" event) with no per-result markup, so a 15-result pull costs
+// ~$0.045 per card. The previous caffein.dev actor billed $0.004/result AND is
+// currently blocked by eBay (every run returns 0 items), as are the $0.002
+// actors from sync-network and tnodes.
 // The cache table is still named pt130_comps for backward compatibility.
 //
 // SERVER-ONLY module — never import from client code.
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/apify";
-const ACTOR_ID = "caffein.dev~ebay-sold-listings";
-const DAYS_TO_SCRAPE = 90; // actor maximum
-const RESULTS_PER_SEARCH = 20; // ~$0.05–$0.08 per card; fewer than this loses real comps
+const ACTOR_ID = "memo23~ebay-search-scraper-ppe";
+const RESULTS_PER_SEARCH = 15; // ~$0.045 per card; fewer than this loses real comps
+const BASEBALL_CARDS_CATEGORY = "26376"; // eBay Baseball Cards — filters boxes/lots at the source
 
 export type Pt130Sale = {
   title: string | null;
@@ -21,14 +24,13 @@ export type Pt130Sale = {
 
 type ApifyEbayItem = {
   title?: string | null;
-  soldPrice?: string | number | null;
-  soldCurrency?: string | null;
-  endedAt?: string | null;
+  price?: string | null;
+  priceValue?: number | string | null;
+  currency?: string | null;
+  soldDate?: string | null; // e.g. "Sold  Aug 18, 2026"
+  sold?: boolean | null;
   url?: string | null;
-  listingType?: string | null;
-  isBestOfferAccepted?: boolean | null;
-  thumbnailUrl?: string | null;
-  keyword?: string | null;
+  image?: string | null;
 };
 
 function requireEnv(name: string): string {
