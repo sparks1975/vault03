@@ -189,21 +189,26 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
   const out: Pt130Sale[] = [];
   for (const item of items) {
     // Only USD sales — mixing currencies would corrupt the valuation math.
-    if (item.soldCurrency && item.soldCurrency !== "USD") continue;
-    const price = Number(item.soldPrice);
+    if (item.currency && item.currency !== "USD") continue;
+    // Sold-only: the actor flags completed sales explicitly. Anything without
+    // both the flag and a sold date is an active listing and never a comp.
+    if (item.sold !== true) continue;
+    const price = Number(item.priceValue ?? String(item.price ?? "").replace(/[^0-9.]/g, ""));
     if (!Number.isFinite(price) || price <= 0) continue;
-    // Sold-only: a completed sale always has an end date in the past. Anything
-    // missing or future-dated is an active listing and must never be a comp.
-    const endedIso = toIsoDate(item.endedAt);
-    if (!endedIso) continue;
-    if (new Date(item.endedAt as string).getTime() > Date.now() + 24 * 60 * 60 * 1000) continue;
+    // "Sold  Aug 18, 2026" -> parseable date
+    const soldRaw = item.soldDate?.replace(/^sold\s*/i, "").trim() || null;
+    const soldIso = toIsoDate(soldRaw);
+    if (!soldIso) continue;
+    if (new Date(soldRaw as string).getTime() > Date.now() + 24 * 60 * 60 * 1000) continue;
 
     out.push({
       title: item.title?.trim() || null,
-      image_url: item.thumbnailUrl || null,
+      image_url: item.image || null,
       price,
-      sold_at: endedIso,
-      listing_type: normalizeListingType(item.listingType, item.isBestOfferAccepted),
+      sold_at: soldIso,
+      // The sold search results do not expose buying format; the valuation math
+      // treats "other" the same as any single sale.
+      listing_type: normalizeListingType(null, null),
       url: item.url || null,
     });
   }
