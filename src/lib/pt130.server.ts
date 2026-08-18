@@ -1,14 +1,17 @@
-// eBay completed-sales comps via Apify (actor: caffein.dev/ebay-sold-listings).
-// The actor is paid per result (~$2.50–$4 / 1,000 results), so we keep
-// `count` low (20) and send a single descriptor per card to minimize cost.
+// eBay completed-sales comps via Apify (actor: memo23/ebay-search-scraper-ppe).
+// Cheapest actor that actually returns sold listings today: $0.003 per sold row
+// ("fast-item" event) with no per-result markup, so a 15-result pull costs
+// ~$0.045 per card. The previous caffein.dev actor billed $0.004/result AND is
+// currently blocked by eBay (every run returns 0 items), as are the $0.002
+// actors from sync-network and tnodes.
 // The cache table is still named pt130_comps for backward compatibility.
 //
 // SERVER-ONLY module — never import from client code.
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/apify";
-const ACTOR_ID = "caffein.dev~ebay-sold-listings";
-const DAYS_TO_SCRAPE = 90; // actor maximum
-const RESULTS_PER_SEARCH = 20; // ~$0.05–$0.08 per card; fewer than this loses real comps
+const ACTOR_ID = "memo23~ebay-search-scraper-ppe";
+const RESULTS_PER_SEARCH = 15; // ~$0.045 per card; fewer than this loses real comps
+const BASEBALL_CARDS_CATEGORY = "26376"; // eBay Baseball Cards — filters boxes/lots at the source
 
 export type Pt130Sale = {
   title: string | null;
@@ -21,14 +24,13 @@ export type Pt130Sale = {
 
 type ApifyEbayItem = {
   title?: string | null;
-  soldPrice?: string | number | null;
-  soldCurrency?: string | null;
-  endedAt?: string | null;
+  price?: string | null;
+  priceValue?: number | string | null;
+  currency?: string | null;
+  soldDate?: string | null; // e.g. "Sold  Aug 18, 2026"
+  sold?: boolean | null;
   url?: string | null;
-  listingType?: string | null;
-  isBestOfferAccepted?: boolean | null;
-  thumbnailUrl?: string | null;
-  keyword?: string | null;
+  image?: string | null;
 };
 
 function requireEnv(name: string): string {
@@ -101,8 +103,8 @@ export function buildPt130Descriptors(fields: Parameters<typeof buildPt130Descri
 }
 
 // Run the Apify eBay sold-listings actor for one or more search keywords.
-// The actor accepts up to 6 keywords per run, so all descriptors for a card are
-// searched in a single run.
+// Each keyword becomes one sold-search URL; maxItems is applied per search, so
+// keep the descriptor list to one or two entries to control cost.
 export async function scrapePt130(descriptor: string | string[]): Promise<Pt130Sale[]> {
   const lovableKey = requireEnv("LOVABLE_API_KEY");
   const apifyKey = requireEnv("APIFY_API_KEY");
@@ -110,7 +112,7 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
   const keywords = (Array.isArray(descriptor) ? descriptor : [descriptor])
     .map((k) => k.trim())
     .filter(Boolean)
-    .slice(0, 6);
+    .slice(0, 2);
   if (keywords.length === 0) return [];
 
   const headers = {
@@ -119,14 +121,17 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
     "Content-Type": "application/json",
   };
   const input = {
-    keywords,
-    count: RESULTS_PER_SEARCH,
-    daysToScrape: DAYS_TO_SCRAPE,
-    ebaySite: "ebay.com",
-    sortOrder: "endedRecently",
-    categoryId: "26376", // eBay Baseball Cards — filters boxes/lots/non-baseball at the source
-    includeCompletedListings: true,
-    itemCondition: "any",
+    // Sold search URLs (LH_Sold/LH_Complete) scoped to Baseball Cards, sorted
+    // by most recently ended.
+    startUrls: keywords.map((k) => ({
+      url:
+        `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(k)}` +
+        `&_sacat=${BASEBALL_CARDS_CATEGORY}&LH_Sold=1&LH_Complete=1&_sop=13`,
+    })),
+    mode: "sold",
+    detailedItems: false, // sold rows come from search results; avoids 3x request cost
+    maxItems: RESULTS_PER_SEARCH,
+    marketplace: "ebay.com",
   };
 
   // The connector gateway cuts requests off at ~60s, so run-sync-get-dataset-items
@@ -184,21 +189,26 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
   const out: Pt130Sale[] = [];
   for (const item of items) {
     // Only USD sales — mixing currencies would corrupt the valuation math.
-    if (item.soldCurrency && item.soldCurrency !== "USD") continue;
-    const price = Number(item.soldPrice);
+    if (item.currency && item.currency !== "USD") continue;
+    // Sold-only: the actor flags completed sales explicitly. Anything without
+    // both the flag and a sold date is an active listing and never a comp.
+    if (item.sold !== true) continue;
+    const price = Number(item.priceValue ?? String(item.price ?? "").replace(/[^0-9.]/g, ""));
     if (!Number.isFinite(price) || price <= 0) continue;
-    // Sold-only: a completed sale always has an end date in the past. Anything
-    // missing or future-dated is an active listing and must never be a comp.
-    const endedIso = toIsoDate(item.endedAt);
-    if (!endedIso) continue;
-    if (new Date(item.endedAt as string).getTime() > Date.now() + 24 * 60 * 60 * 1000) continue;
+    // "Sold  Aug 18, 2026" -> parseable date
+    const soldRaw = item.soldDate?.replace(/^sold\s*/i, "").trim() || null;
+    const soldIso = toIsoDate(soldRaw);
+    if (!soldIso) continue;
+    if (new Date(soldRaw as string).getTime() > Date.now() + 24 * 60 * 60 * 1000) continue;
 
     out.push({
       title: item.title?.trim() || null,
-      image_url: item.thumbnailUrl || null,
+      image_url: item.image || null,
       price,
-      sold_at: endedIso,
-      listing_type: normalizeListingType(item.listingType, item.isBestOfferAccepted),
+      sold_at: soldIso,
+      // The sold search results do not expose buying format; the valuation math
+      // treats "other" the same as any single sale.
+      listing_type: normalizeListingType(null, null),
       url: item.url || null,
     });
   }
