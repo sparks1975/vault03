@@ -113,34 +113,72 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
     .slice(0, 6);
   if (keywords.length === 0) return [];
 
-  const res = await fetch(
-    `${GATEWAY_URL}/acts/${ACTOR_ID}/run-sync-get-dataset-items?timeout=180`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${lovableKey}`,
-        "X-Connection-Api-Key": apifyKey,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        keywords,
-        count: RESULTS_PER_SEARCH,
-        daysToScrape: DAYS_TO_SCRAPE,
-        ebaySite: "ebay.com",
-        sortOrder: "endedRecently",
-        categoryId: "26376", // eBay Baseball Cards — filters boxes/lots/non-baseball at the source
-        includeCompletedListings: true,
-        itemCondition: "any",
-      }),
-    },
-  );
+  const headers = {
+    Authorization: `Bearer ${lovableKey}`,
+    "X-Connection-Api-Key": apifyKey,
+    "Content-Type": "application/json",
+  };
+  const input = {
+    keywords,
+    count: RESULTS_PER_SEARCH,
+    daysToScrape: DAYS_TO_SCRAPE,
+    ebaySite: "ebay.com",
+    sortOrder: "endedRecently",
+    categoryId: "26376", // eBay Baseball Cards — filters boxes/lots/non-baseball at the source
+    includeCompletedListings: true,
+    itemCondition: "any",
+  };
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Apify eBay sold listings failed [${res.status}]: ${text}`);
+  // The connector gateway cuts requests off at ~60s, so run-sync-get-dataset-items
+  // always returned 502 for runs that take longer. Start the run async and poll.
+  const startRes = await fetch(`${GATEWAY_URL}/acts/${ACTOR_ID}/runs?timeout=300`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(input),
+  });
+  if (!startRes.ok) {
+    const text = await startRes.text();
+    throw new Error(`Apify eBay sold listings failed to start [${startRes.status}]: ${text}`);
+  }
+  const started = (await startRes.json()) as {
+    data?: { id?: string; defaultDatasetId?: string };
+  };
+  const runId = started.data?.id;
+  if (!runId) throw new Error("Apify eBay sold listings returned no run id");
+
+  // The dataset id on the start payload is not reliable while the run is still
+  // READY — always take it from the final run status.
+  let datasetId = started.data?.defaultDatasetId ?? null;
+  const deadline = Date.now() + 240_000;
+  let status = "READY";
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 5_000));
+    const statusRes = await fetch(`${GATEWAY_URL}/actor-runs/${runId}`, { headers });
+    if (!statusRes.ok) continue;
+    const body = (await statusRes.json()) as {
+      data?: { status?: string; defaultDatasetId?: string };
+    };
+    status = body.data?.status ?? status;
+    if (body.data?.defaultDatasetId) datasetId = body.data.defaultDatasetId;
+    if (status !== "RUNNING" && status !== "READY") break;
+  }
+  if (status !== "SUCCEEDED") {
+    // Timed-out or aborted runs may still have partial results; only hard-fail
+    // when nothing usable exists.
+    console.warn(`Apify eBay run finished with status ${status}`);
+  }
+  if (!datasetId) throw new Error("Apify eBay sold listings returned no dataset");
+
+  const itemsRes = await fetch(
+    `${GATEWAY_URL}/datasets/${datasetId}/items?clean=true&limit=200`,
+    { headers },
+  );
+  if (!itemsRes.ok) {
+    const text = await itemsRes.text();
+    throw new Error(`Apify eBay sold listings failed [${itemsRes.status}]: ${text}`);
   }
 
-  const items = (await res.json()) as ApifyEbayItem[];
+  const items = (await itemsRes.json()) as ApifyEbayItem[];
   if (!Array.isArray(items)) return [];
 
   const out: Pt130Sale[] = [];
