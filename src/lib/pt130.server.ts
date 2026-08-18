@@ -144,19 +144,22 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
     data?: { id?: string; defaultDatasetId?: string };
   };
   const runId = started.data?.id;
-  const datasetId = started.data?.defaultDatasetId;
-  if (!runId || !datasetId) {
-    throw new Error("Apify eBay sold listings returned no run id");
-  }
+  if (!runId) throw new Error("Apify eBay sold listings returned no run id");
 
-  const deadline = Date.now() + 180_000;
+  // The dataset id on the start payload is not reliable while the run is still
+  // READY — always take it from the final run status.
+  let datasetId = started.data?.defaultDatasetId ?? null;
+  const deadline = Date.now() + 240_000;
   let status = "READY";
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 5_000));
     const statusRes = await fetch(`${GATEWAY_URL}/actor-runs/${runId}`, { headers });
     if (!statusRes.ok) continue;
-    const body = (await statusRes.json()) as { data?: { status?: string } };
+    const body = (await statusRes.json()) as {
+      data?: { status?: string; defaultDatasetId?: string };
+    };
     status = body.data?.status ?? status;
+    if (body.data?.defaultDatasetId) datasetId = body.data.defaultDatasetId;
     if (status !== "RUNNING" && status !== "READY") break;
   }
   if (status !== "SUCCEEDED") {
@@ -164,6 +167,7 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
     // when nothing usable exists.
     console.warn(`Apify eBay run finished with status ${status}`);
   }
+  if (!datasetId) throw new Error("Apify eBay sold listings returned no dataset");
 
   const itemsRes = await fetch(
     `${GATEWAY_URL}/datasets/${datasetId}/items?clean=true&limit=200`,
