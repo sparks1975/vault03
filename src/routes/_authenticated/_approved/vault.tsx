@@ -895,7 +895,7 @@ function CardDetail({
         },
 
       });
-      await replaceValFn({
+      const saveRes = await replaceValFn({
         data: {
           card_id: card.id,
           current_value: est.current_value,
