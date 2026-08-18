@@ -2220,7 +2220,9 @@ function AddCardDialog({
         await qc.invalidateQueries({ queryKey: ["cards"] });
         onCreated(created.id);
         onClose();
-        const soldCount = est.sales.filter((s) => s.source.includes("eBay sold")).length;
+        // Only count comps that were actually saved and will render in
+        // Recent Comparables.
+        const soldCount = Number(saveRes?.saved_comp_count ?? 0);
         const valued = Number.isFinite(Number(est.current_value)) && Number(est.current_value) > 0;
         if (soldCount > 0) {
           toast.success(`Valued — ${soldCount} sold comp${soldCount === 1 ? "" : "s"}`);
