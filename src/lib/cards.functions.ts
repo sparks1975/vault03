@@ -463,14 +463,14 @@ export const replaceValuation = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    await applyValuation(supabase as never, userId, data.card_id, {
+    const result = await applyValuation(supabase as never, userId, data.card_id, {
       current_value: data.current_value,
       value_delta_pct: data.value_delta_pct,
       valuation_error: data.valuation_error ?? false,
       sales: data.sales,
       history: data.history,
     });
-    return { ok: true };
+    return { ok: true, saved_comp_count: result.saved_comp_count };
   });
 
 
