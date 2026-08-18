@@ -2195,7 +2195,7 @@ function AddCardDialog({
             force_refresh: true,
           },
         });
-        await replaceValFn({
+        const saveRes = await replaceValFn({
           data: {
             card_id: created.id,
             current_value: est.current_value,
