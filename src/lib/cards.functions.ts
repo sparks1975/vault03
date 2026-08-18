@@ -428,6 +428,11 @@ async function applyValuation(
       .eq("id", cardId);
   }
 
+  // Number of comp rows actually persisted (and therefore visible in
+  // Recent Comparables) so the UI never claims comps it cannot show.
+  return { saved_comp_count: singleCardSales.length + validManualCount };
+
+
 }
 
 
