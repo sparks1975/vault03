@@ -508,7 +508,15 @@ function strictSetTitleMatches(title: string, setName: string | null | undefined
   if (titleHasPhrase(titleNorm, setNorm)) return true;
 
   const brandTokens = ["topps", "bowman", "panini", "donruss", "bbm", "epoch", "calbee", "prizm", "select", "fleer", "ultra", "upper", "deck"];
-  const common = new Set(["base", "card", "cards", "set", "sets", "series", "and", "the", "collection", "edition"]);
+  // Catalog-structural words that sellers essentially never type in a title
+  // ("BBM Team Sets" is listed as "2021 BBM Hanshin Tigers ..."). Requiring them
+  // rejected every legitimate comp for those releases.
+  const common = new Set([
+    "base", "card", "cards", "set", "sets", "series", "and", "the",
+    "collection", "edition", "team", "teams", "baseball", "npb", "mlb",
+  ]);
+
+
   const setTokens = setNorm.split(" ").filter(Boolean);
   const brands = setTokens.filter((token) => brandTokens.includes(token));
   if (brands.length > 0 && !brands.some((brand) => titleHasPhrase(titleNorm, brand))) return false;
@@ -569,9 +577,13 @@ export function verifyCompTitle(
 
   if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
     const hasExactCardNumber = wantedNumber && titleMentionsCardNumber(rawTitle, wantedNumber);
-
-    if (!lookup.relaxedSetMatch || !hasExactCardNumber || hasConflictingKnownSetAlias(titleNorm, lookup.set_name)) {
+    // Year + player + exact full card number is already an identity match, so a
+    // seller who omits the catalog's sub-set wording is still selling this card.
+    // Only a title that names a DIFFERENT known set of the same brand is a
+    // genuine mismatch.
+    if (!hasExactCardNumber || hasConflictingKnownSetAlias(titleNorm, lookup.set_name)) {
       reasons.push("set mismatch");
+
     }
   }
 
