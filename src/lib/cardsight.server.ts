@@ -1,7 +1,7 @@
 // Server-only Cardsight REST client. Do not import from client-reachable modules
 // at top level. See https://cardsight.ai/documentation/api-reference.
 import { createClient } from "@supabase/supabase-js";
-import { toApprovedCardSet } from "./card-sets";
+import { cardSetBrand, toApprovedCardSet } from "./card-sets";
 import type { Database } from "@/integrations/supabase/types";
 
 const REST_BASE = "https://api.cardsight.ai";
@@ -487,46 +487,11 @@ function titleMatchesKnownSetAlias(titleNorm: string, setName: string): boolean 
   return (SET_TITLE_ALIASES[setName] ?? []).some((phrase) => titleHasPhrase(titleNorm, phrase));
 }
 
-function hasConflictingKnownSetAlias(titleNorm: string, setName: string | null | undefined): boolean {
-  const approved = toApprovedCardSet(setName) ?? compact(setName);
-  if (!approved) return false;
-  return Object.entries(SET_TITLE_ALIASES).some(([otherSet, phrases]) => {
-    if (otherSet === approved) return false;
-    const sameBrand = normalizeText(otherSet).split(" ")[0] === normalizeText(approved).split(" ")[0];
-    return sameBrand && phrases.some((phrase) => titleHasPhrase(titleNorm, phrase));
-  });
-}
-
 function strictSetTitleMatches(title: string, setName: string | null | undefined): boolean {
-  const approved = toApprovedCardSet(setName) ?? compact(setName);
-  if (!approved) return true;
-
+  const brand = cardSetBrand(setName);
+  if (!brand) return true;
   const titleNorm = normalizeText(title);
-  if (titleMatchesKnownSetAlias(titleNorm, approved)) return true;
-
-  const setNorm = normalizeText(approved);
-  if (titleHasPhrase(titleNorm, setNorm)) return true;
-
-  const brandTokens = ["topps", "bowman", "panini", "donruss", "bbm", "epoch", "calbee", "prizm", "select", "fleer", "ultra", "upper", "deck"];
-  // Catalog-structural words that sellers essentially never type in a title
-  // ("BBM Team Sets" is listed as "2021 BBM Hanshin Tigers ..."). Requiring them
-  // rejected every legitimate comp for those releases.
-  const common = new Set([
-    "base", "card", "cards", "set", "sets", "series", "and", "the",
-    "collection", "edition", "team", "teams", "baseball", "npb", "mlb",
-  ]);
-
-
-  const setTokens = setNorm.split(" ").filter(Boolean);
-  const brands = setTokens.filter((token) => brandTokens.includes(token));
-  if (brands.length > 0 && !brands.some((brand) => titleHasPhrase(titleNorm, brand))) return false;
-
-  const discriminators = setTokens.filter((token) => !brandTokens.includes(token) && !common.has(token));
-  if (discriminators.length === 0) return brands.length === 0 || brands.some((brand) => titleHasPhrase(titleNorm, brand));
-
-  const matched = discriminators.filter((token) => titleHasPhrase(titleNorm, token)).length;
-  if (discriminators.length <= 2) return matched === discriminators.length;
-  return matched >= Math.max(2, discriminators.length - 1);
+  return titleHasPhrase(titleNorm, brand);
 }
 
 export function verifyCompTitle(
@@ -575,16 +540,9 @@ export function verifyCompTitle(
     }
   }
 
-  if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
-    const hasExactCardNumber = wantedNumber && titleMentionsCardNumber(rawTitle, wantedNumber);
-    // Year + player + exact full card number is already an identity match, so a
-    // seller who omits the catalog's sub-set wording is still selling this card.
-    // Only a title that names a DIFFERENT known set of the same brand is a
-    // genuine mismatch.
-    if (!hasExactCardNumber || hasConflictingKnownSetAlias(titleNorm, lookup.set_name)) {
-      reasons.push("set mismatch");
-
-    }
+  const brand = cardSetBrand(lookup.set_name);
+  if (brand && !titleHasPhrase(titleNorm, brand)) {
+    reasons.push("set brand mismatch");
   }
 
   const isAutoTitle = AUTO_RE.test(rawTitle);
@@ -843,10 +801,9 @@ function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean 
   const wantedNumber = normalizeCardNumber(lookup.card_number);
   if (wantedNumber && !cardNumbersEquivalent(wantedNumber, normalizeCardNumber(candidate.number))) return false;
 
-  const candidateSet = sanitizeSetName(candidate.releaseName, candidate.setName);
-  if (!candidateSet) return false;
-  const wantedSet = toApprovedCardSet(lookup.set_name);
-  if (wantedSet && candidateSet !== wantedSet) return false;
+  const wantedBrand = cardSetBrand(lookup.set_name);
+  const candidateBrand = cardSetBrand([candidate.releaseName, candidate.setName].filter(Boolean).join(" "));
+  if (wantedBrand && candidateBrand !== wantedBrand) return false;
 
   return true;
 }
@@ -873,6 +830,7 @@ export async function listSetCandidatesForCard(lookup: CardLookup): Promise<SetC
   const player = merged.player_name?.trim();
   const year = merged.year == null ? null : String(merged.year).trim();
   const setName = merged.set_name?.trim();
+  const brand = cardSetBrand(setName);
   const number = merged.card_number?.trim().replace(/^#\s*/, "");
 
   const paths = new Set<string>();
@@ -884,8 +842,6 @@ export async function listSetCandidatesForCard(lookup: CardLookup): Promise<SetC
     if ([...sp.keys()].length > 1) paths.add(`/v1/catalog/cards?${sp.toString()}`);
   };
 
-  addCardsPath({ name: player, number, year, releaseName: setName });
-  addCardsPath({ name: player, number, year, setName });
   addCardsPath({ name: player, number, year });
   addCardsPath({ number, year });
   addCardsPath({ name: player, year });
@@ -911,7 +867,7 @@ export async function listSetCandidatesForCard(lookup: CardLookup): Promise<SetC
   if (cardsById.size === 0) {
     const queries = new Set<string>();
     if (player && year && number) queries.add([year, player, `#${number}`].join(" "));
-    if (player && year && setName) queries.add([year, setName, player].join(" "));
+    if (player && year && brand) queries.add([year, brand, number ? `#${number}` : null, player].filter(Boolean).join(" "));
     if (merged.descriptor) queries.add(merged.descriptor);
     for (const q of queries) {
       if (q.trim().length < 2) continue;
@@ -971,6 +927,7 @@ export async function listCatalogCardCandidates(lookup: CardLookup): Promise<Cat
   const player = merged.player_name?.trim();
   const year = merged.year == null ? null : String(merged.year).trim();
   const setName = merged.set_name?.trim();
+  const brand = cardSetBrand(setName);
   const number = merged.card_number?.trim().replace(/^#\s*/, "");
 
   const paths = new Set<string>();
@@ -982,9 +939,7 @@ export async function listCatalogCardCandidates(lookup: CardLookup): Promise<Cat
     if ([...sp.keys()].length > 1) paths.add(`/v1/catalog/cards?${sp.toString()}`);
   };
 
-  addCardsPath({ name: player, number, year, releaseName: setName });
   addCardsPath({ name: player, number, year });
-  addCardsPath({ name: player, year, releaseName: setName });
   addCardsPath({ name: player, year });
   addCardsPath({ name: player, number });
 
@@ -1002,7 +957,7 @@ export async function listCatalogCardCandidates(lookup: CardLookup): Promise<Cat
   // Free-text search as a last resort, so an odd set/number spelling still
   // surfaces something the user can pick.
   if (cardsById.size === 0) {
-    const q = [year, setName, player, number ? `#${number}` : null].filter(Boolean).join(" ").trim();
+    const q = [year, brand, number ? `#${number}` : null, player].filter(Boolean).join(" ").trim();
     if (q.length >= 2) {
       try {
         const resp = await csFetch<{ results: SearchResult[] }>(
@@ -1123,6 +1078,7 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
   const player = merged.player_name?.trim();
   const year = merged.year == null ? null : String(merged.year).trim();
   const setName = merged.set_name?.trim();
+  const brand = cardSetBrand(setName);
   const number = merged.card_number?.trim().replace(/^#\s*/, "");
 
   const attempts: string[] = [];
@@ -1134,23 +1090,13 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
     attempts.push(`/v1/catalog/cards?${sp.toString()}`);
   };
 
-  // The structured cards endpoint handles exact number/year/release filters far
-  // better than free-text search, especially when a descriptor contains "#28".
+  // Resolve with the stable identity fields. Detailed release/subset names are
+  // deliberately excluded because catalog naming differences can hide an
+  // otherwise exact year/player/card-number match.
   // Keep catalog resolution bounded. The old eight-query cascade was the main
   // source of runaway API usage when a card was absent or described slightly
   // differently in the catalog.
-  addCardsAttempt({ name: player, number, year, releaseName: setName });
-  addCardsAttempt({ name: player, number, year, setName });
-  // The catalog frequently stores the base number ("112") for cards printed as
-  // "112-SP", and names releases differently than collectors do ("Topps Black &
-  // White" vs "Topps Black and White"). Those two mismatches made the filtered
-  // queries above return zero rows and pushed perfectly common cards to an AI
-  // guess. Sweeping the player's year once and matching locally fixes both, in
-  // a single extra request.
-  const baseNumber = number ? number.replace(/[^a-z0-9]*(sp|ssp)$/i, "") : null;
-  if (baseNumber && baseNumber !== number) {
-    addCardsAttempt({ name: player, number: baseNumber, year, releaseName: setName });
-  }
+  addCardsAttempt({ name: player, number, year });
   if (player && year) {
     for (const skip of ["0", "100", "200"]) {
       addCardsAttempt({ name: player, year, take: "100", skip });
@@ -1191,7 +1137,7 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
 
   const searchQueries = new Set<string>();
   if (merged.descriptor) searchQueries.add(merged.descriptor);
-  else if (player) searchQueries.add([year, setName, player, number ? `#${number}` : null].filter(Boolean).join(" "));
+  else if (player) searchQueries.add([year, brand, number ? `#${number}` : null, player].filter(Boolean).join(" "));
 
   const searchCandidates = new Map<string, SearchResult>();
   for (const textQuery of searchQueries) {
@@ -1509,51 +1455,15 @@ type PricingSearchLookup = CardLookup & {
   relaxedSetMatch?: boolean;
 };
 
-function setBrand(setName: string | null | undefined): string | null {
-  const n = normalizeText(setName);
-  const brands = [
-    "bowman chrome",
-    "bowman",
-    "topps chrome",
-    "topps",
-    "bbm",
-    "panini",
-    "donruss",
-    "fleer",
-    "upper deck",
-    "ultra",
-    "select",
-    "prizm",
-  ];
-  return brands.find((b) => n.includes(b)) ?? null;
-}
-
 function uniquePricingQueries(lookup: PricingSearchLookup): string[] {
   const player = compact(lookup.player_name);
   const year = compact(lookup.year);
-  const set = compact(lookup.set_name)
-    .replace(/\bbase\s+set\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  const brand = setBrand(lookup.set_name);
+  const brand = cardSetBrand(lookup.set_name);
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
-  const auto = lookup.is_autograph ? "auto" : null;
-  const serial = serialSearchTerm(lookup.serial_number);
-  const parallel = compact(lookup.selected_parallel_name).replace(/\/\s*\d+/g, " ").trim() || null;
-  const grade = compact([lookup.grader, lookup.grade].filter(Boolean).join(" ")) || null;
-  const variants = [auto, parallel, serial, grade].filter(Boolean) as string[];
-  const strictCandidates = [
-    [year, set, player, ...variants, number],
-    [player, year, set, ...variants, number],
-    [player, set, ...variants, number],
+  const candidates = [
+    [year, brand, number, player],
+    [player, year, brand, number],
   ];
-  const candidates = variants.length > 0
-    ? strictCandidates
-    : [
-        ...strictCandidates,
-        [year, player, brand, number],
-        [player, brand, number],
-      ];
   const seen = new Set<string>();
   return candidates
     .map((parts) => parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim())

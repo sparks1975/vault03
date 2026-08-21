@@ -470,6 +470,33 @@ export function toApprovedCardSet(...parts: Array<string | number | null | undef
 
   return titleCase(normalized);
 }
+
+/**
+ * Returns the marketplace-facing brand for a catalog set. Valuation searches
+ * should use this broad label rather than a release/subset name sellers may
+ * omit (for example, "Bowman Sterling" becomes "Bowman").
+ */
+export function cardSetBrand(value: string | null | undefined): string | null {
+  const normalized = normalizeSetText(value);
+  if (!normalized) return null;
+
+  const brands: Array<[RegExp, string]> = [
+    [/\bbowman\b/, "Bowman"],
+    [/\btopps\b/, "Topps"],
+    [/\b(bb[m]?|baseball magazine)\b/, "BBM"],
+    [/\bepoch\b/, "Epoch"],
+    [/\bcalbee\b/, "Calbee"],
+    [/\bupper deck\b|\bud\b/, "Upper Deck"],
+    [/\bdonruss\b/, "Donruss"],
+    [/\bpanini\b/, "Panini"],
+    [/\bprizm\b/, "Prizm"],
+    [/\bselect\b/, "Select"],
+    [/\bfleer\b/, "Fleer"],
+    [/\bultra\b/, "Ultra"],
+    [/\bleaf\b/, "Leaf"],
+  ];
+  return brands.find(([pattern]) => pattern.test(normalized))?.[1] ?? normalized.split(" ")[0] ?? null;
+}
 // ---------------------------------------------------------------------------
 // Grouping helper for analytics ("Sets by count").
 //
