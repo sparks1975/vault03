@@ -508,7 +508,11 @@ function strictSetTitleMatches(title: string, setName: string | null | undefined
   if (titleHasPhrase(titleNorm, setNorm)) return true;
 
   const brandTokens = ["topps", "bowman", "panini", "donruss", "bbm", "epoch", "calbee", "prizm", "select", "fleer", "ultra", "upper", "deck"];
-  const common = new Set(["base", "card", "cards", "set", "sets", "series", "and", "the", "collection", "edition"]);
+  // Catalog-structural words that sellers essentially never type in a title
+  // ("BBM Team Sets" is listed as "2021 BBM Hanshin Tigers ..."). Requiring them
+  // rejected every legitimate comp for those releases.
+  const common = new SetOfWords();
+
   const setTokens = setNorm.split(" ").filter(Boolean);
   const brands = setTokens.filter((token) => brandTokens.includes(token));
   if (brands.length > 0 && !brands.some((brand) => titleHasPhrase(titleNorm, brand))) return false;
