@@ -9,28 +9,27 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as RequestAccessRouteImport } from './routes/request-access'
-import { Route as InviteRouteImport } from './routes/invite'
-import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SSlugRouteImport } from './routes/s.$slug'
-import { Route as AuthenticatedAccessRouteImport } from './routes/_authenticated/access'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as InviteRouteImport } from './routes/invite'
+import { Route as RequestAccessRouteImport } from './routes/request-access'
 import { Route as AuthenticatedApprovedRouteRouteImport } from './routes/_authenticated/_approved/route'
-import { Route as AuthenticatedApprovedVaultRouteImport } from './routes/_authenticated/_approved/vault'
-import { Route as AuthenticatedApprovedShowdownRouteImport } from './routes/_authenticated/_approved/showdown'
-import { Route as AuthenticatedApprovedDashboardRouteImport } from './routes/_authenticated/_approved/dashboard'
+import { Route as AuthenticatedAccessRouteImport } from './routes/_authenticated/access'
+import { Route as SSlugRouteImport } from './routes/s.$slug'
 import { Route as AuthenticatedApprovedAdminRouteImport } from './routes/_authenticated/_approved/admin'
+import { Route as AuthenticatedApprovedDashboardRouteImport } from './routes/_authenticated/_approved/dashboard'
+import { Route as AuthenticatedApprovedShowdownRouteImport } from './routes/_authenticated/_approved/showdown'
+import { Route as AuthenticatedApprovedVaultRouteImport } from './routes/_authenticated/_approved/vault'
 import { Route as ApiPublicHooksScoreShowdownRouteImport } from './routes/api/public/hooks/score-showdown'
 
-const RequestAccessRoute = RequestAccessRouteImport.update({
-  id: '/request-access',
-  path: '/request-access',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const InviteRoute = InviteRouteImport.update({
-  id: '/invite',
-  path: '/invite',
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -38,40 +37,35 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
+const InviteRoute = InviteRouteImport.update({
+  id: '/invite',
+  path: '/invite',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const RequestAccessRoute = RequestAccessRouteImport.update({
+  id: '/request-access',
+  path: '/request-access',
   getParentRoute: () => rootRouteImport,
-} as any)
-const SSlugRoute = SSlugRouteImport.update({
-  id: '/s/$slug',
-  path: '/s/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedAccessRoute = AuthenticatedAccessRouteImport.update({
-  id: '/access',
-  path: '/access',
-  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedApprovedRouteRoute =
   AuthenticatedApprovedRouteRouteImport.update({
     id: '/_approved',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedApprovedVaultRoute =
-  AuthenticatedApprovedVaultRouteImport.update({
-    id: '/vault',
-    path: '/vault',
-    getParentRoute: () => AuthenticatedApprovedRouteRoute,
-  } as any)
-const AuthenticatedApprovedShowdownRoute =
-  AuthenticatedApprovedShowdownRouteImport.update({
-    id: '/showdown',
-    path: '/showdown',
+const AuthenticatedAccessRoute = AuthenticatedAccessRouteImport.update({
+  id: '/access',
+  path: '/access',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const SSlugRoute = SSlugRouteImport.update({
+  id: '/s/$slug',
+  path: '/s/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedApprovedAdminRoute =
+  AuthenticatedApprovedAdminRouteImport.update({
+    id: '/admin',
+    path: '/admin',
     getParentRoute: () => AuthenticatedApprovedRouteRoute,
   } as any)
 const AuthenticatedApprovedDashboardRoute =
@@ -80,10 +74,16 @@ const AuthenticatedApprovedDashboardRoute =
     path: '/dashboard',
     getParentRoute: () => AuthenticatedApprovedRouteRoute,
   } as any)
-const AuthenticatedApprovedAdminRoute =
-  AuthenticatedApprovedAdminRouteImport.update({
-    id: '/admin',
-    path: '/admin',
+const AuthenticatedApprovedShowdownRoute =
+  AuthenticatedApprovedShowdownRouteImport.update({
+    id: '/showdown',
+    path: '/showdown',
+    getParentRoute: () => AuthenticatedApprovedRouteRoute,
+  } as any)
+const AuthenticatedApprovedVaultRoute =
+  AuthenticatedApprovedVaultRouteImport.update({
+    id: '/vault',
+    path: '/vault',
     getParentRoute: () => AuthenticatedApprovedRouteRoute,
   } as any)
 const ApiPublicHooksScoreShowdownRoute =
@@ -191,25 +191,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/request-access': {
-      id: '/request-access'
-      path: '/request-access'
-      fullPath: '/request-access'
-      preLoaderRoute: typeof RequestAccessRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/invite': {
-      id: '/invite'
-      path: '/invite'
-      fullPath: '/invite'
-      preLoaderRoute: typeof InviteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -219,26 +205,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/s/$slug': {
-      id: '/s/$slug'
-      path: '/s/$slug'
-      fullPath: '/s/$slug'
-      preLoaderRoute: typeof SSlugRouteImport
+    '/invite': {
+      id: '/invite'
+      path: '/invite'
+      fullPath: '/invite'
+      preLoaderRoute: typeof InviteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/access': {
-      id: '/_authenticated/access'
-      path: '/access'
-      fullPath: '/access'
-      preLoaderRoute: typeof AuthenticatedAccessRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
+    '/request-access': {
+      id: '/request-access'
+      path: '/request-access'
+      fullPath: '/request-access'
+      preLoaderRoute: typeof RequestAccessRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/_approved': {
       id: '/_authenticated/_approved'
@@ -247,18 +233,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedApprovedRouteRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/_approved/vault': {
-      id: '/_authenticated/_approved/vault'
-      path: '/vault'
-      fullPath: '/vault'
-      preLoaderRoute: typeof AuthenticatedApprovedVaultRouteImport
-      parentRoute: typeof AuthenticatedApprovedRouteRoute
+    '/_authenticated/access': {
+      id: '/_authenticated/access'
+      path: '/access'
+      fullPath: '/access'
+      preLoaderRoute: typeof AuthenticatedAccessRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/_approved/showdown': {
-      id: '/_authenticated/_approved/showdown'
-      path: '/showdown'
-      fullPath: '/showdown'
-      preLoaderRoute: typeof AuthenticatedApprovedShowdownRouteImport
+    '/s/$slug': {
+      id: '/s/$slug'
+      path: '/s/$slug'
+      fullPath: '/s/$slug'
+      preLoaderRoute: typeof SSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/_approved/admin': {
+      id: '/_authenticated/_approved/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedApprovedAdminRouteImport
       parentRoute: typeof AuthenticatedApprovedRouteRoute
     }
     '/_authenticated/_approved/dashboard': {
@@ -268,11 +261,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedApprovedDashboardRouteImport
       parentRoute: typeof AuthenticatedApprovedRouteRoute
     }
-    '/_authenticated/_approved/admin': {
-      id: '/_authenticated/_approved/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AuthenticatedApprovedAdminRouteImport
+    '/_authenticated/_approved/showdown': {
+      id: '/_authenticated/_approved/showdown'
+      path: '/showdown'
+      fullPath: '/showdown'
+      preLoaderRoute: typeof AuthenticatedApprovedShowdownRouteImport
+      parentRoute: typeof AuthenticatedApprovedRouteRoute
+    }
+    '/_authenticated/_approved/vault': {
+      id: '/_authenticated/_approved/vault'
+      path: '/vault'
+      fullPath: '/vault'
+      preLoaderRoute: typeof AuthenticatedApprovedVaultRouteImport
       parentRoute: typeof AuthenticatedApprovedRouteRoute
     }
     '/api/public/hooks/score-showdown': {
