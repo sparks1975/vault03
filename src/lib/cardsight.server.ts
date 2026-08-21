@@ -1,7 +1,7 @@
 // Server-only Cardsight REST client. Do not import from client-reachable modules
 // at top level. See https://cardsight.ai/documentation/api-reference.
 import { createClient } from "@supabase/supabase-js";
-import { toApprovedCardSet } from "./card-sets";
+import { cardSetBrand, toApprovedCardSet } from "./card-sets";
 import type { Database } from "@/integrations/supabase/types";
 
 const REST_BASE = "https://api.cardsight.ai";
@@ -575,16 +575,9 @@ export function verifyCompTitle(
     }
   }
 
-  if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
-    const hasExactCardNumber = wantedNumber && titleMentionsCardNumber(rawTitle, wantedNumber);
-    // Year + player + exact full card number is already an identity match, so a
-    // seller who omits the catalog's sub-set wording is still selling this card.
-    // Only a title that names a DIFFERENT known set of the same brand is a
-    // genuine mismatch.
-    if (!hasExactCardNumber || hasConflictingKnownSetAlias(titleNorm, lookup.set_name)) {
-      reasons.push("set mismatch");
-
-    }
+  const brand = cardSetBrand(lookup.set_name);
+  if (brand && !titleHasPhrase(titleNorm, brand)) {
+    reasons.push("set brand mismatch");
   }
 
   const isAutoTitle = AUTO_RE.test(rawTitle);
@@ -1509,51 +1502,15 @@ type PricingSearchLookup = CardLookup & {
   relaxedSetMatch?: boolean;
 };
 
-function setBrand(setName: string | null | undefined): string | null {
-  const n = normalizeText(setName);
-  const brands = [
-    "bowman chrome",
-    "bowman",
-    "topps chrome",
-    "topps",
-    "bbm",
-    "panini",
-    "donruss",
-    "fleer",
-    "upper deck",
-    "ultra",
-    "select",
-    "prizm",
-  ];
-  return brands.find((b) => n.includes(b)) ?? null;
-}
-
 function uniquePricingQueries(lookup: PricingSearchLookup): string[] {
   const player = compact(lookup.player_name);
   const year = compact(lookup.year);
-  const set = compact(lookup.set_name)
-    .replace(/\bbase\s+set\b/gi, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  const brand = setBrand(lookup.set_name);
+  const brand = cardSetBrand(lookup.set_name);
   const number = compact(lookup.card_number).replace(/^#\s*/, "");
-  const auto = lookup.is_autograph ? "auto" : null;
-  const serial = serialSearchTerm(lookup.serial_number);
-  const parallel = compact(lookup.selected_parallel_name).replace(/\/\s*\d+/g, " ").trim() || null;
-  const grade = compact([lookup.grader, lookup.grade].filter(Boolean).join(" ")) || null;
-  const variants = [auto, parallel, serial, grade].filter(Boolean) as string[];
-  const strictCandidates = [
-    [year, set, player, ...variants, number],
-    [player, year, set, ...variants, number],
-    [player, set, ...variants, number],
+  const candidates = [
+    [year, brand, number, player],
+    [player, year, brand, number],
   ];
-  const candidates = variants.length > 0
-    ? strictCandidates
-    : [
-        ...strictCandidates,
-        [year, player, brand, number],
-        [player, brand, number],
-      ];
   const seen = new Set<string>();
   return candidates
     .map((parts) => parts.filter(Boolean).join(" ").replace(/\s+/g, " ").trim())

@@ -7,6 +7,7 @@
 // The cache table is still named pt130_comps for backward compatibility.
 //
 // SERVER-ONLY module — never import from client code.
+import { cardSetBrand } from "./card-sets";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/apify";
 const ACTOR_ID = "memo23~ebay-search-scraper-ppe";
@@ -71,26 +72,24 @@ export function buildPt130Descriptor(fields: {
   grade?: string | null;
 }, opts: { includeCardNumber?: boolean } = {}): string {
   const includeCardNumber = opts.includeCardNumber ?? true;
-  const parallel = fields.selected_parallel_name
-    ? fields.selected_parallel_name.replace(/\/\s*\d+/g, " ").replace(/\s+/g, " ").trim()
-    : null;
-  // Grader/grade intentionally excluded — including them narrows the sold
-  // search too aggressively (especially for niche graders like Arena Club).
-  // We keep them as inputs so the API signature is stable.
+  // Keep these inputs for API compatibility, but sold-search discovery uses
+  // only year, broad brand, exact card number, and player name. Release names,
+  // parallels, autographs and grades can be absent or inconsistent in titles;
+  // the verification pass below still enforces those value-affecting traits.
+  void fields.is_autograph;
+  void fields.selected_parallel_name;
   void fields.grader;
   void fields.grade;
   const parts = [
     fields.year ? String(fields.year) : null,
-    fields.set_name,
-    fields.player_name,
-    fields.is_autograph ? "auto" : null,
-    parallel,
+    cardSetBrand(fields.set_name),
     // eBay treats a hyphen as an exclusion operator ("112-SP" => 112 NOT SP),
     // which silently drops every legitimate short-print listing. Render the
     // number with spaces instead.
     includeCardNumber && fields.card_number
       ? `#${String(fields.card_number).replace(/^#/, "").replace(/[-/]+/g, " ").replace(/\s+/g, " ").trim()}`
       : null,
+    fields.player_name,
   ].filter(Boolean) as string[];
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
