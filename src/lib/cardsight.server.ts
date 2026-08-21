@@ -939,9 +939,7 @@ export async function listCatalogCardCandidates(lookup: CardLookup): Promise<Cat
     if ([...sp.keys()].length > 1) paths.add(`/v1/catalog/cards?${sp.toString()}`);
   };
 
-  addCardsPath({ name: player, number, year, releaseName: setName });
   addCardsPath({ name: player, number, year });
-  addCardsPath({ name: player, year, releaseName: setName });
   addCardsPath({ name: player, year });
   addCardsPath({ name: player, number });
 
@@ -959,7 +957,7 @@ export async function listCatalogCardCandidates(lookup: CardLookup): Promise<Cat
   // Free-text search as a last resort, so an odd set/number spelling still
   // surfaces something the user can pick.
   if (cardsById.size === 0) {
-    const q = [year, setName, player, number ? `#${number}` : null].filter(Boolean).join(" ").trim();
+    const q = [year, brand, number ? `#${number}` : null, player].filter(Boolean).join(" ").trim();
     if (q.length >= 2) {
       try {
         const resp = await csFetch<{ results: SearchResult[] }>(
@@ -1080,6 +1078,7 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
   const player = merged.player_name?.trim();
   const year = merged.year == null ? null : String(merged.year).trim();
   const setName = merged.set_name?.trim();
+  const brand = cardSetBrand(setName);
   const number = merged.card_number?.trim().replace(/^#\s*/, "");
 
   const attempts: string[] = [];
