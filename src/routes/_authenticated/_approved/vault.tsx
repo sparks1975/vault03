@@ -656,6 +656,7 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
   return (
     <button
       onClick={onClick}
+      data-card-id={card.id}
       className={`w-full text-left p-4 flex gap-4 transition-colors ${active ? "ring-1 ring-inset ring-accent bg-accent/[0.06]" : "border border-foreground bg-background hover:bg-secondary"}`}
     >
       <div className="w-16 h-24 bg-secondary shrink-0 border border-border overflow-hidden grid place-items-center relative">
