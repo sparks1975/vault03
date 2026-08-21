@@ -487,16 +487,6 @@ function titleMatchesKnownSetAlias(titleNorm: string, setName: string): boolean 
   return (SET_TITLE_ALIASES[setName] ?? []).some((phrase) => titleHasPhrase(titleNorm, phrase));
 }
 
-function hasConflictingKnownSetAlias(titleNorm: string, setName: string | null | undefined): boolean {
-  const approved = toApprovedCardSet(setName) ?? compact(setName);
-  if (!approved) return false;
-  return Object.entries(SET_TITLE_ALIASES).some(([otherSet, phrases]) => {
-    if (otherSet === approved) return false;
-    const sameBrand = normalizeText(otherSet).split(" ")[0] === normalizeText(approved).split(" ")[0];
-    return sameBrand && phrases.some((phrase) => titleHasPhrase(titleNorm, phrase));
-  });
-}
-
 function strictSetTitleMatches(title: string, setName: string | null | undefined): boolean {
   const approved = toApprovedCardSet(setName) ?? compact(setName);
   if (!approved) return true;
