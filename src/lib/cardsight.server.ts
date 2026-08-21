@@ -577,9 +577,13 @@ export function verifyCompTitle(
 
   if (!strictSetTitleMatches(rawTitle, lookup.set_name)) {
     const hasExactCardNumber = wantedNumber && titleMentionsCardNumber(rawTitle, wantedNumber);
-
-    if (!lookup.relaxedSetMatch || !hasExactCardNumber || hasConflictingKnownSetAlias(titleNorm, lookup.set_name)) {
+    // Year + player + exact full card number is already an identity match, so a
+    // seller who omits the catalog's sub-set wording is still selling this card.
+    // Only a title that names a DIFFERENT known set of the same brand is a
+    // genuine mismatch.
+    if (!hasExactCardNumber || hasConflictingKnownSetAlias(titleNorm, lookup.set_name)) {
       reasons.push("set mismatch");
+
     }
   }
 
