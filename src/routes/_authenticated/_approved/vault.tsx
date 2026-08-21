@@ -426,7 +426,12 @@ function VaultPage() {
   }
 
 
+  // Remember where the list was scrolled when opening a mobile detail view so
+  // the back arrow returns the user to the card they were looking at.
+  const listScrollY = useRef(0);
+
   function selectCard(id: string) {
+    if (typeof window !== "undefined") listScrollY.current = window.scrollY;
     setSelectedId(id);
     setMobileDetail(true);
     if (typeof window !== "undefined" && window.innerWidth >= 1024) {
@@ -434,13 +439,30 @@ function VaultPage() {
     }
   }
 
+  function closeMobileDetail() {
+    const targetId = selected;
+    setMobileDetail(false);
+    if (typeof window === "undefined") return;
+    // Wait for the list to re-render, then scroll the card back into view.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = targetId
+          ? document.querySelector<HTMLElement>(`[data-card-id="${targetId}"]`)
+          : null;
+        if (el) el.scrollIntoView({ block: "center" });
+        else window.scrollTo({ top: listScrollY.current });
+      });
+    });
+  }
+
+
   return (
     <div className="min-h-screen bg-background text-foreground pb-20 overflow-x-clip">
       <AppNav
         leading={
           mobileDetail ? (
             <button
-              onClick={() => setMobileDetail(false)}
+              onClick={closeMobileDetail}
               className="lg:hidden p-2 -ml-2 rounded-sm border border-white/20 hover:bg-white/10 text-white"
               aria-label="Back to list"
             >
@@ -656,6 +678,7 @@ function CardRow({ card, active, onClick }: { card: Card; active: boolean; onCli
   return (
     <button
       onClick={onClick}
+      data-card-id={card.id}
       className={`w-full text-left p-4 flex gap-4 transition-colors ${active ? "ring-1 ring-inset ring-accent bg-accent/[0.06]" : "border border-foreground bg-background hover:bg-secondary"}`}
     >
       <div className="w-16 h-24 bg-secondary shrink-0 border border-border overflow-hidden grid place-items-center relative">
