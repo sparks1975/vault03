@@ -462,7 +462,7 @@ function VaultPage() {
         leading={
           mobileDetail ? (
             <button
-              onClick={() => setMobileDetail(false)}
+              onClick={closeMobileDetail}
               className="lg:hidden p-2 -ml-2 rounded-sm border border-white/20 hover:bg-white/10 text-white"
               aria-label="Back to list"
             >
