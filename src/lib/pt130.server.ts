@@ -72,14 +72,19 @@ export function buildPt130Descriptor(fields: {
   grade?: string | null;
 }, opts: { includeCardNumber?: boolean } = {}): string {
   const includeCardNumber = opts.includeCardNumber ?? true;
-  // Keep these inputs for API compatibility, but sold-search discovery uses
-  // only year, broad brand, exact card number, and player name. Release names,
-  // parallels, autographs and grades can be absent or inconsistent in titles;
-  // the verification pass below still enforces those value-affecting traits.
-  void fields.is_autograph;
-  void fields.selected_parallel_name;
+  // Sold-search discovery must state the same value-affecting traits that the
+  // verification pass later requires, otherwise autographed / parallel /
+  // serial-numbered cards search as base cards and every returned listing gets
+  // rejected ("0 recent comparables"). Grades are intentionally left out: the
+  // verifier never checks them and graders/grades are written inconsistently.
   void fields.grader;
   void fields.grade;
+  const parallel = (fields.selected_parallel_name ?? "")
+    .replace(/\/\s*\d+/g, " ")
+    .replace(/\b(parallel|card|cards)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const serialDenominator = (fields.selected_parallel_name ?? "").match(/\/\s*(\d+)/)?.[1] ?? null;
   const parts = [
     fields.year ? String(fields.year) : null,
     cardSetBrand(fields.set_name),
@@ -90,8 +95,12 @@ export function buildPt130Descriptor(fields: {
       ? `#${String(fields.card_number).replace(/^#/, "").replace(/[-/]+/g, " ").replace(/\s+/g, " ").trim()}`
       : null,
     fields.player_name,
+    parallel || null,
+    serialDenominator ? `/${serialDenominator}` : null,
+    fields.is_autograph ? "auto" : null,
   ].filter(Boolean) as string[];
   return parts.join(" ").replace(/\s+/g, " ").trim();
+
 }
 
 // Returns only the primary descriptor (with card number) to keep result count
