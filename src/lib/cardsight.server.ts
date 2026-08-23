@@ -677,17 +677,25 @@ export function isVariantTitle(
     .replace(/\bgold\s+framed?\b/gi, "framed")
     .replace(/\bgold\s+label\b/gi, "label");
   const hasSelectedParallel = Boolean(opts.hasSelectedParallel || opts.selectedParallelName);
+  // A serial number ("147/200") means the card IS a numbered parallel even when
+  // the user hasn't picked which one from the catalog. The print run pins the
+  // identity, so generic parallel wording in the title confirms the card rather
+  // than contradicting it — otherwise numbered cards reject every listing:
+  // parallel comps fail here and base comps fail the serial check.
+  const serialIdentifiesParallel = Boolean(serialSearchTerm(opts.serial_number));
+  const parallelOptIn = hasSelectedParallel || serialIdentifiesParallel;
   if (opts.selectedParallelName) {
     if (!selectedParallelTitleMatches(variantTitle, opts.selectedParallelName)) return true;
     const selectedHasSerial = /\/\s*\d+/.test(opts.selectedParallelName);
     if (!selectedHasSerial && !opts.serial_number && SERIAL_RE.test(variantTitle)) return true;
     if (hasUnselectedParallelModifier(variantTitle, opts.selectedParallelName)) return true;
   }
-  if (!hasSelectedParallel && PARALLEL_COLOR_RE.test(variantTitle)) return true;
-  if (!hasSelectedParallel && REFRACTOR_FAMILY_RE.test(variantTitle)) return true;
-  if (!hasSelectedParallel && WAVE_FAMILY_RE.test(variantTitle)) return true;
+  if (!parallelOptIn && PARALLEL_COLOR_RE.test(variantTitle)) return true;
+  if (!parallelOptIn && REFRACTOR_FAMILY_RE.test(variantTitle)) return true;
+  if (!parallelOptIn && WAVE_FAMILY_RE.test(variantTitle)) return true;
   if (!opts.is_first_bowman && FIRST_BOWMAN_RE.test(variantTitle)) return true;
-  if (!hasSelectedParallel && !opts.serial_number && SERIAL_RE.test(variantTitle)) return true;
+  if (!parallelOptIn && !opts.serial_number && SERIAL_RE.test(variantTitle)) return true;
+
   if (!opts.is_autograph && AUTO_RE.test(variantTitle)) return true;
   return false;
 }
