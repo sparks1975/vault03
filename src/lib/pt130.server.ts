@@ -68,6 +68,7 @@ export function buildPt130Descriptor(fields: {
   card_number?: string | null;
   is_autograph?: boolean | null;
   selected_parallel_name?: string | null;
+  serial_number?: string | null;
   grader?: string | null;
   grade?: string | null;
 }, opts: { includeCardNumber?: boolean } = {}): string {
@@ -84,7 +85,10 @@ export function buildPt130Descriptor(fields: {
     .replace(/\b(parallel|card|cards)\b/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
-  const serialDenominator = (fields.selected_parallel_name ?? "").match(/\/\s*(\d+)/)?.[1] ?? null;
+  const serialDenominator =
+    (fields.serial_number ?? "").match(/\/\s*(\d+)/)?.[1] ??
+    (fields.selected_parallel_name ?? "").match(/\/\s*(\d+)/)?.[1] ??
+    null;
   const parts = [
     fields.year ? String(fields.year) : null,
     cardSetBrand(fields.set_name),
@@ -97,6 +101,7 @@ export function buildPt130Descriptor(fields: {
     fields.player_name,
     parallel || null,
     serialDenominator ? `/${serialDenominator}` : null,
+
     fields.is_autograph ? "auto" : null,
   ].filter(Boolean) as string[];
   return parts.join(" ").replace(/\s+/g, " ").trim();
