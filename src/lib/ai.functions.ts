@@ -952,6 +952,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             card_number: valuationLookup.card_number,
             is_autograph: valuationLookup.is_autograph,
             selected_parallel_name: selectedParallelName,
+            serial_number: data.serial_number,
             grader: data.grader,
             grade: data.grade,
           });
@@ -1019,6 +1020,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
               card_number: valuationLookup.card_number,
               is_autograph: valuationLookup.is_autograph,
               selected_parallel_name: selectedParallelName,
+              serial_number: data.serial_number,
               grader: data.grader,
               grade: data.grade,
             },

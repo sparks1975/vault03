@@ -724,6 +724,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
             player_name: card.player_name,
             card_number: card.card_number,
             is_autograph: card.is_autograph,
+            serial_number: card.serial_number,
           }),
           card_number: card.card_number,
         });
