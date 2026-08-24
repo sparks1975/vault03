@@ -2016,9 +2016,9 @@ function AddCardDialog({
         is_numbered: result.serial_number ? true : f.is_numbered,
         is_rookie: result.is_rookie === true ? true : f.is_rookie,
         cardsight_card_id: result.cardsight_card_id ?? f.cardsight_card_id,
-        // Keep the parallel identification actually resolved — nulling this was
-        // discarding the parallel the scan read off the card.
-        cardsight_parallel_id: result.cardsight_parallel_id ?? null,
+        // Never auto-assign a parallel from the scan — it guessed wrong too
+        // often. The read is surfaced as a suggestion the user can apply.
+        cardsight_parallel_id: null,
       }));
       setParallelHint(result.parallel_hint ?? null);
       setConfidence(result.confidence ?? null);
@@ -2793,26 +2793,13 @@ function ParallelSelect({
   });
 
   const options = q.data ?? [];
+  // Suggestion only: an exact name match from the scan read. Never applied
+  // automatically — fuzzy/substring guesses picked the wrong parallel.
   const hintMatch = (() => {
     const hint = normalizeParallelName(hintName);
     if (!hint) return null;
-    const exact = options.find((p) => normalizeParallelName(p.name) === hint);
-    if (exact) return exact;
-    return (
-      options.find((p) => {
-        const name = normalizeParallelName(p.name);
-        return name.includes(hint) || hint.includes(name);
-      }) ?? null
-    );
+    return options.find((p) => normalizeParallelName(p.name) === hint) ?? null;
   })();
-  const appliedHint = useRef<string | null>(null);
-  useEffect(() => {
-    if (value || !hintMatch) return;
-    if (appliedHint.current === hintMatch.id) return;
-    appliedHint.current = hintMatch.id;
-    onChange(hintMatch.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hintMatch?.id, value]);
   return (
     <label className="block">
       <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
@@ -2839,6 +2826,19 @@ function ParallelSelect({
           Link this card to the catalog above to choose a parallel/refractor.
         </span>
       )}
+      {canLookup && !value && hintMatch && (
+        <span className="mt-1 block text-[9px] font-mono text-muted-foreground">
+          Scan read “{hintMatch.name}”.{" "}
+          <button
+            type="button"
+            onClick={() => onChange(hintMatch.id)}
+            className="underline text-accent"
+          >
+            Use it
+          </button>
+        </span>
+      )}
+
 
       {canLookup && !q.isLoading && (q.data?.length ?? 0) === 0 && (
         <span className="text-[9px] font-mono text-muted-foreground">
