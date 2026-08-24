@@ -2722,10 +2722,21 @@ function ApprovedSetSelect({
   );
 }
 
+// Normalizes a parallel name for matching the scan's free-text read against
+// catalog option names ("Gold Refractor /50" ≈ "gold refractor").
+function normalizeParallelName(value: string | null | undefined): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\/\s*\d+/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
 function ParallelSelect({
   cardId,
   lookup,
   value,
+  hintName = null,
   onChange,
 }: {
   cardId: string | null;
@@ -2736,6 +2747,9 @@ function ParallelSelect({
     card_number?: string | null;
   };
   value: string | null;
+  // Free-text parallel read off the card by the scan, used to preselect the
+  // matching catalog option once the scoped list loads.
+  hintName?: string | null;
   onChange: (id: string | null) => void;
 }) {
   const listFn = useServerFn(listCardsightParallels);
@@ -2756,6 +2770,28 @@ function ParallelSelect({
     enabled: canLookup,
     staleTime: 60 * 60 * 1000,
   });
+
+  const options = q.data ?? [];
+  const hintMatch = (() => {
+    const hint = normalizeParallelName(hintName);
+    if (!hint) return null;
+    const exact = options.find((p) => normalizeParallelName(p.name) === hint);
+    if (exact) return exact;
+    return (
+      options.find((p) => {
+        const name = normalizeParallelName(p.name);
+        return name.includes(hint) || hint.includes(name);
+      }) ?? null
+    );
+  })();
+  const appliedHint = useRef<string | null>(null);
+  useEffect(() => {
+    if (value || !hintMatch) return;
+    if (appliedHint.current === hintMatch.id) return;
+    appliedHint.current = hintMatch.id;
+    onChange(hintMatch.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hintMatch?.id, value]);
   return (
     <label className="block">
       <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
