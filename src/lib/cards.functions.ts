@@ -232,9 +232,18 @@ const allowed = [
         .maybeSingle();
       if (existing) {
         const norm = (v: unknown) => (v == null ? "" : String(v).trim().toLowerCase());
+        // Compare the *normalized* stored value: set names are canonicalized on
+        // write, so an older raw value ("Topps Black & White - Frame Rate")
+        // must not read as a user identity edit and wipe the catalog link,
+        // the chosen parallel, the value and every saved comp.
+        const existingValue = (k: (typeof identityKeys)[number]) => {
+          const raw = (existing as Record<string, unknown>)[k];
+          return k === "set_name" ? toApprovedCardSet(raw as string | null | undefined) : raw;
+        };
         const changed = identityKeys.some(
-          (k) => k in clean && norm(clean[k]) !== norm((existing as Record<string, unknown>)[k]),
+          (k) => k in clean && norm(clean[k]) !== norm(existingValue(k)),
         );
+
         if (changed) {
           identityReset = true;
           clean["cardsight_card_id"] = null;
