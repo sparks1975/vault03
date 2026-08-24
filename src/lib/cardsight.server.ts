@@ -475,6 +475,10 @@ function cardNumberImpliesAutograph(cardNumber: string | null | undefined): bool
   return AUTOGRAPH_CARD_NUMBER_PREFIX_RE.test(normalized);
 }
 
+function explicitCardNumberConflicts(explicitNumbers: string[], wantedNumber: string): boolean {
+  return explicitNumbers.length > 0 && !explicitNumbers.includes(wantedNumber);
+}
+
 const SET_TITLE_ALIASES: Record<string, string[]> = {
   "Upper Deck": ["upper deck", "ud"],
   "Upper Deck Collector's Choice": ["upper deck collectors choice", "collectors choice"],
@@ -557,6 +561,7 @@ export function verifyCompTitle(
   if (!rawTitle) return { verified: false, reasons: ["missing title"] };
 
   const titleNorm = normalizeText(rawTitle);
+  const serial = serialSearchTerm(lookup.serial_number);
   const playerTokens = normalizeText(lookup.player_name)
     .split(" ")
     .filter((t) => t.length > 1);
@@ -571,13 +576,25 @@ export function verifyCompTitle(
 
   const wantedNumber = normalizeCardNumber(lookup.card_number);
   let explicitNumbers: string[] = [];
+  let numberStated = false;
+  let strongNumberlessMatch = false;
   if (wantedNumber) {
     explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
     // Card number is identity, not a fuzzy hint. A comp must state the complete
     // submitted number, including every prefix/suffix (112 is not 112-SP).
-    // Missing numbers are unverifiable and must never influence valuation.
-    const numberStated = titleMentionsCardNumber(rawTitle, wantedNumber);
-    if (!numberStated) {
+    // Missing numbers are usually unverifiable, but many sold rows omit insert
+    // numbers entirely. Allow that only when there is no conflicting explicit
+    // number and the title has strong identity evidence such as the exact serial
+    // denominator or an autograph insert prefix encoded in the saved number.
+    numberStated = titleMentionsCardNumber(rawTitle, wantedNumber);
+    strongNumberlessMatch =
+      !numberStated &&
+      !explicitCardNumberConflicts(explicitNumbers, wantedNumber) &&
+      (
+        Boolean(serial && rawTitle.toLowerCase().includes(serial.toLowerCase())) ||
+        (cardNumberImpliesAutograph(lookup.card_number) && AUTO_RE.test(rawTitle))
+      );
+    if (!numberStated && !strongNumberlessMatch) {
       const label = compact(lookup.card_number).replace(/^#\s*/, "");
       reasons.push(`card number #${label} mismatch`);
     }
@@ -591,14 +608,13 @@ export function verifyCompTitle(
   const exactNumberedAutoInsert = Boolean(
     isAutoTitle &&
     wantedNumber &&
-    titleMentionsCardNumber(rawTitle, wantedNumber) &&
+    (numberStated || strongNumberlessMatch) &&
     cardNumberImpliesAutograph(lookup.card_number),
   );
   const effectiveIsAutograph = lookup.is_autograph || exactNumberedAutoInsert;
   if (lookup.is_autograph && !isAutoTitle) reasons.push("missing autograph marker");
   if (!effectiveIsAutograph && isAutoTitle) reasons.push("autograph mismatch");
 
-  const serial = serialSearchTerm(lookup.serial_number);
   if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) reasons.push("serial mismatch");
 
   // Remove the exact card-number token before looking for variant words. A
