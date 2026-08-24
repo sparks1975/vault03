@@ -385,7 +385,7 @@ function selectedParallelTitleMatches(title: string, parallelName: string | null
   const specificTokens = allTokens.filter((t) => !generic.has(t));
   const titleNorm = normalizeText(rawTitle);
   return specificTokens.length > 0
-    ? specificTokens.every((t) => titleNorm.includes(t))
+    ? specificTokens.every((t) => titleHasPhrase(titleNorm, t))
     : Boolean(denom);
 }
 
@@ -450,6 +450,29 @@ function titleHasPhrase(titleNorm: string, phrase: string): boolean {
   const normalizedPhrase = normalizeText(phrase);
   if (!normalizedPhrase) return false;
   return new RegExp(`(^| )${escapeRegex(normalizedPhrase)}($| )`, "i").test(titleNorm);
+}
+
+const PANINI_BRAND_ALIASES = [
+  "panini", "prizm", "select", "mosaic", "donruss", "optic", "chronicles", "national treasures",
+  "flawless", "immaculate", "contenders", "diamond kings", "absolute", "prospect edition", "elite extra edition",
+];
+
+function titleMentionsSetBrand(titleNorm: string, setName: string | null | undefined): boolean {
+  const brand = cardSetBrand(setName);
+  if (!brand) return true;
+  if (titleHasPhrase(titleNorm, brand)) return true;
+  if (brand === "Panini") return PANINI_BRAND_ALIASES.some((alias) => titleHasPhrase(titleNorm, alias));
+  return false;
+}
+
+// Some autograph insert sets encode the autograph identity in the card number
+// itself. If the sold title states that exact number, don't reject it merely
+// because the scan missed the autograph checkbox.
+const AUTOGRAPH_CARD_NUMBER_PREFIX_RE = /^(ss|as|ba|bpa|cpa|ra|ta|pa|aa|ac|ca|dca|sc|sa)[a-z0-9]*/i;
+
+function cardNumberImpliesAutograph(cardNumber: string | null | undefined): boolean {
+  const normalized = normalizeCardNumber(cardNumber);
+  return AUTOGRAPH_CARD_NUMBER_PREFIX_RE.test(normalized);
 }
 
 const SET_TITLE_ALIASES: Record<string, string[]> = {
@@ -560,14 +583,20 @@ export function verifyCompTitle(
     }
   }
 
-  const brand = cardSetBrand(lookup.set_name);
-  if (brand && !titleHasPhrase(titleNorm, brand)) {
+  if (!titleMentionsSetBrand(titleNorm, lookup.set_name)) {
     reasons.push("set brand mismatch");
   }
 
   const isAutoTitle = AUTO_RE.test(rawTitle);
+  const exactNumberedAutoInsert = Boolean(
+    isAutoTitle &&
+    wantedNumber &&
+    titleMentionsCardNumber(rawTitle, wantedNumber) &&
+    cardNumberImpliesAutograph(lookup.card_number),
+  );
+  const effectiveIsAutograph = lookup.is_autograph || exactNumberedAutoInsert;
   if (lookup.is_autograph && !isAutoTitle) reasons.push("missing autograph marker");
-  if (!lookup.is_autograph && isAutoTitle) reasons.push("autograph mismatch");
+  if (!effectiveIsAutograph && isAutoTitle) reasons.push("autograph mismatch");
 
   const serial = serialSearchTerm(lookup.serial_number);
   if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) reasons.push("serial mismatch");
@@ -594,7 +623,7 @@ export function verifyCompTitle(
     hasSelectedParallel: lookup.hasSelectedParallel,
     selectedParallelName: lookup.selected_parallel_name,
     set_name: lookup.set_name,
-    is_autograph: lookup.is_autograph,
+    is_autograph: effectiveIsAutograph,
     serial_number: lookup.serial_number,
     is_first_bowman: lookup.is_first_bowman,
   })) {
@@ -700,7 +729,11 @@ export function isVariantTitle(
   const serialIdentifiesParallel = Boolean(serialSearchTerm(opts.serial_number));
   // A print-run denominator proves that this is numbered, but it does not prove
   // which parallel it is. Never let /99 (for example) waive color/foil checks.
-  const parallelOptIn = hasSelectedParallel;
+  // If the user saved an exact serial denominator but the catalog parallel name
+  // is missing, the matching denominator is the best available parallel proof.
+  // verifyCompTitle() already requires the denominator to be present, so allow
+  // normal finish words instead of rejecting every numbered comp as a variant.
+  const parallelOptIn = hasSelectedParallel || serialIdentifiesParallel;
   if (opts.selectedParallelName) {
     if (!selectedParallelTitleMatches(variantTitle, opts.selectedParallelName)) return true;
     const selectedHasSerial = /\/\s*\d+/.test(opts.selectedParallelName);
