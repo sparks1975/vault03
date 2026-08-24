@@ -9,7 +9,7 @@ import { getCurrentShowdown, getMyShowdownEntry } from "@/lib/showdown.functions
 import { AppNav, MobileNavTabs } from "@/components/AppNav";
 import { ShareDialog } from "@/components/ShareDialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CollectorIllustration } from "@/components/CollectorIllustration";
+
 import topMoverAsset from "@/assets/dashboard.svg.asset.json";
 import showdownAsset from "@/assets/showdown.svg.asset.json";
 
@@ -132,10 +132,6 @@ function DashboardPage() {
         ) : (
           <>
             <header className="border border-border animate-in-up">
-              <div className="border-b border-border flex items-center justify-center px-2 py-3 sm:py-4 md:py-6 md:px-0 overflow-hidden">
-                <CollectorIllustration className="w-full h-auto max-h-48 sm:max-h-56 md:max-h-none object-contain" />
-              </div>
-
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-border">
                 <StatCell label="Total Value" value={fmt(s.totalValue)} sub={s.count ? "Live" : "Add your first card"} subAccent={s.count > 0} />
                 <StatCell label="Assets" value={String(s.count)} sub={s.count ? `Graded: ${s.gradedPct}%` : "—"} />
