@@ -2490,7 +2490,14 @@ function AddCardDialog({
               <Field label="Year" type="number" value={form.year} onChange={(v) => setForm({ ...form, year: v })} />
               <ApprovedSetSelect
                 value={form.set_name}
-                onChange={(setName) => setForm({ ...form, set_name: setName ?? "", cardsight_card_id: null, cardsight_parallel_id: null })}
+                catalogCardId={form.cardsight_card_id}
+                onChange={(setName, keepCatalogLink) =>
+                  setForm(
+                    keepCatalogLink
+                      ? { ...form, set_name: setName ?? "" }
+                      : { ...form, set_name: setName ?? "", cardsight_card_id: null, cardsight_parallel_id: null },
+                  )
+                }
               />
               <Field label="Card #" value={form.card_number} onChange={(v) => setForm({ ...form, card_number: v })} />
               <Field label="Position" value={form.position} onChange={(v) => setForm({ ...form, position: v })} />
