@@ -332,7 +332,7 @@ async function applyValuation(
     .maybeSingle();
   if (cardIdentityError) throw cardIdentityError;
   if (!cardIdentity) throw new Error("Card not found");
-  const { getParallelNameForCard, verifyCompTitle } = await import("./cardsight.server");
+  const { getParallelNameForCard, verifyCompTitle, looseCompMatch } = await import("./cardsight.server");
   const selectedParallelName = cardIdentity.cardsight_card_id
     ? await getParallelNameForCard(cardIdentity.cardsight_card_id, cardIdentity.cardsight_parallel_id)
     : null;
@@ -340,11 +340,17 @@ async function applyValuation(
   const nonSingleCardRe = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
   const sealedWordsRe = /\b(factory|sealed|unopened|hobby|jumbo|blaster|retail|mega|hanger|value|cello|wax)\b/i;
   const containerWordsRe = /\b(box|boxes|case|cases|pack|packs|product|wax)\b/i;
-  const singleCardSales = valuation.sales.filter((s) => {
+  const candidateSales = valuation.sales.filter((s) => {
     const title = String(s.title ?? "").trim();
-    if (!title || nonSingleCardRe.test(title) || (sealedWordsRe.test(title) && containerWordsRe.test(title))) return false;
-    return verifyCompTitle(title, cardLookup).verified;
+    return Boolean(title) && !nonSingleCardRe.test(title) && !(sealedWordsRe.test(title) && containerWordsRe.test(title));
   });
+  const strictSales = candidateSales.filter((s) => verifyCompTitle(String(s.title ?? ""), cardLookup).verified);
+  // Approximate comps the collector can refine beat an empty card, so keep the
+  // loose player/year matches when strict identity verification rejects all.
+  const singleCardSales =
+    strictSales.length > 0
+      ? strictSales
+      : candidateSales.filter((s) => looseCompMatch(String(s.title ?? ""), cardLookup));
   const validSalePrices = singleCardSales
     .map((s) => Number(s.price))
     .filter((price) => Number.isFinite(price) && price > 0);
@@ -360,7 +366,9 @@ async function applyValuation(
   for (const m of manualRows ?? []) {
     const p = Number(m.price);
     const title = String(m.title ?? "");
-    if (Number.isFinite(p) && p > 0 && !nonSingleRe.test(title) && verifyCompTitle(title, cardLookup).verified) {
+    // Manual comps are the collector's explicit choice: keep them unless the
+    // row is unusable (bad price or a sealed/lot listing).
+    if (Number.isFinite(p) && p > 0 && !nonSingleRe.test(title)) {
       validSalePrices.push(p);
       validManualCount++;
     } else {
@@ -569,22 +577,27 @@ async function recomputeCardValue(
     .eq("id", cardId)
     .maybeSingle();
   if (!card) throw new Error("Card not found");
-  const { getParallelNameForCard, verifyCompTitle } = await import("./cardsight.server");
+  const { getParallelNameForCard, verifyCompTitle, looseCompMatch } = await import("./cardsight.server");
   const selectedParallelName = card.cardsight_card_id
     ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
     : null;
   const cardLookup = { ...card, selected_parallel_name: selectedParallelName };
   const { data: rows } = await supabase
     .from("card_sales")
-    .select("price, title")
+    .select("price, title, is_manual")
     .eq("card_id", cardId);
-  const prices = (rows ?? [])
-    .filter((r) => {
-      const title = String(r.title ?? "");
-      return !NON_SINGLE_RE_LOCAL.test(title) && verifyCompTitle(title, cardLookup).verified;
-    })
+  const usableRows = (rows ?? []).filter(
+    (r) => Number.isFinite(Number(r.price)) && Number(r.price) > 0 && !NON_SINGLE_RE_LOCAL.test(String(r.title ?? "")),
+  );
+  // Manual picks always count. Otherwise prefer strict identity matches and only
+  // fall back to loose player/year matches so a card is never left unvalued.
+  const manualRows = usableRows.filter((r) => r.is_manual);
+  const autoRows = usableRows.filter((r) => !r.is_manual);
+  const strictAuto = autoRows.filter((r) => verifyCompTitle(String(r.title ?? ""), cardLookup).verified);
+  const chosenAuto =
+    strictAuto.length > 0 ? strictAuto : autoRows.filter((r) => looseCompMatch(String(r.title ?? ""), cardLookup));
+  const prices = [...manualRows, ...(manualRows.length > 0 ? strictAuto : chosenAuto)]
     .map((r) => Number(r.price))
-    .filter((p) => Number.isFinite(p) && p > 0)
     .sort((a, b) => a - b);
   if (prices.length === 0) {
     await supabase

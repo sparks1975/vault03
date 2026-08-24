@@ -714,6 +714,28 @@ export function isNonSingleCardListing(title: string | null | undefined): boolea
 }
 // (graded regex intentionally inlined at call sites)
 
+// Last-resort comp match. Used only when strict verification accepted nothing:
+// showing approximate comps the collector can refine beats showing none. Keeps
+// out sealed product/lots and obviously different players, nothing else.
+export function looseCompMatch(
+  title: string | null | undefined,
+  lookup: { player_name?: string | null; year?: string | number | null },
+): boolean {
+  const rawTitle = compact(title);
+  if (!rawTitle || isNonSingleCardListing(rawTitle)) return false;
+  const titleNorm = normalizeText(rawTitle);
+  const playerTokens = normalizeText(lookup.player_name)
+    .split(" ")
+    .filter((t) => t.length > 1);
+  if (playerTokens.length > 0) {
+    const hits = playerTokens.filter((t) => titleHasPhrase(titleNorm, t)).length;
+    // Require the surname-level majority of the name, so a different player
+    // never sneaks in on a shared first name.
+    if (hits < Math.max(1, playerTokens.length - 1)) return false;
+  }
+  return true;
+}
+
 // Reject titles that clearly indicate a different variation than the submitted
 // base card. Applies to both structured Cardsight pricing and pt130 comps.
 export function isVariantTitle(

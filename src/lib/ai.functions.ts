@@ -949,7 +949,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     const ebaySoldPass = async () => {
       if (usedCardsight || !data.card_id) return;
       try {
-        const { verifyCompTitle } = await import("./cardsight.server");
+        const { verifyCompTitle, looseCompMatch } = await import("./cardsight.server");
         let { data: cachedRows, error } = await context.supabase
           .from("pt130_comps")
           .select("title, price, sold_at, url, scraped_at")
@@ -1070,6 +1070,23 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         }
 
 
+        // Nothing passed identity verification. An approximate value the
+        // collector can refine in Manage Comps is far more useful than an empty
+        // card, so fall back to loose player/year matches and say so.
+        let approximate = false;
+        if (matchedRows.length === 0 && usableRows.length > 0) {
+          const loose = usableRows.filter((row) =>
+            looseCompMatch(row.title ?? "", {
+              player_name: valuationLookup.player_name,
+              year: valuationLookup.year,
+            }),
+          );
+          if (loose.length > 0) {
+            matchedRows = loose;
+            approximate = true;
+          }
+        }
+
         const cachedSales = matchedRows.map((row) => ({
           sold_at: row.sold_at ?? null,
           grade: data.grader && data.grade ? `${data.grader} ${data.grade}` : null,
@@ -1085,7 +1102,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           if (saleMedian != null) {
             currentValue = saleMedian;
             usedCardsight = true;
-            compsNote = null;
+            compsNote = approximate
+              ? "Approximate value from close sales for this player — open Manage Comps to refine the exact matches."
+              : null;
           }
         } else if (usableRows.length > 0) {
           compsNote =
