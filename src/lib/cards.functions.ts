@@ -232,9 +232,18 @@ const allowed = [
         .maybeSingle();
       if (existing) {
         const norm = (v: unknown) => (v == null ? "" : String(v).trim().toLowerCase());
+        // Compare the *normalized* stored value: set names are canonicalized on
+        // write, so an older raw value ("Topps Black & White - Frame Rate")
+        // must not read as a user identity edit and wipe the catalog link,
+        // the chosen parallel, the value and every saved comp.
+        const existingValue = (k: (typeof identityKeys)[number]) => {
+          const raw = (existing as Record<string, unknown>)[k];
+          return k === "set_name" ? toApprovedCardSet(raw as string | null | undefined) : raw;
+        };
         const changed = identityKeys.some(
-          (k) => k in clean && norm(clean[k]) !== norm((existing as Record<string, unknown>)[k]),
+          (k) => k in clean && norm(clean[k]) !== norm(existingValue(k)),
         );
+
         if (changed) {
           identityReset = true;
           clean["cardsight_card_id"] = null;
@@ -627,15 +636,15 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       url: string | null;
     }> = [];
 
-    // Always resolve Manage Comps from the card's current editable identity.
-    // A legacy/bad scan can leave a valid UUID pointing at a completely
-    // different player, so merely checking that an id exists is not enough.
-    // Exception: a card with no saved id that recently failed to resolve
-    // skips straight to cached comps instead of re-paying the cascade.
-    let cardsightId: string | null = null;
-    const skipResolution = !!card && !card.cardsight_card_id && !!card.cardsight_lookup_failed_at &&
+    // A saved catalog link is authoritative — it was either resolved and
+    // verified once, or set by hand along with a parallel. Manage Comps must
+    // never re-resolve over it: doing so silently cleared the link, the chosen
+    // parallel, the value and every comp whenever the search came back empty.
+    // Only resolve when there is no link yet, and only persist a new one.
+    let cardsightId: string | null = card.cardsight_card_id ?? null;
+    const skipResolution = !!card.cardsight_lookup_failed_at &&
       Date.now() - new Date(card.cardsight_lookup_failed_at).getTime() < LOOKUP_RETRY_COOLDOWN_MS;
-    if (card && !skipResolution) {
+    if (!cardsightId && !skipResolution) {
       try {
         const { findCatalogCard } = await import("./cardsight.server");
         const match = await findCatalogCard({
@@ -648,39 +657,10 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
         });
         if (match?.id) {
           cardsightId = match.id;
-          if (cardsightId !== card.cardsight_card_id) {
-            await supabase
-              .from("cards")
-              .update({
-                cardsight_card_id: cardsightId,
-                cardsight_parallel_id: null,
-                cardsight_grade_id: null,
-                current_value: null,
-                value_delta_pct: null,
-                last_valued_at: null,
-                cardsight_lookup_failed_at: null,
-              } as never)
-              .eq("id", card.id);
-            await supabase.from("card_sales").delete().eq("card_id", card.id);
-            await supabase.from("pt130_comps").delete().eq("card_id", card.id);
-          }
-        } else if (card.cardsight_card_id) {
-          // Never fall back to a stored id that cannot be verified against the
-          // corrected player/year/set/card number.
           await supabase
             .from("cards")
-            .update({
-              cardsight_card_id: null,
-              cardsight_parallel_id: null,
-              cardsight_grade_id: null,
-              current_value: null,
-              value_delta_pct: null,
-              last_valued_at: null,
-              cardsight_lookup_failed_at: new Date().toISOString(),
-            } as never)
+            .update({ cardsight_card_id: cardsightId, cardsight_lookup_failed_at: null } as never)
             .eq("id", card.id);
-          await supabase.from("card_sales").delete().eq("card_id", card.id);
-          await supabase.from("pt130_comps").delete().eq("card_id", card.id);
         } else {
           await supabase
             .from("cards")
@@ -691,6 +671,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
         console.error("fetchCompCandidates catalog resolve failed", err);
       }
     }
+
 
     if (cardsightId) {
       try {

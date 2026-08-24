@@ -389,18 +389,26 @@ function selectedParallelTitleMatches(title: string, parallelName: string | null
     : Boolean(denom);
 }
 
+// With a parallel chosen, a comp must state that parallel *and nothing else*.
+// Any parallel/finish word in the title that the selected parallel doesn't
+// contain means the listing is a different parallel of the same card.
 function hasUnselectedParallelModifier(title: string, selectedParallelName: string | null | undefined): boolean {
   const titleNorm = normalizeText(title);
   const selectedNorm = normalizeText(selectedParallelName);
   const modifiers = [
     "atomic", "black", "blue", "bronze", "camo", "clear cut", "cracked ice", "die cut", "foilfractor",
     "gold", "green", "mojo", "negative", "orange", "pink", "platinum", "purple", "rainbow", "red",
-    "rose gold", "sepia", "shimmer", "silver", "superfractor", "red hot", "x fractor", "yellow", "aqua",
-    "teal", "wave", "nebula", "scope", "hyper", "lava", "dragon", "tiger", "zebra", "snake",
-    "choice", "diamante", "holiday", "logo foil", "holo", "holographic", "ssp", "printing plate",
+    "rose gold", "sepia", "shimmer", "silver", "superfractor", "refractor", "fractor", "x fractor",
+    "yellow", "aqua", "teal", "wave", "nebula", "scope", "hyper", "lava", "dragon", "tiger", "zebra",
+    "snake", "choice", "diamante", "holiday", "logo foil", "foil", "holo", "holographic", "ssp",
+    "printing plate", "prizm", "prism", "sapphire", "ruby", "emerald", "onyx", "lunar", "seismic",
+    "cosmic", "galactic", "velocity", "genesis", "disco", "kaleidoscope", "stained glass", "sun",
+    "fireworks", "checkerboard", "magenta", "acetate", "independence", "memorial day", "mothers day",
+    "fathers day", "image variation", "photo variation", "short print",
   ];
   return modifiers.some((modifier) => titleNorm.includes(modifier) && !selectedNorm.includes(modifier));
 }
+
 
 function normalizeCardNumber(value: string | number | null | undefined): string {
   return compact(value)
