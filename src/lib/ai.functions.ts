@@ -699,6 +699,20 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       return median(prices);
     };
 
+    // Resolve the saved parallel before either pricing source runs. eBay is the
+    // primary pass, so doing this only inside cardsightPass meant its verifier
+    // saw a selected parallel id but no parallel name and rejected the exact
+    // parallel listings. Manage Comps resolved the name independently, which is
+    // why the same rows appeared correct there.
+    if (resolvedCardId && data.cardsight_parallel_id) {
+      try {
+        const { getParallelNameForCard } = await import("./cardsight.server");
+        selectedParallelName = await getParallelNameForCard(resolvedCardId, data.cardsight_parallel_id);
+      } catch (err) {
+        console.error("Cardsight parallel-name lookup failed:", err);
+      }
+    }
+
     const cardsightPass = async () => {
     if (!resolvedCardId && !lookupFailedRecently) {
       try {
@@ -766,7 +780,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     }
     // CardSight filters its structured endpoint by id, but scraped sold listings
     // still need the human-readable parallel name for exact title verification.
-    if (resolvedCardId && data.cardsight_parallel_id) {
+    if (resolvedCardId && data.cardsight_parallel_id && !selectedParallelName) {
       try {
         const { getParallelNameForCard } = await import("./cardsight.server");
         selectedParallelName = await getParallelNameForCard(resolvedCardId, data.cardsight_parallel_id);
