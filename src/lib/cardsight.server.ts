@@ -1155,6 +1155,8 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
       console.error("Cardsight cards lookup failed:", err);
     }
     if (candidates.length === 0) continue;
+    // Set-level match first: the catalog link must point at the recorded set,
+    // not just any release of the same brand.
     const matched = candidates.filter((c) => cardMatchesLookup(c, merged));
     if (matched.length > 0) {
       resolved = matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
@@ -1164,13 +1166,20 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
   if (resolved) return resolved;
 
   if (candidates.length > 0) {
+    // Only when nothing in the catalog names the recorded set do we fall back
+    // to brand-level agreement, then to a year-agnostic pass.
+    const brandOnly = candidates.filter((c) => cardMatchesLookup(c, merged, { requireSet: false }));
+    if (brandOnly.length > 0) {
+      return brandOnly.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+    }
     const yearAgnosticMatched = year
-      ? candidates.filter((c) => cardMatchesLookup(c, { ...merged, year: null }))
+      ? candidates.filter((c) => cardMatchesLookup(c, { ...merged, year: null }, { requireSet: false }))
       : [];
     if (yearAgnosticMatched.length > 0) {
       return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
     }
   }
+
 
 
   const searchQueries = new Set<string>();
