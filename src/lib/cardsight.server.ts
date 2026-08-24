@@ -389,25 +389,37 @@ function selectedParallelTitleMatches(title: string, parallelName: string | null
     : Boolean(denom);
 }
 
-// With a parallel chosen, a comp must state that parallel *and nothing else*.
-// Any parallel/finish word in the title that the selected parallel doesn't
-// contain means the listing is a different parallel of the same card.
+// With a parallel chosen, a comp must not name a *different* parallel. Only
+// discriminating words count: catalog parallel names routinely omit the finish
+// word ("Gold /50" is really "Gold Refractor /50", "Green" is "Green Prizm"),
+// so finish/technology words are generic and must never cause a rejection —
+// matching the same convention selectedParallelTitleMatches() uses.
+const GENERIC_FINISH_WORDS = new Set([
+  "refractor", "refractors", "fractor", "prizm", "prizms", "prism", "foil", "foilboard",
+  "holo", "holofoil", "holographic", "chrome", "parallel", "card", "cards",
+]);
+
 function hasUnselectedParallelModifier(title: string, selectedParallelName: string | null | undefined): boolean {
   const titleNorm = normalizeText(title);
   const selectedNorm = normalizeText(selectedParallelName);
   const modifiers = [
     "atomic", "black", "blue", "bronze", "camo", "clear cut", "cracked ice", "die cut", "foilfractor",
     "gold", "green", "mojo", "negative", "orange", "pink", "platinum", "purple", "rainbow", "red",
-    "rose gold", "sepia", "shimmer", "silver", "superfractor", "refractor", "fractor", "x fractor",
+    "rose gold", "sepia", "shimmer", "silver", "superfractor", "x fractor", "xfractor",
     "yellow", "aqua", "teal", "wave", "nebula", "scope", "hyper", "lava", "dragon", "tiger", "zebra",
-    "snake", "choice", "diamante", "holiday", "logo foil", "foil", "holo", "holographic", "ssp",
-    "printing plate", "prizm", "prism", "sapphire", "ruby", "emerald", "onyx", "lunar", "seismic",
-    "cosmic", "galactic", "velocity", "genesis", "disco", "kaleidoscope", "stained glass", "sun",
+    "snake", "choice", "diamante", "holiday", "ssp",
+    "printing plate", "sapphire", "ruby", "emerald", "onyx", "lunar", "seismic",
+    "cosmic", "galactic", "velocity", "genesis", "disco", "kaleidoscope", "stained glass",
     "fireworks", "checkerboard", "magenta", "acetate", "independence", "memorial day", "mothers day",
     "fathers day", "image variation", "photo variation", "short print",
-  ];
-  return modifiers.some((modifier) => titleNorm.includes(modifier) && !selectedNorm.includes(modifier));
+  ].filter((modifier) => !GENERIC_FINISH_WORDS.has(modifier));
+  // Word-bounded so "red" doesn't fire inside "Alfredo" and "sun" (removed
+  // above) style substrings can't invent a mismatch.
+  return modifiers.some(
+    (modifier) => titleHasPhrase(titleNorm, modifier) && !titleHasPhrase(selectedNorm, modifier),
+  );
 }
+
 
 
 function normalizeCardNumber(value: string | number | null | undefined): string {
