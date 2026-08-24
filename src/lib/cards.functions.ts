@@ -366,7 +366,9 @@ async function applyValuation(
   for (const m of manualRows ?? []) {
     const p = Number(m.price);
     const title = String(m.title ?? "");
-    if (Number.isFinite(p) && p > 0 && !nonSingleRe.test(title) && verifyCompTitle(title, cardLookup).verified) {
+    // Manual comps are the collector's explicit choice: keep them unless the
+    // row is unusable (bad price or a sealed/lot listing).
+    if (Number.isFinite(p) && p > 0 && !nonSingleRe.test(title)) {
       validSalePrices.push(p);
       validManualCount++;
     } else {
