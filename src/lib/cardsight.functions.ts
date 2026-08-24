@@ -87,3 +87,20 @@ export const listCardsightSetCandidates = createServerFn({ method: "POST" })
       return [];
     }
   });
+
+// The catalog entry a card is currently linked to. The form uses this to show
+// the authoritative set/release for the link and to avoid dropping the link
+// when the user is only correcting the set to the catalog's own name.
+export const getCardsightCardSummary = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({ card_id: z.string().uuid().nullable().optional() }).parse(d))
+  .handler(async ({ data }) => {
+    if (!data.card_id) return null;
+    const { getCatalogCardSummary } = await import("./cardsight.server");
+    try {
+      return await getCatalogCardSummary(data.card_id);
+    } catch (err) {
+      console.error("getCatalogCardSummary failed:", err);
+      return null;
+    }
+  });
