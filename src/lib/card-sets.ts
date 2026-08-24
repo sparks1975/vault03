@@ -470,13 +470,20 @@ export function toApprovedCardSet(...parts: Array<string | number | null | undef
   // release like "Panini Prizm Signature Series" contains both "panini" and
   // "prizm"; the product name is the set the collector cares about, so match
   // specific product sets first and fall back to the brand only if none hit.
+  //
+  // Matching is word-bounded so "Select" never matches "Selections" and
+  // "Prizm" never matches "Prizmatic", and among the word-bounded hits the
+  // longest (most specific) product name wins — "Bowman Chrome Sapphire"
+  // must not collapse to "Bowman Chrome".
   const byLength = (a: string, b: string) => normalizeSetText(b).length - normalizeSetText(a).length;
+  const containsPhrase = (haystack: string, phrase: string) =>
+    new RegExp(`(^|\\s)${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(\\s|$)`).test(haystack);
   const specific = APPROVED_CARD_SETS.filter((set) => !GENERIC_BRAND_SETS.includes(set)).sort(byLength);
   const generic = APPROVED_CARD_SETS.filter((set) => GENERIC_BRAND_SETS.includes(set)).sort(byLength);
   for (const set of [...specific, ...generic]) {
-    const setNorm = normalizeSetText(set);
-    if (normalized.includes(setNorm)) return set;
+    if (containsPhrase(normalized, normalizeSetText(set))) return set;
   }
+
 
   return titleCase(normalized);
 }
