@@ -324,17 +324,17 @@ async function applyValuation(
   if (cardIdentityError) throw cardIdentityError;
   if (!cardIdentity) throw new Error("Card not found");
   const { getParallelNameForCard, verifyCompTitle } = await import("./cardsight.server");
-  const selectedParallelName = card.cardsight_card_id
-    ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
+  const selectedParallelName = cardIdentity.cardsight_card_id
+    ? await getParallelNameForCard(cardIdentity.cardsight_card_id, cardIdentity.cardsight_parallel_id)
     : null;
-  const cardLookup = { ...card, selected_parallel_name: selectedParallelName };
+  const cardLookup = { ...cardIdentity, selected_parallel_name: selectedParallelName };
   const nonSingleCardRe = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
   const sealedWordsRe = /\b(factory|sealed|unopened|hobby|jumbo|blaster|retail|mega|hanger|value|cello|wax)\b/i;
   const containerWordsRe = /\b(box|boxes|case|cases|pack|packs|product|wax)\b/i;
   const singleCardSales = valuation.sales.filter((s) => {
     const title = String(s.title ?? "").trim();
     if (!title || nonSingleCardRe.test(title) || (sealedWordsRe.test(title) && containerWordsRe.test(title))) return false;
-    return verifyCompTitle(title, cardIdentity).verified;
+    return verifyCompTitle(title, cardLookup).verified;
   });
   const validSalePrices = singleCardSales
     .map((s) => Number(s.price))
@@ -351,7 +351,7 @@ async function applyValuation(
   for (const m of manualRows ?? []) {
     const p = Number(m.price);
     const title = String(m.title ?? "");
-    if (Number.isFinite(p) && p > 0 && !nonSingleRe.test(title) && verifyCompTitle(title, cardIdentity).verified) {
+    if (Number.isFinite(p) && p > 0 && !nonSingleRe.test(title) && verifyCompTitle(title, cardLookup).verified) {
       validSalePrices.push(p);
       validManualCount++;
     } else {
@@ -556,11 +556,15 @@ async function recomputeCardValue(
 ) {
   const { data: card } = await supabase
     .from("cards")
-    .select("player_name, year, set_name, card_number, is_autograph, serial_number, is_first_bowman")
+    .select("player_name, year, set_name, card_number, is_autograph, serial_number, is_first_bowman, cardsight_card_id, cardsight_parallel_id")
     .eq("id", cardId)
     .maybeSingle();
   if (!card) throw new Error("Card not found");
-  const { verifyCompTitle } = await import("./cardsight.server");
+  const { getParallelNameForCard, verifyCompTitle } = await import("./cardsight.server");
+  const selectedParallelName = card.cardsight_card_id
+    ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
+    : null;
+  const cardLookup = { ...card, selected_parallel_name: selectedParallelName };
   const { data: rows } = await supabase
     .from("card_sales")
     .select("price, title")
