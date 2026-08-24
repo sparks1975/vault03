@@ -576,6 +576,8 @@ export function verifyCompTitle(
 
   const wantedNumber = normalizeCardNumber(lookup.card_number);
   let explicitNumbers: string[] = [];
+  let numberStated = false;
+  let strongNumberlessMatch = false;
   if (wantedNumber) {
     explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
     // Card number is identity, not a fuzzy hint. A comp must state the complete
@@ -584,8 +586,8 @@ export function verifyCompTitle(
     // numbers entirely. Allow that only when there is no conflicting explicit
     // number and the title has strong identity evidence such as the exact serial
     // denominator or an autograph insert prefix encoded in the saved number.
-    const numberStated = titleMentionsCardNumber(rawTitle, wantedNumber);
-    const strongNumberlessMatch =
+    numberStated = titleMentionsCardNumber(rawTitle, wantedNumber);
+    strongNumberlessMatch =
       !numberStated &&
       !explicitCardNumberConflicts(explicitNumbers, wantedNumber) &&
       (
@@ -606,7 +608,7 @@ export function verifyCompTitle(
   const exactNumberedAutoInsert = Boolean(
     isAutoTitle &&
     wantedNumber &&
-    titleMentionsCardNumber(rawTitle, wantedNumber) &&
+    (numberStated || strongNumberlessMatch) &&
     cardNumberImpliesAutograph(lookup.card_number),
   );
   const effectiveIsAutograph = lookup.is_autograph || exactNumberedAutoInsert;
