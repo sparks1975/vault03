@@ -2572,7 +2572,8 @@ function AddCardDialog({
               cardId={form.cardsight_card_id}
               lookup={form}
               value={form.cardsight_parallel_id}
-              onChange={(id) => setForm({ ...form, cardsight_parallel_id: id })}
+              hintName={parallelHint}
+              onChange={(id) => setForm((f) => ({ ...f, cardsight_parallel_id: id }))}
             />
 
 
