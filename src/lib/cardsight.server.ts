@@ -801,7 +801,27 @@ function cardNumbersEquivalent(wanted: string, candidate: string): boolean {
   return wanted === candidate;
 }
 
-function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean {
+// True when a catalog candidate's release/subset naming actually contains the
+// set the user recorded (not merely the same brand). Catalog links must be
+// resolved at set level — brand-only agreement is a last-resort fallback.
+export function catalogSetMatches(
+  candidate: { releaseName?: string | null; setName?: string | null },
+  setName: string | null | undefined,
+): boolean {
+  const terms = expandSetSearchTerms(setName)
+    .map((t) => normalizeText(t))
+    .filter(Boolean);
+  if (terms.length === 0) return true;
+  const hay = normalizeText([candidate.releaseName, candidate.setName].filter(Boolean).join(" "));
+  if (!hay) return false;
+  return terms.some((term) => hay.includes(term));
+}
+
+function cardMatchesLookup(
+  candidate: CatalogCard,
+  lookup: CardLookup,
+  opts: { requireSet?: boolean } = {},
+): boolean {
   const playerTokens = normalizeText(lookup.player_name)
     .split(" ")
     .filter((t) => t.length > 1);
@@ -818,8 +838,13 @@ function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean 
   const candidateBrand = cardSetBrand([candidate.releaseName, candidate.setName].filter(Boolean).join(" "));
   if (wantedBrand && candidateBrand !== wantedBrand) return false;
 
+  // Set-level agreement is the default requirement; callers relax it only when
+  // no candidate in the catalog names the recorded set at all.
+  if (opts.requireSet !== false && !catalogSetMatches(candidate, lookup.set_name)) return false;
+
   return true;
 }
+
 
 
 function setCandidateFromCard(card: CatalogCard, lookup: CardLookup): SetCandidate | null {
