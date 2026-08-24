@@ -1070,6 +1070,23 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         }
 
 
+        // Nothing passed identity verification. An approximate value the
+        // collector can refine in Manage Comps is far more useful than an empty
+        // card, so fall back to loose player/year matches and say so.
+        let approximate = false;
+        if (matchedRows.length === 0 && usableRows.length > 0) {
+          const loose = usableRows.filter((row) =>
+            looseCompMatch(row.title ?? "", {
+              player_name: valuationLookup.player_name,
+              year: valuationLookup.year,
+            }),
+          );
+          if (loose.length > 0) {
+            matchedRows = loose;
+            approximate = true;
+          }
+        }
+
         const cachedSales = matchedRows.map((row) => ({
           sold_at: row.sold_at ?? null,
           grade: data.grader && data.grade ? `${data.grader} ${data.grade}` : null,
