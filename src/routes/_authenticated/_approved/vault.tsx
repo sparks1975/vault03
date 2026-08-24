@@ -2826,6 +2826,19 @@ function ParallelSelect({
           Link this card to the catalog above to choose a parallel/refractor.
         </span>
       )}
+      {canLookup && !value && hintMatch && (
+        <span className="mt-1 block text-[9px] font-mono text-muted-foreground">
+          Scan read “{hintMatch.name}”.{" "}
+          <button
+            type="button"
+            onClick={() => onChange(hintMatch.id)}
+            className="underline text-accent"
+          >
+            Use it
+          </button>
+        </span>
+      )}
+
 
       {canLookup && !q.isLoading && (q.data?.length ?? 0) === 0 && (
         <span className="text-[9px] font-mono text-muted-foreground">
