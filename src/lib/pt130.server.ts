@@ -71,7 +71,7 @@ export function buildPt130Descriptor(fields: {
   serial_number?: string | null;
   grader?: string | null;
   grade?: string | null;
-}, opts: { includeCardNumber?: boolean } = {}): string {
+}, opts: { includeCardNumber?: boolean; setLabel?: "brand" | "set" } = {}): string {
   const includeCardNumber = opts.includeCardNumber ?? true;
   // Sold-search discovery must state the same value-affecting traits that the
   // verification pass later requires, otherwise autographed / parallel /
@@ -89,9 +89,15 @@ export function buildPt130Descriptor(fields: {
     (fields.serial_number ?? "").match(/\/\s*(\d+)/)?.[1] ??
     (fields.selected_parallel_name ?? "").match(/\/\s*(\d+)/)?.[1] ??
     null;
+  // Brand and set are searched independently: the set-specific query finds the
+  // exact release, the brand-only query catches sellers who list just "Topps".
+  const setLabel =
+    opts.setLabel === "set"
+      ? (fields.set_name ?? "").replace(/\s+/g, " ").trim() || cardSetBrand(fields.set_name)
+      : cardSetBrand(fields.set_name);
   const parts = [
     fields.year ? String(fields.year) : null,
-    cardSetBrand(fields.set_name),
+    setLabel,
     // eBay treats a hyphen as an exclusion operator ("112-SP" => 112 NOT SP),
     // which silently drops every legitimate short-print listing. Render the
     // number with spaces instead.
@@ -108,12 +114,19 @@ export function buildPt130Descriptor(fields: {
 
 }
 
-// Returns only the primary descriptor (with card number) to keep result count
-// — and therefore Apify cost — as low as possible.
+// Two searches at most: the set-specific descriptor and, when the set name is
+// more detailed than its brand, a brand-only descriptor. Both keep the card
+// number so result counts — and Apify cost — stay low.
 export function buildPt130Descriptors(fields: Parameters<typeof buildPt130Descriptor>[0]): string[] {
-  const primary = buildPt130Descriptor(fields, { includeCardNumber: true });
-  return primary ? [primary] : [];
+  const bySet = buildPt130Descriptor(fields, { includeCardNumber: true, setLabel: "set" });
+  const byBrand = buildPt130Descriptor(fields, { includeCardNumber: true, setLabel: "brand" });
+  const out: string[] = [];
+  for (const d of [bySet, byBrand]) {
+    if (d && !out.includes(d)) out.push(d);
+  }
+  return out;
 }
+
 
 // Run the Apify eBay sold-listings actor for one or more search keywords.
 // Each keyword becomes one sold-search URL; maxItems is applied per search, so

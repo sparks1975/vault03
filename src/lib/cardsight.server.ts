@@ -801,7 +801,27 @@ function cardNumbersEquivalent(wanted: string, candidate: string): boolean {
   return wanted === candidate;
 }
 
-function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean {
+// True when a catalog candidate's release/subset naming actually contains the
+// set the user recorded (not merely the same brand). Catalog links must be
+// resolved at set level — brand-only agreement is a last-resort fallback.
+export function catalogSetMatches(
+  candidate: { releaseName?: string | null; setName?: string | null },
+  setName: string | null | undefined,
+): boolean {
+  const terms = expandSetSearchTerms(setName)
+    .map((t) => normalizeText(t))
+    .filter(Boolean);
+  if (terms.length === 0) return true;
+  const hay = normalizeText([candidate.releaseName, candidate.setName].filter(Boolean).join(" "));
+  if (!hay) return false;
+  return terms.some((term) => hay.includes(term));
+}
+
+function cardMatchesLookup(
+  candidate: CatalogCard,
+  lookup: CardLookup,
+  opts: { requireSet?: boolean } = {},
+): boolean {
   const playerTokens = normalizeText(lookup.player_name)
     .split(" ")
     .filter((t) => t.length > 1);
@@ -818,8 +838,13 @@ function cardMatchesLookup(candidate: CatalogCard, lookup: CardLookup): boolean 
   const candidateBrand = cardSetBrand([candidate.releaseName, candidate.setName].filter(Boolean).join(" "));
   if (wantedBrand && candidateBrand !== wantedBrand) return false;
 
+  // Set-level agreement is the default requirement; callers relax it only when
+  // no candidate in the catalog names the recorded set at all.
+  if (opts.requireSet !== false && !catalogSetMatches(candidate, lookup.set_name)) return false;
+
   return true;
 }
+
 
 
 function setCandidateFromCard(card: CatalogCard, lookup: CardLookup): SetCandidate | null {
@@ -905,7 +930,10 @@ export async function listSetCandidatesForCard(lookup: CardLookup): Promise<SetC
 
   const bySet = new Map<string, SetCandidate>();
   for (const card of cardsById.values()) {
-    if (!cardMatchesLookup(card, merged)) continue;
+    // The set chooser intentionally stays brand-level: it exists so the user
+    // can pick a different set than the one recorded.
+    if (!cardMatchesLookup(card, merged, { requireSet: false })) continue;
+
     const candidate = setCandidateFromCard(card, merged);
     if (!candidate) continue;
     const existing = bySet.get(candidate.set_name);
@@ -1130,6 +1158,8 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
       console.error("Cardsight cards lookup failed:", err);
     }
     if (candidates.length === 0) continue;
+    // Set-level match first: the catalog link must point at the recorded set,
+    // not just any release of the same brand.
     const matched = candidates.filter((c) => cardMatchesLookup(c, merged));
     if (matched.length > 0) {
       resolved = matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
@@ -1139,13 +1169,20 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
   if (resolved) return resolved;
 
   if (candidates.length > 0) {
+    // Only when nothing in the catalog names the recorded set do we fall back
+    // to brand-level agreement, then to a year-agnostic pass.
+    const brandOnly = candidates.filter((c) => cardMatchesLookup(c, merged, { requireSet: false }));
+    if (brandOnly.length > 0) {
+      return brandOnly.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+    }
     const yearAgnosticMatched = year
-      ? candidates.filter((c) => cardMatchesLookup(c, { ...merged, year: null }))
+      ? candidates.filter((c) => cardMatchesLookup(c, { ...merged, year: null }, { requireSet: false }))
       : [];
     if (yearAgnosticMatched.length > 0) {
       return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
     }
   }
+
 
 
   const searchQueries = new Set<string>();
@@ -1188,11 +1225,14 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
       }
       const matched = detailed.filter((c) => cardMatchesLookup(c, merged));
       if (matched.length > 0) return matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+      const brandOnly = detailed.filter((c) => cardMatchesLookup(c, merged, { requireSet: false }));
+      if (brandOnly.length > 0) return brandOnly.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
     }
 
     const yearAgnosticMatched = year
-      ? detailed.filter((c) => cardMatchesLookup(c, { ...merged, year: null }))
+      ? detailed.filter((c) => cardMatchesLookup(c, { ...merged, year: null }, { requireSet: false }))
       : [];
+
     if (yearAgnosticMatched.length > 0) {
       return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
     }
