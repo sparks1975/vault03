@@ -764,9 +764,16 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         console.error("Cardsight valuation lookup failed:", err);
       }
     }
-    // Parallel filtering is done server-side by CardSight via parallel_id, so we
-    // no longer spend calls resolving the parallel's display name.
-    void selectedParallelName;
+    // CardSight filters its structured endpoint by id, but scraped sold listings
+    // still need the human-readable parallel name for exact title verification.
+    if (resolvedCardId && data.cardsight_parallel_id) {
+      try {
+        const { getParallelNameForCard } = await import("./cardsight.server");
+        selectedParallelName = await getParallelNameForCard(resolvedCardId, data.cardsight_parallel_id);
+      } catch (err) {
+        console.error("Cardsight parallel-name lookup failed:", err);
+      }
+    }
 
 
     const priceFromSlice = async (slice: Awaited<ReturnType<typeof import("./cardsight.server").fetchPricing>>) => {

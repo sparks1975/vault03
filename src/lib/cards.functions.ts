@@ -317,13 +317,17 @@ async function applyValuation(
 ) {
   const { data: cardIdentity, error: cardIdentityError } = await supabase
     .from("cards")
-    .select("player_name, year, set_name, card_number, is_autograph, serial_number, is_first_bowman")
+    .select("player_name, year, set_name, card_number, is_autograph, serial_number, is_first_bowman, cardsight_card_id, cardsight_parallel_id")
     .eq("id", cardId)
     .eq("user_id", userId)
     .maybeSingle();
   if (cardIdentityError) throw cardIdentityError;
   if (!cardIdentity) throw new Error("Card not found");
-  const { verifyCompTitle } = await import("./cardsight.server");
+  const { getParallelNameForCard, verifyCompTitle } = await import("./cardsight.server");
+  const selectedParallelName = card.cardsight_card_id
+    ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
+    : null;
+  const cardLookup = { ...card, selected_parallel_name: selectedParallelName };
   const nonSingleCardRe = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
   const sealedWordsRe = /\b(factory|sealed|unopened|hobby|jumbo|blaster|retail|mega|hanger|value|cello|wax)\b/i;
   const containerWordsRe = /\b(box|boxes|case|cases|pack|packs|product|wax)\b/i;
@@ -564,7 +568,7 @@ async function recomputeCardValue(
   const prices = (rows ?? [])
     .filter((r) => {
       const title = String(r.title ?? "");
-      return !NON_SINGLE_RE_LOCAL.test(title) && verifyCompTitle(title, card).verified;
+      return !NON_SINGLE_RE_LOCAL.test(title) && verifyCompTitle(title, cardLookup).verified;
     })
     .map((r) => Number(r.price))
     .filter((p) => Number.isFinite(p) && p > 0)
@@ -597,14 +601,18 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
     const { data: card, error } = await supabase
       .from("cards")
       .select(
-        "id, cardsight_card_id, cardsight_lookup_failed_at, player_name, year, set_name, card_number, is_autograph, serial_number, is_first_bowman",
+        "id, cardsight_card_id, cardsight_parallel_id, cardsight_lookup_failed_at, player_name, year, set_name, card_number, is_autograph, serial_number, is_first_bowman",
       )
       .eq("id", data.card_id)
       .eq("user_id", userId)
       .maybeSingle();
     if (error) throw error;
     if (!card) throw new Error("Card not found");
-    const { verifyCompTitle } = await import("./cardsight.server");
+    const { getParallelNameForCard, verifyCompTitle } = await import("./cardsight.server");
+    const selectedParallelName = card.cardsight_card_id
+      ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
+      : null;
+    const cardLookup = { ...card, selected_parallel_name: selectedParallelName };
 
     const candidates: Array<{
       title: string | null;
@@ -687,7 +695,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
 
         for (const r of rows) {
           const price = Number(r.price);
-          if (!Number.isFinite(price) || price <= 0 || !verifyCompTitle(r.title, card).verified) continue;
+          if (!Number.isFinite(price) || price <= 0 || !verifyCompTitle(r.title, cardLookup).verified) continue;
           candidates.push({
             title: r.title ?? null,
             image_url: null,
@@ -725,6 +733,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
             card_number: card.card_number,
             is_autograph: card.is_autograph,
             serial_number: card.serial_number,
+            selected_parallel_name: selectedParallelName,
           }),
           card_number: card.card_number,
         });
@@ -741,7 +750,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       .eq("user_id", userId);
     for (const r of pt ?? []) {
       const price = Number(r.price);
-      if (!Number.isFinite(price) || price <= 0 || !verifyCompTitle(r.title, card).verified) continue;
+      if (!Number.isFinite(price) || price <= 0 || !verifyCompTitle(r.title, cardLookup).verified) continue;
       candidates.push({
         title: r.title ?? null,
         image_url: r.image_url ?? null,
@@ -814,14 +823,18 @@ export const addManualComps = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const { data: card, error: cardError } = await supabase
       .from("cards")
-      .select("player_name, year, set_name, card_number, is_autograph, serial_number, is_first_bowman")
+      .select("player_name, year, set_name, card_number, is_autograph, serial_number, is_first_bowman, cardsight_card_id, cardsight_parallel_id")
       .eq("id", data.card_id)
       .eq("user_id", userId)
       .maybeSingle();
     if (cardError) throw cardError;
     if (!card) throw new Error("Card not found");
-    const { verifyCompTitle } = await import("./cardsight.server");
-    const verifiedComps = data.comps.filter((comp) => verifyCompTitle(comp.title, card).verified);
+    const { getParallelNameForCard, verifyCompTitle } = await import("./cardsight.server");
+    const selectedParallelName = card.cardsight_card_id
+      ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
+      : null;
+    const cardLookup = { ...card, selected_parallel_name: selectedParallelName };
+    const verifiedComps = data.comps.filter((comp) => verifyCompTitle(comp.title, cardLookup).verified);
     if (verifiedComps.length !== data.comps.length) {
       throw new Error("A selected sale does not show this card's exact full card number.");
     }

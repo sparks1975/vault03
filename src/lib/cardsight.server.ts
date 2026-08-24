@@ -628,7 +628,7 @@ function pricingRecordMatches(
 // catch open-ended families ("<anything> refractor", "<color> wave", numbered
 // parallels, printing plates, 1/1s, image variations) so we don't have to
 // enumerate every new parallel Topps/Panini/Bowman invents.
-const PARALLEL_COLOR_RE = /\b(atomic|black|blue|bronze|camo|clear cut|cracked ice|die[- ]?cut|foilfractor|gold|green|mojo|negative|orange|pink|platinum|prism|prizm|purple|rainbow|red|rose gold|sepia|shimmer|silver|superfractor|refractor|red hot|x-?fractor|yellow|aqua|teal|wave|nebula|scope|hyper|lava|dragon|tiger|zebra|snake|choice|holo|holographic|ssp|sp|printing plate|lunar|seismic|cosmic|galactic|sapphire|ruby|emerald|onyx|ice|velocity|genesis|disco|kaleidoscope|stained glass|independence|father'?s day|mother'?s day|memorial day|independence day|fireworks|checkerboard|magenta|clear|acetate|shortprint|short print|variation|image variation|photo variation|sp variation|ssp variation|1\s*of\s*1|1\/1)\b/i;
+const PARALLEL_COLOR_RE = /\b(atomic|black|blue|bronze|camo|clear cut|cracked ice|die[- ]?cut|diamante|foil|foilfractor|gold|green|holiday|logo foil|mojo|negative|orange|pink|platinum|prism|prizm|purple|rainbow|red|rose gold|sepia|shimmer|silver|sun|superfractor|refractor|red hot|x-?fractor|yellow|aqua|teal|wave|nebula|scope|hyper|lava|dragon|tiger|zebra|snake|choice|holo|holographic|ssp|sp|printing plate|lunar|seismic|cosmic|galactic|sapphire|ruby|emerald|onyx|ice|velocity|genesis|disco|kaleidoscope|stained glass|independence|father'?s day|mother'?s day|memorial day|independence day|fireworks|checkerboard|magenta|clear|acetate|shortprint|short print|variation|image variation|photo variation|sp variation|ssp variation|1\s*of\s*1|1\/1)\b/i;
 // Catches any "<word> fractor" / "<word> refractor" not covered above.
 const REFRACTOR_FAMILY_RE = /\b[a-z]*fractor\b/i;
 // "Wave" family: prizmatic, mojo wave, blue wave, etc.
@@ -677,13 +677,10 @@ export function isVariantTitle(
     .replace(/\bgold\s+framed?\b/gi, "framed")
     .replace(/\bgold\s+label\b/gi, "label");
   const hasSelectedParallel = Boolean(opts.hasSelectedParallel || opts.selectedParallelName);
-  // A serial number ("147/200") means the card IS a numbered parallel even when
-  // the user hasn't picked which one from the catalog. The print run pins the
-  // identity, so generic parallel wording in the title confirms the card rather
-  // than contradicting it — otherwise numbered cards reject every listing:
-  // parallel comps fail here and base comps fail the serial check.
   const serialIdentifiesParallel = Boolean(serialSearchTerm(opts.serial_number));
-  const parallelOptIn = hasSelectedParallel || serialIdentifiesParallel;
+  // A print-run denominator proves that this is numbered, but it does not prove
+  // which parallel it is. Never let /99 (for example) waive color/foil checks.
+  const parallelOptIn = hasSelectedParallel;
   if (opts.selectedParallelName) {
     if (!selectedParallelTitleMatches(variantTitle, opts.selectedParallelName)) return true;
     const selectedHasSerial = /\/\s*\d+/.test(opts.selectedParallelName);
@@ -694,7 +691,7 @@ export function isVariantTitle(
   if (!parallelOptIn && REFRACTOR_FAMILY_RE.test(variantTitle)) return true;
   if (!parallelOptIn && WAVE_FAMILY_RE.test(variantTitle)) return true;
   if (!opts.is_first_bowman && FIRST_BOWMAN_RE.test(variantTitle)) return true;
-  if (!parallelOptIn && !opts.serial_number && SERIAL_RE.test(variantTitle)) return true;
+  if (!parallelOptIn && !serialIdentifiesParallel && SERIAL_RE.test(variantTitle)) return true;
 
   if (!opts.is_autograph && AUTO_RE.test(variantTitle)) return true;
   return false;
