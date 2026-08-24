@@ -434,6 +434,10 @@ function normalizeSetText(value: string | number | null | undefined): string {
 
 const APPROVED_LOOKUP = new Map(APPROVED_CARD_SETS.map((set) => [normalizeSetText(set), set]));
 
+// Brand-only entries in the approved list. They exist so uncatalogued products
+// still record a brand, but they must never win over a specific product name.
+const GENERIC_BRAND_SETS: string[] = ["Topps", "Bowman", "Panini", "Donruss", "BBM", "Epoch", "Calbee"];
+
 export function isApprovedCardSet(value: string | null | undefined): value is ApprovedCardSet {
   return APPROVED_CARD_SETS.includes(value as ApprovedCardSet);
 }
