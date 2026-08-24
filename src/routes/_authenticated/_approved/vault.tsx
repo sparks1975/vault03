@@ -2651,20 +2651,43 @@ function cardDescriptor(card: {
     .join(" ");
 }
 
+// The catalog entry the form is linked to. Shared query key so the set select
+// and the mismatch note read the same cached summary.
+function useCatalogSummary(cardId: string | null) {
+  const summaryFn = useServerFn(getCardsightCardSummary);
+  return useQuery({
+    queryKey: ["cardsight-card-summary", cardId],
+    queryFn: () => summaryFn({ data: { card_id: cardId } }),
+    enabled: !!cardId,
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
 function ApprovedSetSelect({
   value,
+  catalogCardId = null,
   onChange,
 }: {
   value: string;
-  onChange: (setName: string | null) => void;
+  catalogCardId?: string | null;
+  // keepCatalogLink is true when the new set matches the linked catalog entry's
+  // own set — correcting the set to the catalog's name must not drop the link
+  // (dropping it is what emptied the parallel picker).
+  onChange: (setName: string | null, keepCatalogLink: boolean) => void;
 }) {
   const approvedValue = APPROVED_CARD_SETS.includes(value as (typeof APPROVED_CARD_SETS)[number]) ? value : "";
+  const summary = useCatalogSummary(catalogCardId);
+  const catalogSet = summary.data?.set_name ?? null;
+  const mismatch = !!catalogSet && !!value && catalogSet !== value;
   return (
     <label className="block">
       <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Set</span>
       <select
         value={approvedValue}
-        onChange={(e) => onChange(e.target.value || null)}
+        onChange={(e) => {
+          const next = e.target.value || null;
+          onChange(next, !!next && !!catalogSet && next === catalogSet);
+        }}
         className="mt-1 w-full h-10 px-3 border border-border rounded-sm text-sm bg-background focus:outline-none focus:border-accent"
       >
         <option value="">Select set</option>
@@ -2677,6 +2700,22 @@ function ApprovedSetSelect({
       {value && !approvedValue && (
         <span className="text-[9px] font-mono text-muted-foreground">
           Current set is not approved. Choose one from the list before saving.
+        </span>
+      )}
+      {mismatch && (
+        <span className="mt-1 block text-[9px] font-mono text-muted-foreground">
+          Catalog link says{" "}
+          <span className="text-foreground">
+            {[summary.data?.year, summary.data?.release_name, summary.data?.subset_name].filter(Boolean).join(" ")}
+          </span>{" "}
+          ({catalogSet}).{" "}
+          <button
+            type="button"
+            onClick={() => onChange(catalogSet, true)}
+            className="underline uppercase tracking-widest"
+          >
+            Use catalog set
+          </button>
         </span>
       )}
     </label>
