@@ -1371,12 +1371,17 @@ export type ParallelOption = { id: string; name: string; setId: string };
 
 type DetailedCard = CatalogCard;
 type ParallelsResp = {
-  parallels: Array<{ id: string; setId: string; name: string; isPartial?: boolean }>;
+  parallels: Array<{ id: string; setId: string; name: string; numberedTo?: number | null; isPartial?: boolean }>;
   total_count: number;
 };
 
 const catalogCache = new Map<string, DetailedCard>();
 const parallelsCache = new Map<string, ParallelOption[]>();
+
+function displayParallelName(parallel: { name: string; numberedTo?: number | null }): string {
+  const name = parallel.name.trim();
+  return parallel.numberedTo && !/\/\s*\d+/.test(name) ? `${name} /${parallel.numberedTo}` : name;
+}
 
 export async function listParallelsForCard(card_id: string): Promise<ParallelOption[]> {
   const cached = parallelsCache.get(card_id);
@@ -1401,7 +1406,7 @@ export async function listParallelsForCard(card_id: string): Promise<ParallelOpt
     const scoped = card.parallels
       .map((p) => ({
         id: p.id,
-        name: p.numberedTo ? `${p.name} /${p.numberedTo}` : p.name,
+        name: displayParallelName(p),
         setId: card.setId,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
@@ -1418,7 +1423,7 @@ export async function listParallelsForCard(card_id: string): Promise<ParallelOpt
       `/v1/catalog/parallels?releaseId=${encodeURIComponent(card.releaseId)}&take=${take}&skip=${skip}`,
     );
     for (const p of page.parallels) {
-      if (p.setId === card.setId) all.push({ id: p.id, name: p.name, setId: p.setId });
+      if (p.setId === card.setId) all.push({ id: p.id, name: displayParallelName(p), setId: p.setId });
     }
     skip += page.parallels.length;
     if (page.parallels.length < take || skip >= page.total_count) break;

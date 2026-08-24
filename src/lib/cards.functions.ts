@@ -185,7 +185,7 @@ export const updateCardFields = createServerFn({ method: "POST" })
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-const allowed = [
+    const allowed = [
       "player_name",
       "team",
       "position",
@@ -219,11 +219,14 @@ const allowed = [
     // If the user corrected the card's identity (player / year / set / card #),
     // the CardSight ids resolved from the original scan are no longer valid.
     // Clear them and purge every stale comp so the next valuation re-resolves
-    // from the corrected details.
+    // from the corrected details. Exception: changing a generic brand label to
+    // the catalog card's own approved set (Panini -> Prizm) must preserve the
+    // exact catalog link because that link scopes the parallel checklist.
     let identityReset = false;
     const identityKeys = ["player_name", "year", "set_name", "card_number"] as const;
     const touchesIdentity = identityKeys.some((k) => k in clean);
-    const explicitIds = data.patch["cardsight_card_id"] != null;
+    const hasPatchKey = (key: string) => Object.prototype.hasOwnProperty.call(data.patch, key);
+    const explicitIds = hasPatchKey("cardsight_card_id");
     if (touchesIdentity && !explicitIds) {
       const { data: existing } = await supabase
         .from("cards")
@@ -240,11 +243,21 @@ const allowed = [
           const raw = (existing as Record<string, unknown>)[k];
           return k === "set_name" ? toApprovedCardSet(raw as string | null | undefined) : raw;
         };
-        const changed = identityKeys.some(
+        const changedKeys = identityKeys.filter(
           (k) => k in clean && norm(clean[k]) !== norm(existingValue(k)),
         );
+        let preservesExistingCatalogLink = false;
+        if (changedKeys.length === 1 && changedKeys[0] === "set_name" && existing.cardsight_card_id) {
+          try {
+            const { getCatalogValuationLookup } = await import("./cardsight.server");
+            const catalogLookup = await getCatalogValuationLookup(existing.cardsight_card_id);
+            preservesExistingCatalogLink = norm(clean["set_name"]) === norm(catalogLookup?.set_name);
+          } catch (err) {
+            console.error("Catalog set preservation check failed:", err);
+          }
+        }
 
-        if (changed) {
+        if (changedKeys.length > 0 && !preservesExistingCatalogLink) {
           identityReset = true;
           clean["cardsight_card_id"] = null;
           clean["cardsight_parallel_id"] = null;
