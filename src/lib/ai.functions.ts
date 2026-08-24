@@ -949,7 +949,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     const ebaySoldPass = async () => {
       if (usedCardsight || !data.card_id) return;
       try {
-        const { verifyCompTitle } = await import("./cardsight.server");
+        const { verifyCompTitle, looseCompMatch } = await import("./cardsight.server");
         let { data: cachedRows, error } = await context.supabase
           .from("pt130_comps")
           .select("title, price, sold_at, url, scraped_at")
