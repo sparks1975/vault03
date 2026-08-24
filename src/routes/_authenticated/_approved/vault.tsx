@@ -26,7 +26,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { scanCardPhoto, scanCardBack, estimateCardValue } from "@/lib/ai.functions";
 import { listCardsightParallels, searchCardsightCards, getCardsightCardSummary } from "@/lib/cardsight.functions";
-import { APPROVED_CARD_SETS } from "@/lib/card-sets";
+import { APPROVED_CARD_SETS, toApprovedCardSet } from "@/lib/card-sets";
 import { CardCropDialog } from "@/components/CardCropDialog";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
 import {
@@ -2698,7 +2698,12 @@ function ApprovedSetSelect({
 }) {
   const approvedValue = APPROVED_CARD_SETS.includes(value as (typeof APPROVED_CARD_SETS)[number]) ? value : "";
   const summary = useCatalogSummary(catalogCardId);
-  const catalogSet = summary.data?.set_name ?? null;
+  const rawCatalogSet = summary.data?.set_name ?? null;
+  // The catalog link's own release/subset text is the authority: resolve it to
+  // the approved product set so a "Panini Prizm ..." link agrees with "Prizm"
+  // instead of insisting on the bare brand.
+  const catalogSet =
+    toApprovedCardSet(summary.data?.release_name, summary.data?.subset_name) ?? rawCatalogSet;
   const mismatch = !!catalogSet && !!value && catalogSet !== value;
   return (
     <label className="block">
