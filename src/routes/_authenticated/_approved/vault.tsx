@@ -26,7 +26,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { scanCardPhoto, scanCardBack, estimateCardValue } from "@/lib/ai.functions";
 import { listCardsightParallels, searchCardsightCards, getCardsightCardSummary } from "@/lib/cardsight.functions";
-import { APPROVED_CARD_SETS } from "@/lib/card-sets";
+import { APPROVED_CARD_SETS, toApprovedCardSet } from "@/lib/card-sets";
 import { CardCropDialog } from "@/components/CardCropDialog";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
 import {
