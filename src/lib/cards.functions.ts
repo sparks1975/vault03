@@ -332,7 +332,7 @@ async function applyValuation(
     .maybeSingle();
   if (cardIdentityError) throw cardIdentityError;
   if (!cardIdentity) throw new Error("Card not found");
-  const { getParallelNameForCard, verifyCompTitle } = await import("./cardsight.server");
+  const { getParallelNameForCard, verifyCompTitle, looseCompMatch } = await import("./cardsight.server");
   const selectedParallelName = cardIdentity.cardsight_card_id
     ? await getParallelNameForCard(cardIdentity.cardsight_card_id, cardIdentity.cardsight_parallel_id)
     : null;
