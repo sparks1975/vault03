@@ -1222,11 +1222,14 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
       }
       const matched = detailed.filter((c) => cardMatchesLookup(c, merged));
       if (matched.length > 0) return matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
+      const brandOnly = detailed.filter((c) => cardMatchesLookup(c, merged, { requireSet: false }));
+      if (brandOnly.length > 0) return brandOnly.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
     }
 
     const yearAgnosticMatched = year
-      ? detailed.filter((c) => cardMatchesLookup(c, { ...merged, year: null }))
+      ? detailed.filter((c) => cardMatchesLookup(c, { ...merged, year: null }, { requireSet: false }))
       : [];
+
     if (yearAgnosticMatched.length > 0) {
       return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
     }
