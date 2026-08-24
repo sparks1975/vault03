@@ -2013,8 +2013,11 @@ function AddCardDialog({
         is_numbered: result.serial_number ? true : f.is_numbered,
         is_rookie: result.is_rookie === true ? true : f.is_rookie,
         cardsight_card_id: result.cardsight_card_id ?? f.cardsight_card_id,
-        cardsight_parallel_id: null,
+        // Keep the parallel identification actually resolved — nulling this was
+        // discarding the parallel the scan read off the card.
+        cardsight_parallel_id: result.cardsight_parallel_id ?? null,
       }));
+      setParallelHint(result.parallel_hint ?? null);
       setConfidence(result.confidence ?? null);
       setScanSource(result.source ?? null);
       setCandidates(result.disagreement ? result.candidates : []);
