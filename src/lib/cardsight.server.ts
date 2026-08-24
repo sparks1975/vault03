@@ -930,7 +930,10 @@ export async function listSetCandidatesForCard(lookup: CardLookup): Promise<SetC
 
   const bySet = new Map<string, SetCandidate>();
   for (const card of cardsById.values()) {
-    if (!cardMatchesLookup(card, merged)) continue;
+    // The set chooser intentionally stays brand-level: it exists so the user
+    // can pick a different set than the one recorded.
+    if (!cardMatchesLookup(card, merged, { requireSet: false })) continue;
+
     const candidate = setCandidateFromCard(card, merged);
     if (!candidate) continue;
     const existing = bySet.get(candidate.set_name);
