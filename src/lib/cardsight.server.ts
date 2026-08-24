@@ -397,7 +397,7 @@ function hasUnselectedParallelModifier(title: string, selectedParallelName: stri
     "gold", "green", "mojo", "negative", "orange", "pink", "platinum", "purple", "rainbow", "red",
     "rose gold", "sepia", "shimmer", "silver", "superfractor", "red hot", "x fractor", "yellow", "aqua",
     "teal", "wave", "nebula", "scope", "hyper", "lava", "dragon", "tiger", "zebra", "snake",
-    "choice", "diamante", "foil", "holiday", "logo foil", "sun", "holo", "holographic", "ssp", "printing plate",
+    "choice", "diamante", "holiday", "logo foil", "holo", "holographic", "ssp", "printing plate",
   ];
   return modifiers.some((modifier) => titleNorm.includes(modifier) && !selectedNorm.includes(modifier));
 }
