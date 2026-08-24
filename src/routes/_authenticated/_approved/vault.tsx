@@ -25,7 +25,7 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 import { scanCardPhoto, scanCardBack, estimateCardValue } from "@/lib/ai.functions";
-import { listCardsightParallels, searchCardsightCards } from "@/lib/cardsight.functions";
+import { listCardsightParallels, searchCardsightCards, getCardsightCardSummary } from "@/lib/cardsight.functions";
 import { APPROVED_CARD_SETS } from "@/lib/card-sets";
 import { CardCropDialog } from "@/components/CardCropDialog";
 import { searchMlbPlayer, getPlayerStats } from "@/lib/mlb.functions";
@@ -1060,7 +1060,14 @@ function CardDetail({
               <Field label="Year" type="number" value={draft.year == null ? "" : String(draft.year)} onChange={(v) => setDraft({ ...draft, year: v ? Number(v) : null })} />
               <ApprovedSetSelect
                 value={String(draft.set_name ?? "")}
-                onChange={(setName) => setDraft({ ...draft, set_name: setName, cardsight_card_id: null, cardsight_parallel_id: null })}
+                catalogCardId={(draft.cardsight_card_id ?? card.cardsight_card_id) ?? null}
+                onChange={(setName, keepCatalogLink) =>
+                  setDraft(
+                    keepCatalogLink
+                      ? { ...draft, set_name: setName }
+                      : { ...draft, set_name: setName, cardsight_card_id: null, cardsight_parallel_id: null },
+                  )
+                }
               />
               <Field label="Card #" value={String(draft.card_number ?? "")} onChange={(v) => setDraft({ ...draft, card_number: v || null })} />
               <Field label="Position" value={String(draft.position ?? "")} onChange={(v) => setDraft({ ...draft, position: v || null })} />
@@ -1916,6 +1923,9 @@ function AddCardDialog({
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<"front" | "back">("front");
   const [confidence, setConfidence] = useState<"high" | "medium" | "low" | null>(null);
+  // Parallel wording read off the card by the scan, used to preselect the
+  // matching catalog parallel once the scoped list loads.
+  const [parallelHint, setParallelHint] = useState<string | null>(null);
   const [scanSource, setScanSource] = useState<"catalog" | "ai" | null>(null);
   type ScanCandidate = Awaited<ReturnType<typeof scanCardPhoto>>["candidates"][number];
   const [candidates, setCandidates] = useState<ScanCandidate[]>([]);
@@ -2006,8 +2016,11 @@ function AddCardDialog({
         is_numbered: result.serial_number ? true : f.is_numbered,
         is_rookie: result.is_rookie === true ? true : f.is_rookie,
         cardsight_card_id: result.cardsight_card_id ?? f.cardsight_card_id,
-        cardsight_parallel_id: null,
+        // Keep the parallel identification actually resolved — nulling this was
+        // discarding the parallel the scan read off the card.
+        cardsight_parallel_id: result.cardsight_parallel_id ?? null,
       }));
+      setParallelHint(result.parallel_hint ?? null);
       setConfidence(result.confidence ?? null);
       setScanSource(result.source ?? null);
       setCandidates(result.disagreement ? result.candidates : []);
@@ -2483,7 +2496,14 @@ function AddCardDialog({
               <Field label="Year" type="number" value={form.year} onChange={(v) => setForm({ ...form, year: v })} />
               <ApprovedSetSelect
                 value={form.set_name}
-                onChange={(setName) => setForm({ ...form, set_name: setName ?? "", cardsight_card_id: null, cardsight_parallel_id: null })}
+                catalogCardId={form.cardsight_card_id}
+                onChange={(setName, keepCatalogLink) =>
+                  setForm(
+                    keepCatalogLink
+                      ? { ...form, set_name: setName ?? "" }
+                      : { ...form, set_name: setName ?? "", cardsight_card_id: null, cardsight_parallel_id: null },
+                  )
+                }
               />
               <Field label="Card #" value={form.card_number} onChange={(v) => setForm({ ...form, card_number: v })} />
               <Field label="Position" value={form.position} onChange={(v) => setForm({ ...form, position: v })} />
@@ -2558,7 +2578,8 @@ function AddCardDialog({
               cardId={form.cardsight_card_id}
               lookup={form}
               value={form.cardsight_parallel_id}
-              onChange={(id) => setForm({ ...form, cardsight_parallel_id: id })}
+              hintName={parallelHint}
+              onChange={(id) => setForm((f) => ({ ...f, cardsight_parallel_id: id }))}
             />
 
 
@@ -2651,20 +2672,43 @@ function cardDescriptor(card: {
     .join(" ");
 }
 
+// The catalog entry the form is linked to. Shared query key so the set select
+// and the mismatch note read the same cached summary.
+function useCatalogSummary(cardId: string | null) {
+  const summaryFn = useServerFn(getCardsightCardSummary);
+  return useQuery({
+    queryKey: ["cardsight-card-summary", cardId],
+    queryFn: () => summaryFn({ data: { card_id: cardId } }),
+    enabled: !!cardId,
+    staleTime: 60 * 60 * 1000,
+  });
+}
+
 function ApprovedSetSelect({
   value,
+  catalogCardId = null,
   onChange,
 }: {
   value: string;
-  onChange: (setName: string | null) => void;
+  catalogCardId?: string | null;
+  // keepCatalogLink is true when the new set matches the linked catalog entry's
+  // own set — correcting the set to the catalog's name must not drop the link
+  // (dropping it is what emptied the parallel picker).
+  onChange: (setName: string | null, keepCatalogLink: boolean) => void;
 }) {
   const approvedValue = APPROVED_CARD_SETS.includes(value as (typeof APPROVED_CARD_SETS)[number]) ? value : "";
+  const summary = useCatalogSummary(catalogCardId);
+  const catalogSet = summary.data?.set_name ?? null;
+  const mismatch = !!catalogSet && !!value && catalogSet !== value;
   return (
     <label className="block">
       <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Set</span>
       <select
         value={approvedValue}
-        onChange={(e) => onChange(e.target.value || null)}
+        onChange={(e) => {
+          const next = e.target.value || null;
+          onChange(next, !!next && !!catalogSet && next === catalogSet);
+        }}
         className="mt-1 w-full h-10 px-3 border border-border rounded-sm text-sm bg-background focus:outline-none focus:border-accent"
       >
         <option value="">Select set</option>
@@ -2679,14 +2723,41 @@ function ApprovedSetSelect({
           Current set is not approved. Choose one from the list before saving.
         </span>
       )}
+      {mismatch && (
+        <span className="mt-1 block text-[9px] font-mono text-muted-foreground">
+          Catalog link says{" "}
+          <span className="text-foreground">
+            {[summary.data?.year, summary.data?.release_name, summary.data?.subset_name].filter(Boolean).join(" ")}
+          </span>{" "}
+          ({catalogSet}).{" "}
+          <button
+            type="button"
+            onClick={() => onChange(catalogSet, true)}
+            className="underline uppercase tracking-widest"
+          >
+            Use catalog set
+          </button>
+        </span>
+      )}
     </label>
   );
+}
+
+// Normalizes a parallel name for matching the scan's free-text read against
+// catalog option names ("Gold Refractor /50" ≈ "gold refractor").
+function normalizeParallelName(value: string | null | undefined): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\/\s*\d+/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function ParallelSelect({
   cardId,
   lookup,
   value,
+  hintName = null,
   onChange,
 }: {
   cardId: string | null;
@@ -2697,6 +2768,9 @@ function ParallelSelect({
     card_number?: string | null;
   };
   value: string | null;
+  // Free-text parallel read off the card by the scan, used to preselect the
+  // matching catalog option once the scoped list loads.
+  hintName?: string | null;
   onChange: (id: string | null) => void;
 }) {
   const listFn = useServerFn(listCardsightParallels);
@@ -2717,6 +2791,28 @@ function ParallelSelect({
     enabled: canLookup,
     staleTime: 60 * 60 * 1000,
   });
+
+  const options = q.data ?? [];
+  const hintMatch = (() => {
+    const hint = normalizeParallelName(hintName);
+    if (!hint) return null;
+    const exact = options.find((p) => normalizeParallelName(p.name) === hint);
+    if (exact) return exact;
+    return (
+      options.find((p) => {
+        const name = normalizeParallelName(p.name);
+        return name.includes(hint) || hint.includes(name);
+      }) ?? null
+    );
+  })();
+  const appliedHint = useRef<string | null>(null);
+  useEffect(() => {
+    if (value || !hintMatch) return;
+    if (appliedHint.current === hintMatch.id) return;
+    appliedHint.current = hintMatch.id;
+    onChange(hintMatch.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hintMatch?.id, value]);
   return (
     <label className="block">
       <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">

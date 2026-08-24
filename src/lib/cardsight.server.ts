@@ -1301,6 +1301,41 @@ export async function listParallelsForCard(card_id: string): Promise<ParallelOpt
   return all;
 }
 
+// The catalog card a form is linked to. The linked card is the authority on
+// year / release / set — the vision read's set string is a fuzzy mapping and
+// can disagree with the entry it is actually linked to.
+export type CatalogCardSummary = {
+  card_id: string;
+  player_name: string | null;
+  card_number: string | null;
+  year: string | null;
+  release_name: string | null;
+  subset_name: string | null;
+  set_name: string | null;
+  parallel_count: number;
+};
+
+export async function getCatalogCardSummary(card_id: string): Promise<CatalogCardSummary | null> {
+  let card = catalogCache.get(card_id);
+  if (!card) {
+    card = await csFetch<DetailedCard>(`/v1/catalog/cards/${card_id}`);
+    catalogCache.set(card_id, card);
+  }
+  if (!card) return null;
+  const subset = card.setName && !/^(base|base set)$/i.test(card.setName) ? card.setName : null;
+  return {
+    card_id,
+    player_name: card.name ?? null,
+    card_number: card.number ?? null,
+    year: card.releaseYear ?? null,
+    release_name: card.releaseName ?? null,
+    subset_name: subset,
+    set_name: sanitizeSetName(card.releaseName, card.setName),
+    parallel_count: card.parallelCount ?? card.parallels?.length ?? 0,
+  };
+}
+
+
 export async function getParallelNameForCard(card_id: string, parallel_id: string | null | undefined): Promise<string | null> {
   if (!parallel_id) return null;
   const option = (await listParallelsForCard(card_id)).find((p) => p.id === parallel_id);
