@@ -1923,6 +1923,9 @@ function AddCardDialog({
   const [cropSource, setCropSource] = useState<string | null>(null);
   const [cropTarget, setCropTarget] = useState<"front" | "back">("front");
   const [confidence, setConfidence] = useState<"high" | "medium" | "low" | null>(null);
+  // Parallel wording read off the card by the scan, used to preselect the
+  // matching catalog parallel once the scoped list loads.
+  const [parallelHint, setParallelHint] = useState<string | null>(null);
   const [scanSource, setScanSource] = useState<"catalog" | "ai" | null>(null);
   type ScanCandidate = Awaited<ReturnType<typeof scanCardPhoto>>["candidates"][number];
   const [candidates, setCandidates] = useState<ScanCandidate[]>([]);
