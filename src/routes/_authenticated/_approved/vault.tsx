@@ -1060,7 +1060,14 @@ function CardDetail({
               <Field label="Year" type="number" value={draft.year == null ? "" : String(draft.year)} onChange={(v) => setDraft({ ...draft, year: v ? Number(v) : null })} />
               <ApprovedSetSelect
                 value={String(draft.set_name ?? "")}
-                onChange={(setName) => setDraft({ ...draft, set_name: setName, cardsight_card_id: null, cardsight_parallel_id: null })}
+                catalogCardId={(draft.cardsight_card_id ?? card.cardsight_card_id) ?? null}
+                onChange={(setName, keepCatalogLink) =>
+                  setDraft(
+                    keepCatalogLink
+                      ? { ...draft, set_name: setName }
+                      : { ...draft, set_name: setName, cardsight_card_id: null, cardsight_parallel_id: null },
+                  )
+                }
               />
               <Field label="Card #" value={String(draft.card_number ?? "")} onChange={(v) => setDraft({ ...draft, card_number: v || null })} />
               <Field label="Position" value={String(draft.position ?? "")} onChange={(v) => setDraft({ ...draft, position: v || null })} />
