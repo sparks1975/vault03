@@ -577,22 +577,27 @@ async function recomputeCardValue(
     .eq("id", cardId)
     .maybeSingle();
   if (!card) throw new Error("Card not found");
-  const { getParallelNameForCard, verifyCompTitle } = await import("./cardsight.server");
+  const { getParallelNameForCard, verifyCompTitle, looseCompMatch } = await import("./cardsight.server");
   const selectedParallelName = card.cardsight_card_id
     ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
     : null;
   const cardLookup = { ...card, selected_parallel_name: selectedParallelName };
   const { data: rows } = await supabase
     .from("card_sales")
-    .select("price, title")
+    .select("price, title, is_manual")
     .eq("card_id", cardId);
-  const prices = (rows ?? [])
-    .filter((r) => {
-      const title = String(r.title ?? "");
-      return !NON_SINGLE_RE_LOCAL.test(title) && verifyCompTitle(title, cardLookup).verified;
-    })
+  const usableRows = (rows ?? []).filter(
+    (r) => Number.isFinite(Number(r.price)) && Number(r.price) > 0 && !NON_SINGLE_RE_LOCAL.test(String(r.title ?? "")),
+  );
+  // Manual picks always count. Otherwise prefer strict identity matches and only
+  // fall back to loose player/year matches so a card is never left unvalued.
+  const manualRows = usableRows.filter((r) => r.is_manual);
+  const autoRows = usableRows.filter((r) => !r.is_manual);
+  const strictAuto = autoRows.filter((r) => verifyCompTitle(String(r.title ?? ""), cardLookup).verified);
+  const chosenAuto =
+    strictAuto.length > 0 ? strictAuto : autoRows.filter((r) => looseCompMatch(String(r.title ?? ""), cardLookup));
+  const prices = [...manualRows, ...(manualRows.length > 0 ? strictAuto : chosenAuto)]
     .map((r) => Number(r.price))
-    .filter((p) => Number.isFinite(p) && p > 0)
     .sort((a, b) => a - b);
   if (prices.length === 0) {
     await supabase
