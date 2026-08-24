@@ -462,8 +462,14 @@ export function toApprovedCardSet(...parts: Array<string | number | null | undef
   const exact = APPROVED_LOOKUP.get(normalized) ?? SET_ALIASES[normalized];
   if (exact) return exact;
 
-  const ordered = [...APPROVED_CARD_SETS].sort((a, b) => normalizeSetText(b).length - normalizeSetText(a).length);
-  for (const set of ordered) {
+  // Bare brand labels ("Panini", "Topps") are last-resort only. A catalog
+  // release like "Panini Prizm Signature Series" contains both "panini" and
+  // "prizm"; the product name is the set the collector cares about, so match
+  // specific product sets first and fall back to the brand only if none hit.
+  const byLength = (a: string, b: string) => normalizeSetText(b).length - normalizeSetText(a).length;
+  const specific = APPROVED_CARD_SETS.filter((set) => !GENERIC_BRAND_SETS.includes(set)).sort(byLength);
+  const generic = APPROVED_CARD_SETS.filter((set) => GENERIC_BRAND_SETS.includes(set)).sort(byLength);
+  for (const set of [...specific, ...generic]) {
     const setNorm = normalizeSetText(set);
     if (normalized.includes(setNorm)) return set;
   }
