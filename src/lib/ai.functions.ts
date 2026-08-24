@@ -1102,7 +1102,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           if (saleMedian != null) {
             currentValue = saleMedian;
             usedCardsight = true;
-            compsNote = null;
+            compsNote = approximate
+              ? "Approximate value from close sales for this player — open Manage Comps to refine the exact matches."
+              : null;
           }
         } else if (usableRows.length > 0) {
           compsNote =
