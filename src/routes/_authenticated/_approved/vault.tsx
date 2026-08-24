@@ -2793,26 +2793,13 @@ function ParallelSelect({
   });
 
   const options = q.data ?? [];
+  // Suggestion only: an exact name match from the scan read. Never applied
+  // automatically — fuzzy/substring guesses picked the wrong parallel.
   const hintMatch = (() => {
     const hint = normalizeParallelName(hintName);
     if (!hint) return null;
-    const exact = options.find((p) => normalizeParallelName(p.name) === hint);
-    if (exact) return exact;
-    return (
-      options.find((p) => {
-        const name = normalizeParallelName(p.name);
-        return name.includes(hint) || hint.includes(name);
-      }) ?? null
-    );
+    return options.find((p) => normalizeParallelName(p.name) === hint) ?? null;
   })();
-  const appliedHint = useRef<string | null>(null);
-  useEffect(() => {
-    if (value || !hintMatch) return;
-    if (appliedHint.current === hintMatch.id) return;
-    appliedHint.current = hintMatch.id;
-    onChange(hintMatch.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hintMatch?.id, value]);
   return (
     <label className="block">
       <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
