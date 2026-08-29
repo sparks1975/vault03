@@ -1864,3 +1864,94 @@ export async function fetchAllCompCandidates(
   return dedupePricingRecords(rows.filter(isSoldPricingRecord));
 }
 
+
+// ---------- Valuation comp selection ----------
+// Single source of truth for "which sold rows may set current_value".
+// Only exact/strong matches (plus manual picks the collector checked) qualify.
+
+export type ValuationComp = {
+  title?: string | null;
+  price: number;
+  sold_at?: string | null;
+  is_manual?: boolean | null;
+};
+
+const GRADER_RE = /\b(psa|bgs|sgc|cgc|csg|hga|gma|beckett)\b/i;
+
+function mentionsGrade(title: string, grader: string | null | undefined, grade: string | null | undefined): boolean {
+  const raw = compact(title);
+  const g = compact(grade).replace(/^gem\s*(mint)?\s*/i, "").trim();
+  const company = compact(grader);
+  if (!g) return GRADER_RE.test(raw);
+  const companyPattern = company ? escapeRegex(company) : "(psa|bgs|sgc|cgc|csg|beckett)";
+  return new RegExp(`\\b${companyPattern}\\b[^0-9]{0,12}${escapeRegex(g)}\\b`, "i").test(raw);
+}
+
+export function selectValuationComps<T extends ValuationComp>(
+  rows: T[],
+  lookup: CompLookup & { grader?: string | null; grade?: string | null },
+): { comps: T[]; value: number | null; note: string | null; levels: Map<T, CompMatchLevel> } {
+  const levels = new Map<T, CompMatchLevel>();
+  const qualified: T[] = [];
+  for (const row of rows) {
+    if (!Number.isFinite(Number(row.price)) || Number(row.price) <= 0) continue;
+    if (row.is_manual) {
+      levels.set(row, "exact");
+      qualified.push(row);
+      continue;
+    }
+    const level = scoreCompTitle(row.title, lookup).level;
+    levels.set(row, level);
+    if (level === "exact" || level === "strong") qualified.push(row);
+  }
+
+  const notes: string[] = [];
+  // Never blend graded and raw sales in one median.
+  let pool = qualified;
+  const isGraded = Boolean(compact(lookup.grade) || compact(lookup.grader));
+  if (isGraded) {
+    const sameGrade = pool.filter((r) => r.is_manual || mentionsGrade(r.title ?? "", lookup.grader, lookup.grade));
+    if (sameGrade.length >= 2) {
+      pool = sameGrade;
+    } else {
+      const raws = pool.filter((r) => r.is_manual || !GRADER_RE.test(compact(r.title)));
+      if (raws.length >= 2) {
+        pool = raws;
+        notes.push("ungraded comps — graded premium not applied");
+      } else {
+        pool = sameGrade.length > 0 ? sameGrade : raws;
+      }
+    }
+  } else {
+    const raws = pool.filter((r) => r.is_manual || !GRADER_RE.test(compact(r.title)));
+    if (raws.length >= 2 || pool.length === 0) pool = raws;
+  }
+
+  // Prefer the last 24 months; widen to 5 years only when recent sales are thin.
+  const cutoff24 = Date.now() - 730 * 24 * 60 * 60 * 1000;
+  const cutoff5y = Date.now() - 1826 * 24 * 60 * 60 * 1000;
+  const withinDays = (r: T, cutoff: number) => {
+    const t = r.sold_at ? new Date(r.sold_at).getTime() : NaN;
+    return Number.isNaN(t) ? true : t >= cutoff;
+  };
+  const recent = pool.filter((r) => withinDays(r, cutoff24));
+  let selected = recent;
+  if (recent.length < 3) {
+    selected = pool.filter((r) => withinDays(r, cutoff5y));
+    if (selected.length > recent.length) notes.push("limited recent sales");
+  }
+
+  if (selected.length < 2) {
+    return { comps: selected, value: null, note: notes.join(" · ") || null, levels };
+  }
+
+  const prices = selected.map((r) => Number(r.price));
+  const usable = prices.length >= 4 ? trimOutliersIQR(prices) : prices;
+  const value = median(usable);
+  return {
+    comps: selected,
+    value: value > 0 ? value : null,
+    note: notes.join(" · ") || null,
+    levels,
+  };
+}
