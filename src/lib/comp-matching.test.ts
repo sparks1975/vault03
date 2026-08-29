@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as cardsight from "./cardsight.server";
 import { scoreCompTitle, selectValuationComps } from "./cardsight.server";
-import { ebaySoldSearchUrl } from "./pt130.server";
+import { buildPt130SearchTiers, ebaySoldSearchUrl, ebaySoldSearchUrls } from "./pt130.server";
 
 const ohtani = {
   player_name: "Shohei Ohtani",
@@ -222,7 +222,24 @@ describe("eBay sold search URLs", () => {
     expect(url).not.toContain("_sacat=");
   });
 
+  it("also tries the US category as a second BBM URL", () => {
+    const urls = ebaySoldSearchUrls("2021 BBM 1st Version #140 Yoshinobu Yamamoto");
+    expect(urls).toHaveLength(2);
+    expect(urls[1]).toContain("_sacat=26376");
+  });
+
   it("keeps the US Baseball Cards category for Topps", () => {
     expect(ebaySoldSearchUrl("2024 Topps #503 Shohei Ohtani")).toContain("_sacat=26376");
+  });
+
+  it("searches the same identity string as 130point, without an extra auto token", () => {
+    const tiers = buildPt130SearchTiers({
+      year: 2021,
+      set_name: "BBM 1st Version",
+      card_number: "140",
+      player_name: "Yoshinobu Yamamoto",
+      is_autograph: true,
+    });
+    expect(tiers.primary).toBe("2021 BBM 1st Version #140 Yoshinobu Yamamoto");
   });
 });

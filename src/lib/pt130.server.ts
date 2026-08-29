@@ -18,11 +18,18 @@ const BASEBALL_CARDS_CATEGORY = "26376"; // eBay Baseball Cards — filters boxe
 const SKIP_EBAY_CATEGORY_RE = /\b(bbm|epoch|calbee)\b/i;
 
 export function ebaySoldSearchUrl(keyword: string): string {
+  return ebaySoldSearchUrls(keyword)[0];
+}
+
+export function ebaySoldSearchUrls(keyword: string): string[] {
   const base =
     `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(keyword)}` +
     `&LH_Sold=1&LH_Complete=1&_sop=13`;
-  if (SKIP_EBAY_CATEGORY_RE.test(keyword)) return base;
-  return `${base}&_sacat=${BASEBALL_CARDS_CATEGORY}`;
+  const withCategory = `${base}&_sacat=${BASEBALL_CARDS_CATEGORY}`;
+  // Japanese brands: try the open sold search first (how 130point finds them),
+  // and keep the US Baseball Cards URL as a second shot.
+  if (SKIP_EBAY_CATEGORY_RE.test(keyword)) return [base, withCategory];
+  return [withCategory];
 }
 
 export type Pt130Sale = {
@@ -82,8 +89,9 @@ export function buildPt130Descriptor(fields: {
   serial_number?: string | null;
   grader?: string | null;
   grade?: string | null;
-}, opts: { includeCardNumber?: boolean; setLabel?: "brand" | "set" } = {}): string {
+}, opts: { includeCardNumber?: boolean; setLabel?: "brand" | "set"; includeTraits?: boolean } = {}): string {
   const includeCardNumber = opts.includeCardNumber ?? true;
+  const includeTraits = opts.includeTraits ?? false;
   // Sold-search discovery must state the same value-affecting traits that the
   // verification pass later requires, otherwise autographed / parallel /
   // serial-numbered cards search as base cards and every returned listing gets
@@ -120,10 +128,9 @@ export function buildPt130Descriptor(fields: {
       ? `#${String(fields.card_number).replace(/^#/, "").replace(/[-/]+/g, " ").replace(/\s+/g, " ").trim()}`
       : null,
     fields.player_name,
-    parallel || null,
-    serialDenominator ? `/${serialDenominator}` : null,
-
-    fields.is_autograph ? "auto" : null,
+    includeTraits ? parallel || null : null,
+    includeTraits && serialDenominator ? `/${serialDenominator}` : null,
+    includeTraits && fields.is_autograph ? "auto" : null,
   ].filter(Boolean) as string[];
   return parts.join(" ").replace(/\s+/g, " ").trim();
 
@@ -164,6 +171,14 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
     .filter(Boolean)
     .slice(0, 2);
   if (keywords.length === 0) return [];
+  const startUrls: Array<{ url: string }> = [];
+  for (const keyword of keywords) {
+    for (const url of ebaySoldSearchUrls(keyword)) {
+      if (startUrls.length >= 2) break;
+      startUrls.push({ url });
+    }
+    if (startUrls.length >= 2) break;
+  }
 
   const headers = {
     Authorization: `Bearer ${lovableKey}`,
@@ -173,9 +188,7 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
   const input = {
     // Sold search URLs (LH_Sold/LH_Complete) scoped to Baseball Cards, sorted
     // by most recently ended.
-    startUrls: keywords.map((k) => ({
-      url: ebaySoldSearchUrl(k),
-    })),
+    startUrls,
     mode: "sold",
     detailedItems: false, // sold rows come from search results; avoids 3x request cost
     maxItems: RESULTS_PER_SEARCH,
@@ -298,11 +311,13 @@ export async function refreshPt130ForCard(
     sales.push(sale);
   }
 
+  // Never wipe the cache on an empty scrape. That is how a failed Apify run
+  // (or a too-narrow query) left the card with "no comps at all".
+  if (sales.length === 0) return { stored: 0, scraped: scrapedSales.length };
   if (!args.append) {
     const del = await supabase.from("pt130_comps").delete().eq("card_id", args.card_id);
     if (del.error) throw del.error;
   }
-  if (sales.length === 0) return { stored: 0, scraped: scrapedSales.length };
   const rows = sales.map((s) => ({
     card_id: args.card_id,
     user_id: args.user_id,
