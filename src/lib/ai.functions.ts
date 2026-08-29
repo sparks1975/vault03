@@ -692,13 +692,6 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       return raw || "eBay sold";
     };
 
-    const medianValueFromSales = async (rows: typeof sales) => {
-      const prices = rows.map((r) => Number(r.price)).filter((p) => Number.isFinite(p) && p > 0);
-      if (prices.length === 0) return null;
-      const { median } = await import("./cardsight.server");
-      return median(prices);
-    };
-
     // Resolve the saved parallel before either pricing source runs. eBay is the
     // primary pass, so doing this only inside cardsightPass meant its verifier
     // saw a selected parallel id but no parallel name and rejected the exact
@@ -815,10 +808,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         });
       }
 
-      if (auctions.length >= 1) {
-        // Any verified sold comp is real market data — far better than an AI
-        // guess. Only trim outliers once there are enough points for IQR to be
-        // meaningful.
+      if (auctions.length >= 2) {
+        // Two verified sold comps is the floor for a defensible median; a single
+        // sale is shown as a comparable but never becomes the card's value.
         const prices = auctions.map((r) => r.price);
         currentValue = median(auctions.length >= 4 ? trimOutliersIQR(prices) : prices);
 
@@ -858,11 +850,13 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         if (!resolvedGradeId && data.grader && data.grade) {
           resolvedGradeId = await resolveGradeId(data.grader, data.grade);
         }
-        // If the card is graded but we couldn't match a grade_id, skip Cardsight —
-        // we don't want to price a graded card against raw comps.
-        if (data.grader && data.grade && !resolvedGradeId) {
-          compsNote = `Couldn't match grade "${data.grader} ${data.grade}" in Cardsight — using AI estimate.`;
-        } else {
+        // A grade we can't resolve is no reason to skip the backstop entirely.
+        // Price from raw comps instead and say the graded premium is missing.
+        const gradeUnresolved = Boolean(data.grader && data.grade && !resolvedGradeId);
+        if (gradeUnresolved) {
+          compsNote = `Couldn't match grade "${data.grader} ${data.grade}" — value shown from ungraded comps.`;
+        }
+        {
           let slice = await fetchPricing(resolvedCardId, {
             parallel_id: data.cardsight_parallel_id ?? null,
             grade_id: resolvedGradeId,
@@ -1083,8 +1077,6 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     };
 
     if (usedCardsight) {
-      const saleMedian = await medianValueFromSales(sales);
-      if (saleMedian != null) currentValue = saleMedian;
       return {
         current_value: currentValue,
         value_delta_pct: deltaPct,
