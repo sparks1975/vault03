@@ -1582,6 +1582,8 @@ type CompCandidate = {
   sold_at: string | null;
   source: string;
   url: string | null;
+  /** "weak" rows are suggestions only — they never affect the saved value. */
+  level?: "exact" | "strong" | "weak";
 };
 
 type ExistingComp = {
@@ -1836,6 +1838,11 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
                         )}
                         {existing.some((e) => candidateMatchesExisting(c, e) && e.is_manual) && (
                           <span className="shrink-0 border border-primary/40 px-1.5 py-0.5 text-[9px] font-mono uppercase text-primary">Manual</span>
+                        )}
+                        {c.level === "weak" && (
+                          <span className="shrink-0 border border-border px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground">
+                            Needs review
+                          </span>
                         )}
                       </div>
                       {displayDesc && (

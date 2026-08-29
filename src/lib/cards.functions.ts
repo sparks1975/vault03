@@ -345,7 +345,7 @@ async function applyValuation(
     .maybeSingle();
   if (cardIdentityError) throw cardIdentityError;
   if (!cardIdentity) throw new Error("Card not found");
-  const { getParallelNameForCard, verifyCompTitle, looseCompMatch } = await import("./cardsight.server");
+  const { getParallelNameForCard, selectValuationComps } = await import("./cardsight.server");
   const selectedParallelName = cardIdentity.cardsight_card_id
     ? await getParallelNameForCard(cardIdentity.cardsight_card_id, cardIdentity.cardsight_parallel_id)
     : null;
@@ -357,13 +357,18 @@ async function applyValuation(
     const title = String(s.title ?? "").trim();
     return Boolean(title) && !nonSingleCardRe.test(title) && !(sealedWordsRe.test(title) && containerWordsRe.test(title));
   });
-  const strictSales = candidateSales.filter((s) => verifyCompTitle(String(s.title ?? ""), cardLookup).verified);
-  // Approximate comps the collector can refine beat an empty card, so keep the
-  // loose player/year matches when strict identity verification rejects all.
-  const singleCardSales =
-    strictSales.length > 0
-      ? strictSales
-      : candidateSales.filter((s) => looseCompMatch(String(s.title ?? ""), cardLookup));
+  // Only exact/strong identity matches may move the value. Player-only or
+  // product-less "close" sales stay out of the median entirely.
+  const selection = selectValuationComps(
+    candidateSales.map((s) => ({ title: String(s.title ?? ""), price: Number(s.price), sold_at: s.sold_at ?? null })),
+    cardLookup,
+  );
+  const qualifiedKeys = new Set(
+    selection.comps.map((c) => `${c.title}|${c.price}|${c.sold_at ?? ""}`),
+  );
+  const singleCardSales = candidateSales.filter((s) =>
+    qualifiedKeys.has(`${String(s.title ?? "")}|${Number(s.price)}|${s.sold_at ?? ""}`),
+  );
   const validSalePrices = singleCardSales
     .map((s) => Number(s.price))
     .filter((price) => Number.isFinite(price) && price > 0);
@@ -393,6 +398,9 @@ async function applyValuation(
   }
   validSalePrices.sort((a, b) => a - b);
   const medianSaleValue = (() => {
+    // Fewer than two qualified sales is not a defensible median: leave the
+    // existing value alone and let the collector pick comps by hand.
+    if (validSalePrices.length < 2 && validManualCount === 0) return null;
     if (validSalePrices.length === 0) return null;
     const mid = Math.floor(validSalePrices.length / 2);
     return validSalePrices.length % 2
@@ -400,6 +408,7 @@ async function applyValuation(
       : (validSalePrices[mid - 1] + validSalePrices[mid]) / 2;
   })();
   const currentValue = medianSaleValue ?? valuation.current_value;
+  void selection.note;
   // A value of 0 means every pricing source failed (the AI fallback's
   // last-resort failure value) — not a real $0 valuation. Treat it as a
   // failed attempt rather than a fresh, successful one: don't overwrite the
@@ -590,7 +599,7 @@ async function recomputeCardValue(
     .eq("id", cardId)
     .maybeSingle();
   if (!card) throw new Error("Card not found");
-  const { getParallelNameForCard, verifyCompTitle, looseCompMatch } = await import("./cardsight.server");
+  const { getParallelNameForCard, selectValuationComps } = await import("./cardsight.server");
   const selectedParallelName = card.cardsight_card_id
     ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
     : null;
@@ -602,16 +611,18 @@ async function recomputeCardValue(
   const usableRows = (rows ?? []).filter(
     (r) => Number.isFinite(Number(r.price)) && Number(r.price) > 0 && !NON_SINGLE_RE_LOCAL.test(String(r.title ?? "")),
   );
-  // Manual picks always count. Otherwise prefer strict identity matches and only
-  // fall back to loose player/year matches so a card is never left unvalued.
-  const manualRows = usableRows.filter((r) => r.is_manual);
-  const autoRows = usableRows.filter((r) => !r.is_manual);
-  const strictAuto = autoRows.filter((r) => verifyCompTitle(String(r.title ?? ""), cardLookup).verified);
-  const chosenAuto =
-    strictAuto.length > 0 ? strictAuto : autoRows.filter((r) => looseCompMatch(String(r.title ?? ""), cardLookup));
-  const prices = [...manualRows, ...(manualRows.length > 0 ? strictAuto : chosenAuto)]
-    .map((r) => Number(r.price))
-    .sort((a, b) => a - b);
+  // Manual picks always count; automatic rows only when they verify as an
+  // exact/strong match. Approximate player-year sales never set the value.
+  const selection = selectValuationComps(
+    usableRows.map((r) => ({
+      title: String(r.title ?? ""),
+      price: Number(r.price),
+      sold_at: null,
+      is_manual: Boolean(r.is_manual),
+    })),
+    cardLookup,
+  );
+  const prices = selection.comps.map((r) => Number(r.price)).sort((a, b) => a - b);
   if (prices.length === 0) {
     await supabase
       .from("cards")
@@ -647,11 +658,14 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw error;
     if (!card) throw new Error("Card not found");
-    const { getParallelNameForCard, verifyCompTitle } = await import("./cardsight.server");
+    const { getParallelNameForCard, scoreCompTitle } = await import("./cardsight.server");
     const selectedParallelName = card.cardsight_card_id
       ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
       : null;
     const cardLookup = { ...card, selected_parallel_name: selectedParallelName };
+    // Manage Comps shows verified matches plus weak "needs review" suggestions;
+    // only outright rejects (lots, wrong player/number/parallel) are hidden.
+    const candidateLevel = (title: string | null | undefined) => scoreCompTitle(title, cardLookup).level;
 
     const candidates: Array<{
       title: string | null;
@@ -660,6 +674,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       sold_at: string | null;
       source: string;
       url: string | null;
+      level: "exact" | "strong" | "weak";
     }> = [];
 
     // A saved catalog link is authoritative — it was either resolved and
@@ -706,7 +721,8 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
 
         for (const r of rows) {
           const price = Number(r.price);
-          if (!Number.isFinite(price) || price <= 0 || !verifyCompTitle(r.title, cardLookup).verified) continue;
+          const level = candidateLevel(r.title);
+          if (!Number.isFinite(price) || price <= 0 || level === "reject") continue;
           candidates.push({
             title: r.title ?? null,
             image_url: null,
@@ -714,6 +730,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
             sold_at: r.date ?? null,
             source: r.source || "eBay sold",
             url: r.url ?? null,
+            level,
           });
         }
       } catch (err) {
@@ -761,7 +778,8 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       .eq("user_id", userId);
     for (const r of pt ?? []) {
       const price = Number(r.price);
-      if (!Number.isFinite(price) || price <= 0 || !verifyCompTitle(r.title, cardLookup).verified) continue;
+      const level = candidateLevel(r.title);
+      if (!Number.isFinite(price) || price <= 0 || level === "reject") continue;
       candidates.push({
         title: r.title ?? null,
         image_url: r.image_url ?? null,
@@ -769,6 +787,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
         sold_at: r.sold_at ?? null,
         source: "eBay sold",
         url: r.url ?? null,
+        level,
       });
     }
 
@@ -783,7 +802,9 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       }
     }
     const deduped = Array.from(dedupedByKey.values());
+    const levelRank = { exact: 0, strong: 1, weak: 2 } as const;
     deduped.sort((a, b) => {
+      if (levelRank[a.level] !== levelRank[b.level]) return levelRank[a.level] - levelRank[b.level];
       const ta = a.sold_at ? new Date(a.sold_at).getTime() : 0;
       const tb = b.sold_at ? new Date(b.sold_at).getTime() : 0;
       return tb - ta;
@@ -840,15 +861,14 @@ export const addManualComps = createServerFn({ method: "POST" })
       .maybeSingle();
     if (cardError) throw cardError;
     if (!card) throw new Error("Card not found");
-    const { getParallelNameForCard, verifyCompTitle } = await import("./cardsight.server");
-    const selectedParallelName = card.cardsight_card_id
-      ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
-      : null;
-    const cardLookup = { ...card, selected_parallel_name: selectedParallelName };
-    const verifiedComps = data.comps.filter((comp) => verifyCompTitle(comp.title, cardLookup).verified);
-    if (verifiedComps.length !== data.comps.length) {
-      throw new Error("A selected sale does not show this card's exact full card number.");
+    const { compAcceptableForManual } = await import("./cardsight.server");
+    // The collector is the filter here. Only refuse rows that provably are not
+    // this card: multi-card listings and a stated, conflicting card number.
+    for (const comp of data.comps) {
+      const check = compAcceptableForManual(comp.title, { card_number: card.card_number });
+      if (!check.ok) throw new Error(check.reason ?? "That listing can't be used as a comp.");
     }
+    const verifiedComps = data.comps;
     if (verifiedComps.length > 0) {
       const { error } = await supabase.from("card_sales").insert(
         verifiedComps.map((c) => ({
