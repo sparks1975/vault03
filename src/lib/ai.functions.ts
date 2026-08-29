@@ -949,166 +949,111 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     const ebaySoldPass = async () => {
       if (usedCardsight || !data.card_id) return;
       try {
-        const { verifyCompTitle, looseCompMatch } = await import("./cardsight.server");
-        let { data: cachedRows, error } = await context.supabase
-          .from("pt130_comps")
-          .select("title, price, sold_at, url, scraped_at")
-          .eq("card_id", data.card_id)
-          .order("sold_at", { ascending: false });
-        if (error) throw error;
+        const { selectValuationComps, scoreCompTitle } = await import("./cardsight.server");
+        const {
+          buildPt130SearchTiers,
+          refreshPt130ForCard,
+        } = await import("./pt130.server");
 
-        const newestScrape = (cachedRows ?? []).reduce((latest, row) => {
-          const time = new Date(row.scraped_at).getTime();
-          return Number.isFinite(time) && time > latest ? time : latest;
-        }, 0);
-        const cacheFresh =
-          !data.force_refresh && newestScrape > 0 && Date.now() - newestScrape < 24 * 60 * 60 * 1000;
+        const compLookup = {
+          player_name: valuationLookup.player_name,
+          year: valuationLookup.year,
+          set_name: valuationLookup.set_name,
+          card_number: valuationLookup.card_number,
+          selected_parallel_name: selectedParallelName,
+          is_autograph: valuationLookup.is_autograph,
+          serial_number: data.serial_number,
+          is_first_bowman: valuationLookup.is_first_bowman,
+          grader: data.grader,
+          grade: data.grade,
+        };
 
-        if (!cacheFresh) {
-          const { buildPt130Descriptors, refreshPt130ForCard } = await import("./pt130.server");
-          const descriptors = buildPt130Descriptors({
-            player_name: valuationLookup.player_name,
-            year: valuationLookup.year,
-            set_name: valuationLookup.set_name,
-            card_number: valuationLookup.card_number,
-            is_autograph: valuationLookup.is_autograph,
-            selected_parallel_name: selectedParallelName,
-            serial_number: data.serial_number,
-            grader: data.grader,
-            grade: data.grade,
-          });
-          if (descriptors.length > 0) {
-            await refreshPt130ForCard(context.supabase as never, {
-              card_id: data.card_id,
-              user_id: context.userId,
-              descriptor: descriptors,
-              card_number: valuationLookup.card_number,
-            });
-            const refreshed = await context.supabase
-              .from("pt130_comps")
-              .select("title, price, sold_at, url, scraped_at")
-              .eq("card_id", data.card_id)
-              .order("sold_at", { ascending: false });
-            if (refreshed.error) throw refreshed.error;
-            cachedRows = refreshed.data;
-          }
-        }
-
-        type CompRow = { title: string | null; price: number | string; sold_at: string | null; url: string | null };
-        const usable = (rows: CompRow[] | null | undefined) => {
+        type CompRow = { title: string | null; price: number | string; sold_at: string | null; url: string | null; scraped_at?: string };
+        const loadRows = async (): Promise<CompRow[]> => {
+          const r = await context.supabase
+            .from("pt130_comps")
+            .select("title, price, sold_at, url, scraped_at")
+            .eq("card_id", data.card_id as string)
+            .order("sold_at", { ascending: false });
+          if (r.error) throw r.error;
           const seen = new Set<string>();
-          return (rows ?? []).filter((row) => {
+          return (r.data ?? []).filter((row) => {
             const price = Number(row.price);
             if (!Number.isFinite(price) || price <= 0) return false;
             const key = [row.url, row.title, row.sold_at, price].map((v) => String(v ?? "")).join("|");
             if (seen.has(key)) return false;
             seen.add(key);
             return true;
-          });
+          }) as CompRow[];
         };
-        const passes = (rows: CompRow[], relaxedSetMatch: boolean) =>
-          rows.filter((row) =>
-            verifyCompTitle(row.title ?? "", {
-              player_name: valuationLookup.player_name,
-              year: valuationLookup.year,
-              set_name: valuationLookup.set_name,
-              card_number: valuationLookup.card_number,
-              selected_parallel_name: selectedParallelName,
-              is_autograph: valuationLookup.is_autograph,
-              serial_number: data.serial_number,
-              is_first_bowman: valuationLookup.is_first_bowman,
-              relaxedSetMatch,
-            }).verified,
-          );
-        // Strict first. If nothing survives, retry once allowing a looser set
-        // match — the listing still has to match player, year, card number,
-        // autograph, serial and parallel, so this recovers real comps whose
-        // seller wrote the set name differently instead of falling to AI.
-        let usableRows = usable(cachedRows as CompRow[] | null);
-        let matchedRows = passes(usableRows, false);
-        if (matchedRows.length === 0) matchedRows = passes(usableRows, true);
 
-        // Still nothing? Many sellers omit the card number entirely, so the
-        // narrow keyword never surfaced the real sales. Run one broader search
-        // (same card, no card number in the query) and append those results.
-        if (matchedRows.length === 0 && valuationLookup.card_number && !cacheFresh) {
-          const { buildPt130Descriptor, refreshPt130ForCard } = await import("./pt130.server");
-          const broad = buildPt130Descriptor(
-            {
-              player_name: valuationLookup.player_name,
-              year: valuationLookup.year,
-              set_name: valuationLookup.set_name,
-              card_number: valuationLookup.card_number,
-              is_autograph: valuationLookup.is_autograph,
-              selected_parallel_name: selectedParallelName,
-              serial_number: data.serial_number,
-              grader: data.grader,
-              grade: data.grade,
-            },
-            { includeCardNumber: false },
-          );
-          if (broad) {
-            await refreshPt130ForCard(context.supabase as never, {
-              card_id: data.card_id,
-              user_id: context.userId,
-              descriptor: [broad],
-              card_number: valuationLookup.card_number,
-              append: true,
-            });
-            const widened = await context.supabase
-              .from("pt130_comps")
-              .select("title, price, sold_at, url, scraped_at")
-              .eq("card_id", data.card_id)
-              .order("sold_at", { ascending: false });
-            if (!widened.error) {
-              cachedRows = widened.data;
-              usableRows = usable(cachedRows as CompRow[] | null);
-              matchedRows = passes(usableRows, false);
-              if (matchedRows.length === 0) matchedRows = passes(usableRows, true);
-            }
-          }
-        }
+        let rows = await loadRows();
+        const newestScrape = rows.reduce((latest, row) => {
+          const time = new Date(row.scraped_at ?? 0).getTime();
+          return Number.isFinite(time) && time > latest ? time : latest;
+        }, 0);
+        const cacheFresh =
+          !data.force_refresh && newestScrape > 0 && Date.now() - newestScrape < 24 * 60 * 60 * 1000;
 
+        const tiers = buildPt130SearchTiers({
+          player_name: valuationLookup.player_name,
+          year: valuationLookup.year,
+          set_name: valuationLookup.set_name,
+          card_number: valuationLookup.card_number,
+          is_autograph: valuationLookup.is_autograph,
+          selected_parallel_name: selectedParallelName,
+          serial_number: data.serial_number,
+          grader: data.grader,
+          grade: data.grade,
+        });
+        const runSearch = async (descriptor: string, append: boolean) => {
+          await refreshPt130ForCard(context.supabase as never, {
+            card_id: data.card_id as string,
+            user_id: context.userId,
+            descriptor: [descriptor],
+            card_number: valuationLookup.card_number,
+            append,
+          });
+          rows = await loadRows();
+        };
+        const qualifiedCount = () =>
+          rows.filter((row) => {
+            const level = scoreCompTitle(row.title ?? "", compLookup).level;
+            return level === "exact" || level === "strong";
+          }).length;
 
-        // Nothing passed identity verification. An approximate value the
-        // collector can refine in Manage Comps is far more useful than an empty
-        // card, so fall back to loose player/year matches and say so.
-        let approximate = false;
-        if (matchedRows.length === 0 && usableRows.length > 0) {
-          const loose = usableRows.filter((row) =>
-            looseCompMatch(row.title ?? "", {
-              player_name: valuationLookup.player_name,
-              year: valuationLookup.year,
-            }),
-          );
-          if (loose.length > 0) {
-            matchedRows = loose;
-            approximate = true;
-          }
-        }
+        // Tier 1: exact product + card number. Only re-scraped when the cache is stale.
+        if (!cacheFresh && tiers.primary) await runSearch(tiers.primary, false);
+        // Tiers 2 and 3 run whenever the verified pool is thin — even on a fresh
+        // cache, because a fresh cache full of unusable rows is still no comps.
+        if (qualifiedCount() < 8 && tiers.brand) await runSearch(tiers.brand, true);
+        if (qualifiedCount() < 5 && tiers.noNumber) await runSearch(tiers.noNumber, true);
 
-        const cachedSales = matchedRows.map((row) => ({
-          sold_at: row.sold_at ?? null,
-          grade: data.grader && data.grade ? `${data.grader} ${data.grade}` : null,
-          price: Number(row.price),
-          source: "eBay sold",
-          url: row.url ?? null,
-          title: row.title ?? null,
-        }));
+        const selection = selectValuationComps(
+          rows.map((row) => ({
+            title: row.title ?? null,
+            price: Number(row.price),
+            sold_at: row.sold_at ?? null,
+            url: row.url ?? null,
+          })),
+          compLookup,
+        );
 
-        if (cachedSales.length > 0) {
-          sales = cachedSales;
-          const saleMedian = await medianValueFromSales(sales);
-          if (saleMedian != null) {
-            currentValue = saleMedian;
-            usedCardsight = true;
-            compsNote = approximate
-              ? "Approximate value from close sales for this player — open Manage Comps to refine the exact matches."
-              : null;
-          }
-        } else if (usableRows.length > 0) {
+        if (selection.value != null && selection.comps.length >= 2) {
+          sales = selection.comps.map((row) => ({
+            sold_at: row.sold_at ?? null,
+            grade: data.grader && data.grade ? `${data.grader} ${data.grade}` : null,
+            price: Number(row.price),
+            source: "eBay sold",
+            url: row.url ?? null,
+            title: row.title ?? null,
+          }));
+          currentValue = selection.value;
+          usedCardsight = true;
+          compsNote = selection.note;
+        } else if (rows.length > 0) {
           compsNote =
-            "Found sold listings but none matched this exact card — open Manage Comps to pick the right ones.";
+            "Found sold listings but fewer than two matched this exact card — open Manage Comps to pick the right ones.";
         }
         pricingSourceResponded = true;
 
@@ -1124,14 +1069,8 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     if (!usedCardsight) await cardsightPass();
 
 
-    if (!usedCardsight) {
-      const saleMedian = await medianValueFromSales(sales);
-      if (saleMedian != null) {
-        currentValue = saleMedian;
-        usedCardsight = true;
-        compsNote = null;
-      }
-    }
+    // No generic fallback median here: `sales` is only ever populated with
+    // verified exact/strong comps, and anything less must never set a value.
 
     const fallbackHistory = (baseValue: number) => {
       const base = Number.isFinite(baseValue) && baseValue > 0 ? baseValue : 0;
