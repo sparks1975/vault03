@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as cardsight from "./cardsight.server";
 import { scoreCompTitle, selectValuationComps } from "./cardsight.server";
+import { ebaySoldSearchUrl } from "./pt130.server";
 
 const ohtani = {
   player_name: "Shohei Ohtani",
@@ -146,5 +147,62 @@ describe("valuation selection", () => {
 describe("valuation never uses player-only matching", () => {
   it("no longer exports looseCompMatch", () => {
     expect("looseCompMatch" in cardsight).toBe(false);
+  });
+});
+
+const yamamotoBbm = {
+  player_name: "Yoshinobu Yamamoto",
+  year: 2021,
+  set_name: "BBM 1st Version",
+  card_number: "140",
+};
+
+describe("2021 BBM 1st Version #140 Yoshinobu Yamamoto", () => {
+  it("keeps facsimile-auto as the standard printed card", () => {
+    expect(
+      scoreCompTitle(
+        "YOSHINOBU YAMAMOTO 2021 BBM 1ST VERSION #140 FACSIMILE AUTO PRE DODGERS, MVP!",
+        yamamotoBbm,
+      ).level,
+    ).toBe("exact");
+  });
+
+  it("keeps print-auto as the standard printed card", () => {
+    expect(
+      scoreCompTitle(
+        "Yoshinobu Yamamoto 2021 BBM 1st Version Print Auto #140 Card LA Dodgers",
+        yamamotoBbm,
+      ).level,
+    ).toBe("exact");
+  });
+
+  it("keeps the plain RC title", () => {
+    expect(scoreCompTitle("Yoshinobu Yamamoto 2021 BBM 1st Version #140 RC", yamamotoBbm).level).toBe(
+      "exact",
+    );
+  });
+
+  it("rejects a real on-card auto for a non-auto vault card", () => {
+    expect(
+      scoreCompTitle("Yoshinobu Yamamoto 2021 BBM 1st Version #140 on card auto", yamamotoBbm).level,
+    ).toBe("reject");
+  });
+
+  it("rejects 2nd Version of the same number", () => {
+    expect(scoreCompTitle("Yoshinobu Yamamoto 2021 BBM 2nd Version #140", yamamotoBbm).level).toBe(
+      "reject",
+    );
+  });
+});
+
+describe("eBay sold search URLs", () => {
+  it("does not lock Japanese brands to the US Baseball Cards category", () => {
+    const url = ebaySoldSearchUrl("2021 BBM 1st Version #140 Yoshinobu Yamamoto");
+    expect(url).toContain("LH_Sold=1");
+    expect(url).not.toContain("_sacat=");
+  });
+
+  it("keeps the US Baseball Cards category for Topps", () => {
+    expect(ebaySoldSearchUrl("2024 Topps #503 Shohei Ohtani")).toContain("_sacat=26376");
   });
 });

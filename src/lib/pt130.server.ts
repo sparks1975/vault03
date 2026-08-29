@@ -13,6 +13,17 @@ const GATEWAY_URL = "https://connector-gateway.lovable.dev/apify";
 const ACTOR_ID = "memo23~ebay-search-scraper-ppe";
 const RESULTS_PER_SEARCH = 40; // 15 was starving the comp pool before verification
 const BASEBALL_CARDS_CATEGORY = "26376"; // eBay Baseball Cards — filters boxes/lots at the source
+// Japanese brands are often listed outside the US Baseball Cards category, so
+// locking _sacat=26376 hides the sold rows that actually exist.
+const SKIP_EBAY_CATEGORY_RE = /\b(bbm|epoch|calbee)\b/i;
+
+export function ebaySoldSearchUrl(keyword: string): string {
+  const base =
+    `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(keyword)}` +
+    `&LH_Sold=1&LH_Complete=1&_sop=13`;
+  if (SKIP_EBAY_CATEGORY_RE.test(keyword)) return base;
+  return `${base}&_sacat=${BASEBALL_CARDS_CATEGORY}`;
+}
 
 export type Pt130Sale = {
   title: string | null;
@@ -163,9 +174,7 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
     // Sold search URLs (LH_Sold/LH_Complete) scoped to Baseball Cards, sorted
     // by most recently ended.
     startUrls: keywords.map((k) => ({
-      url:
-        `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(k)}` +
-        `&_sacat=${BASEBALL_CARDS_CATEGORY}&LH_Sold=1&LH_Complete=1&_sop=13`,
+      url: ebaySoldSearchUrl(k),
     })),
     mode: "sold",
     detailedItems: false, // sold rows come from search results; avoids 3x request cost

@@ -584,6 +584,27 @@ function titleMentionsProduct(
   return false;
 }
 
+// "BBM 2nd Version" must never price "BBM 1st Version". Same brand + number is
+// not enough when the title names a different approved product.
+function titleNamesConflictingProduct(
+  titleNorm: string,
+  setName: string | null | undefined,
+): boolean {
+  if (titleMentionsProduct(titleNorm, setName, false)) return false;
+  const ours = toApprovedCardSet(setName);
+  const ourBrand = cardSetBrand(ours ?? setName);
+  if (!ours || !ourBrand) return false;
+  const haystack = dropAnd(titleNorm);
+  for (const [otherSet, aliases] of Object.entries(SET_TITLE_ALIASES)) {
+    if (otherSet === ours) continue;
+    if (cardSetBrand(otherSet) !== ourBrand) continue;
+    const otherProduct = dropAnd(normalizeText(otherSet.replace(/\s*&\s*/g, " and ")));
+    if (otherProduct && titleHasPhrase(haystack, otherProduct)) return true;
+    if (aliases.some((a) => titleHasPhrase(haystack, dropAnd(normalizeText(a))))) return true;
+  }
+  return false;
+}
+
 function strictSetTitleMatches(title: string, setName: string | null | undefined): boolean {
   const titleNorm = normalizeText(title);
   return titleMentionsProduct(titleNorm, setName, true);
@@ -659,6 +680,10 @@ export function scoreCompTitle(
     return { level: "reject", reasons: ["year mismatch"] };
   }
 
+  if (titleNamesConflictingProduct(titleNorm, lookup.set_name)) {
+    return { level: "reject", reasons: ["conflicting set/product"] };
+  }
+
   const wantedNumber = normalizeCardNumber(lookup.card_number);
   let explicitNumbers: string[] = [];
   let numberStated = false;
@@ -675,7 +700,7 @@ export function scoreCompTitle(
     }
   }
 
-  const isAutoTitle = AUTO_RE.test(rawTitle);
+  const isAutoTitle = titleHasSignedAutograph(rawTitle);
   const exactNumberedAutoInsert = Boolean(
     isAutoTitle && wantedNumber && numberStated && cardNumberImpliesAutograph(lookup.card_number),
   );
@@ -816,6 +841,19 @@ const WAVE_FAMILY_RE = /\b[a-z]+\s+wave\b/i;
 const FIRST_BOWMAN_RE = /\b(1st\s+bowman|first\s+bowman)\b/i;
 const SERIAL_RE = /(^|[^\w])(#?\s*\d+\s*\/\s*\d+|\/\s*\d{1,4})(?=$|[^\w])/i;
 const AUTO_RE = /\b(auto|autograph|autographs|signed|signature|signatures)\b/i;
+// BBM / NPB sellers write "facsimile auto" or "print auto" for a printed
+// signature on the standard card — not ink. Strip those before treating
+// leftover "auto" as a signed autograph.
+const PRINTED_AUTO_RE =
+  /\b(facsimile(\s+auto(graph)?s?)?|print(ed)?\s+auto(graph)?s?|stamp(ed)?\s+auto(graph)?s?|printed\s+signature|facsimile\s+signature)\b/gi;
+
+function stripPrintedAuto(title: string): string {
+  return title.replace(PRINTED_AUTO_RE, " ").replace(/\s+/g, " ").trim();
+}
+
+function titleHasSignedAutograph(title: string): boolean {
+  return AUTO_RE.test(stripPrintedAuto(title));
+}
 // Reject non-single-card listings: breaks, sealed wax, cases, packs, lots, sets.
 // This stays separate from card-identity matching so we can block obvious junk
 // without making real single-card comps disappear.
@@ -877,7 +915,7 @@ export function isVariantTitle(
   if (!opts.is_first_bowman && FIRST_BOWMAN_RE.test(variantTitle)) return true;
   if (!parallelOptIn && !serialIdentifiesParallel && SERIAL_RE.test(variantTitle)) return true;
 
-  if (!opts.is_autograph && AUTO_RE.test(variantTitle)) return true;
+  if (!opts.is_autograph && titleHasSignedAutograph(variantTitle)) return true;
   return false;
 }
 
@@ -1344,21 +1382,6 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
   }
   if (resolved) return resolved;
 
-  if (candidates.length > 0) {
-    // Only when nothing in the catalog names the recorded set do we fall back
-    // to brand-level agreement, then to a year-agnostic pass.
-    const brandOnly = candidates.filter((c) => cardMatchesLookup(c, merged, { requireSet: false }));
-    if (brandOnly.length > 0) {
-      return brandOnly.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
-    }
-    const yearAgnosticMatched = year
-      ? candidates.filter((c) => cardMatchesLookup(c, { ...merged, year: null }, { requireSet: false }))
-      : [];
-    if (yearAgnosticMatched.length > 0) {
-      return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
-    }
-  }
-
 
 
   const searchQueries = new Set<string>();
@@ -1401,19 +1424,9 @@ async function findCatalogCardUncached(lookup: CardLookup): Promise<CatalogCard 
       }
       const matched = detailed.filter((c) => cardMatchesLookup(c, merged));
       if (matched.length > 0) return matched.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
-      const brandOnly = detailed.filter((c) => cardMatchesLookup(c, merged, { requireSet: false }));
-      if (brandOnly.length > 0) return brandOnly.sort((a, b) => scoreCard(b, merged) - scoreCard(a, merged))[0];
     }
-
-    const yearAgnosticMatched = year
-      ? detailed.filter((c) => cardMatchesLookup(c, { ...merged, year: null }, { requireSet: false }))
-      : [];
-
-    if (yearAgnosticMatched.length > 0) {
-      return yearAgnosticMatched.sort((a, b) => scoreCard(b, { ...merged, year: null }) - scoreCard(a, { ...merged, year: null }))[0];
-    }
-    // Never accept an unverified top result merely because it was returned by
-    // search; that both wastes a request and risks saving the wrong card ID.
+    // Never accept brand-only or year-agnostic catalog hits. Those are how
+    // Manage Comps ends up showing a different BBM product or year.
   }
 
 

@@ -84,6 +84,12 @@ function hasOAuthReturnParams() {
 // Mobile browsers block/partition storage for embedded frames (the editor
 // preview), so an OAuth session can never land there. Detect it and send the
 // user to a real tab instead of leaving them stuck on this screen.
+function isLocalDev() {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1";
+}
+
 function isBlockedEmbeddedContext() {
   if (typeof window === "undefined") return false;
   let embedded = false;
@@ -223,6 +229,17 @@ function AuthPage() {
   async function handleOAuth(provider: "google" | "apple") {
     setLoading(provider);
     try {
+      // Lovable Cloud Auth's broker (/~oauth/initiate) only exists on the
+      // hosted app. Locally, send the user through Supabase OAuth instead.
+      if (isLocalDev()) {
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: { redirectTo: window.location.origin + "/auth" },
+        });
+        if (error) throw error;
+        return;
+      }
+
       const result = await lovable.auth.signInWithOAuth(provider, {
         redirect_uri: window.location.origin + "/auth",
       });

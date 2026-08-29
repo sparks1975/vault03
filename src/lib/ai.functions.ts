@@ -1016,8 +1016,10 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             return level === "exact" || level === "strong";
           }).length;
 
-        // Tier 1: exact product + card number. Only re-scraped when the cache is stale.
-        if (!cacheFresh && tiers.primary) await runSearch(tiers.primary, false);
+        // Tier 1: exact product + card number. Re-scrape when the cache is stale
+        // OR when nothing in the cache verifies — a fresh cache of unusable
+        // rows (wrong category, printed-auto rejects) is still no comps.
+        if (tiers.primary && (!cacheFresh || qualifiedCount() === 0)) await runSearch(tiers.primary, false);
         // Tiers 2 and 3 run whenever the verified pool is thin — even on a fresh
         // cache, because a fresh cache full of unusable rows is still no comps.
         if (qualifiedCount() < 8 && tiers.brand) await runSearch(tiers.brand, true);
