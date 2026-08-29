@@ -96,9 +96,8 @@ export function buildPt130Descriptor(fields: {
   // Use the approved product name (Bowman Chrome) instead.
   const setLabel =
     opts.setLabel === "set"
-      ? toApprovedCardSet(fields.set_name) ??
-        (fields.set_name ?? "").replace(/\s+/g, " ").trim() ||
-        cardSetBrand(fields.set_name)
+      ? (toApprovedCardSet(fields.set_name) ??
+          ((fields.set_name ?? "").replace(/\s+/g, " ").trim() || cardSetBrand(fields.set_name)))
       : cardSetBrand(fields.set_name);
   const parts = [
     fields.year ? String(fields.year) : null,
