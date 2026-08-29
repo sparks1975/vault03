@@ -658,7 +658,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw error;
     if (!card) throw new Error("Card not found");
-    const { getParallelNameForCard, scoreCompTitle } = await import("./cardsight.server");
+    const { getParallelNameForCard, scoreCompTitle, isNonSingleCardListing } = await import("./cardsight.server");
     const selectedParallelName = card.cardsight_card_id
       ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
       : null;
@@ -756,27 +756,34 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       return Number.isFinite(time) && time > latest ? time : latest;
     }, 0);
     const cacheFresh = newestScrape > 0 && Date.now() - newestScrape < 24 * 60 * 60 * 1000;
-    if (!hasVerifiedEbay || missingPhoto) {
-      if (!hasVerifiedEbay || !cacheFresh) {
-        try {
-          const { buildPt130Descriptors, refreshPt130ForCard } = await import("./pt130.server");
-          await refreshPt130ForCard(supabase, {
-            card_id: data.card_id,
-            user_id: userId,
-            descriptor: buildPt130Descriptors({
-              year: card.year,
-              set_name: card.set_name,
-              player_name: card.player_name,
-              card_number: card.card_number,
-              is_autograph: card.is_autograph,
-              serial_number: card.serial_number,
-              selected_parallel_name: selectedParallelName,
-            }),
+    let ebayNote: string | null = null;
+    // If nothing verifies, scrape now. A fresh empty cache is why Manage Comps
+    // said "No candidates returned" after the last failed pull.
+    if (!hasVerifiedEbay || (missingPhoto && !cacheFresh)) {
+      try {
+        const { buildPt130Descriptors, refreshPt130ForCard } = await import("./pt130.server");
+        const result = await refreshPt130ForCard(supabase, {
+          card_id: data.card_id,
+          user_id: userId,
+          descriptor: buildPt130Descriptors({
+            year: card.year,
+            set_name: card.set_name,
+            player_name: card.player_name,
             card_number: card.card_number,
-          });
-        } catch (err) {
-          console.error("fetchCompCandidates eBay refresh failed", err);
+            is_autograph: card.is_autograph,
+            serial_number: card.serial_number,
+            selected_parallel_name: selectedParallelName,
+          }),
+          card_number: card.card_number,
+        });
+        if (result.stored === 0) {
+          ebayNote = result.scraped === 0
+            ? "eBay sold scrape returned no listings. Check the Apify actor / API keys."
+            : "eBay returned listings but none could be stored.";
         }
+      } catch (err) {
+        console.error("fetchCompCandidates eBay refresh failed", err);
+        ebayNote = err instanceof Error ? err.message : "eBay sold scrape failed.";
       }
     }
 
@@ -788,8 +795,9 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       .eq("user_id", userId);
     for (const r of pt ?? []) {
       const price = Number(r.price);
-      const level = candidateLevel(r.title);
-      if (!Number.isFinite(price) || price <= 0 || level === "reject") continue;
+      if (!Number.isFinite(price) || price <= 0) continue;
+      if (isNonSingleCardListing(r.title)) continue;
+      const scored = candidateLevel(r.title);
       candidates.push({
         title: r.title ?? null,
         image_url: r.image_url ?? null,
@@ -797,7 +805,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
         sold_at: r.sold_at ?? null,
         source: "eBay sold",
         url: r.url ?? null,
-        level,
+        level: scored === "reject" ? "weak" : scored,
       });
     }
 
@@ -838,7 +846,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       return { ...sale, image_url: match?.image_url ?? null };
     });
 
-    return { candidates: deduped, selected: selectedWithImages };
+    return { candidates: deduped, selected: selectedWithImages, note: ebayNote };
   });
 
 export const addManualComps = createServerFn({ method: "POST" })

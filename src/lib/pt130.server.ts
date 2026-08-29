@@ -43,14 +43,93 @@ export type Pt130Sale = {
 
 type ApifyEbayItem = {
   title?: string | null;
-  price?: string | null;
+  name?: string | null;
+  itemTitle?: string | null;
+  price?: string | number | { value?: number; amount?: number } | null;
   priceValue?: number | string | null;
   currency?: string | null;
-  soldDate?: string | null; // e.g. "Sold  Aug 18, 2026"
+  soldDate?: string | null;
+  date?: string | null;
   sold?: boolean | null;
   url?: string | null;
+  itemUrl?: string | null;
   image?: string | null;
+  imageUrl?: string | null;
+  basic_info?: ApifyEbayItem;
 };
+
+function flattenApifyItem(raw: unknown): ApifyEbayItem {
+  if (!raw || typeof raw !== "object") return {};
+  const item = raw as ApifyEbayItem;
+  if (item.basic_info && typeof item.basic_info === "object") return { ...item.basic_info, ...item };
+  return item;
+}
+
+function apifyTitle(item: ApifyEbayItem): string | null {
+  const title = item.title ?? item.name ?? item.itemTitle;
+  return typeof title === "string" && title.trim() ? title.trim() : null;
+}
+
+function apifyPrice(item: ApifyEbayItem): number {
+  if (typeof item.priceValue === "number" && Number.isFinite(item.priceValue)) return item.priceValue;
+  if (typeof item.price === "number" && Number.isFinite(item.price)) return item.price;
+  if (item.price && typeof item.price === "object") {
+    const nested = Number(item.price.value ?? item.price.amount);
+    if (Number.isFinite(nested) && nested > 0) return nested;
+  }
+  return Number(String(item.priceValue ?? item.price ?? "").replace(/[^0-9.]/g, ""));
+}
+
+function apifySoldAt(item: ApifyEbayItem): string | null {
+  const raw = [item.soldDate, item.date].find((v) => typeof v === "string" && v.trim());
+  if (!raw) return null;
+  return toIsoDate(String(raw).replace(/^sold\s*/i, "").trim());
+}
+
+/** Lovable's Apify gateway wraps payloads as { data }. Apify itself returns a raw array. */
+export function apifyDatasetItems(payload: unknown): unknown[] {
+  if (typeof payload === "string") {
+    try {
+      return apifyDatasetItems(JSON.parse(payload));
+    } catch {
+      return [];
+    }
+  }
+  if (Array.isArray(payload)) return payload;
+  if (!payload || typeof payload !== "object") return [];
+  const body = payload as { data?: unknown; items?: unknown; results?: unknown };
+  if (Array.isArray(body.data)) return body.data;
+  if (Array.isArray(body.items)) return body.items;
+  if (Array.isArray(body.results)) return body.results;
+  if (body.data != null) return apifyDatasetItems(body.data);
+  if (body.items != null) return apifyDatasetItems(body.items);
+  return [];
+}
+
+export function parseApifySoldListings(payload: unknown): Pt130Sale[] {
+  const items = apifyDatasetItems(payload);
+  const out: Pt130Sale[] = [];
+  for (const raw of items) {
+    const item = flattenApifyItem(raw);
+    const currency = String(item.currency ?? "USD").toUpperCase();
+    if (currency && currency !== "USD") continue;
+    const title = apifyTitle(item);
+    const price = apifyPrice(item);
+    if (!Number.isFinite(price) || price <= 0) continue;
+    const soldIso = apifySoldAt(item);
+    if (!soldIso && item.sold === false) continue;
+    if (soldIso && new Date(soldIso).getTime() > Date.now() + 24 * 60 * 60 * 1000) continue;
+    out.push({
+      title,
+      image_url: typeof item.image === "string" ? item.image : typeof item.imageUrl === "string" ? item.imageUrl : null,
+      price,
+      sold_at: soldIso ?? new Date().toISOString().slice(0, 10),
+      listing_type: normalizeListingType(null, null),
+      url: (typeof item.url === "string" && item.url) || (typeof item.itemUrl === "string" && item.itemUrl) || null,
+    });
+  }
+  return out;
+}
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -244,40 +323,21 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
     throw new Error(`Apify eBay sold listings failed [${itemsRes.status}]: ${text}`);
   }
 
-  const items = (await itemsRes.json()) as ApifyEbayItem[];
-  if (!Array.isArray(items)) return [];
-
-  const out: Pt130Sale[] = [];
-  const dropped = { currency: 0, notSold: 0, price: 0, date: 0 };
-  for (const item of items) {
-    // Only USD sales — mixing currencies would corrupt the valuation math.
-    if (item.currency && item.currency !== "USD") { dropped.currency++; continue; }
-    // A parseable sold date is itself proof of a completed sale: the actor's
-    // `sold` flag is missing on some rows even for real sales.
-    const soldRaw = item.soldDate?.replace(/^sold\s*/i, "").trim() || null;
-    const soldIso = toIsoDate(soldRaw);
-    if (!soldIso && item.sold !== true) { dropped.notSold++; continue; }
-    if (!soldIso) { dropped.date++; continue; }
-    const price = Number(item.priceValue ?? String(item.price ?? "").replace(/[^0-9.]/g, ""));
-    if (!Number.isFinite(price) || price <= 0) { dropped.price++; continue; }
-    if (new Date(soldRaw as string).getTime() > Date.now() + 24 * 60 * 60 * 1000) { dropped.date++; continue; }
-
-    out.push({
-      title: item.title?.trim() || null,
-      image_url: item.image || null,
-      price,
-      sold_at: soldIso,
-      // The sold search results do not expose buying format; the valuation math
-      // treats "other" the same as any single sale.
-      listing_type: normalizeListingType(null, null),
-      url: item.url || null,
+  const payload = await itemsRes.json();
+  const items = apifyDatasetItems(payload);
+  const out = parseApifySoldListings(payload);
+  console.log(`[ebay] keywords=${keywords.length} raw=${items.length} kept=${out.length}`);
+  if (out.length === 0) {
+    const keys = payload && typeof payload === "object" && !Array.isArray(payload)
+      ? Object.keys(payload as object)
+      : [];
+    const first = items[0];
+    console.warn("[ebay] empty parse after dataset fetch", {
+      payloadIsArray: Array.isArray(payload),
+      payloadKeys: keys,
+      firstItemKeys: first && typeof first === "object" ? Object.keys(first as object) : [],
     });
   }
-
-  console.log(
-    `[ebay] keywords=${keywords.length} raw=${items.length} kept=${out.length} ` +
-    `dropped: currency=${dropped.currency} notSold=${dropped.notSold} price=${dropped.price} date=${dropped.date}`,
-  );
   return out;
 }
 

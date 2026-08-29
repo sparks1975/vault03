@@ -1650,6 +1650,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
   const [existing, setExisting] = useState<ExistingComp[]>([]);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState("");
+  const [loadNote, setLoadNote] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, { image: string | null; title: string | null; description: string | null }>>({});
 
   useEffect(() => {
@@ -1661,6 +1662,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
         setCandidates(r.candidates as CompCandidate[]);
         setExisting(r.selected);
         setSelectedKeys(new Set((r.selected as ExistingComp[]).map((s) => candidateKey(s))));
+        setLoadNote((r as { note?: string | null }).note ?? null);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load candidates");
       } finally {
@@ -1788,7 +1790,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
             </div>
           ) : merged.length === 0 ? (
             <div className="p-6 text-center text-xs text-muted-foreground">
-              No candidates returned. Try a manual re-value first, or check the source APIs.
+              {loadNote ?? "No sold listings came back from eBay for this card. The scrape is empty or failed — this is not a 130point search."}
             </div>
           ) : (
             <ul className="divide-y divide-border">

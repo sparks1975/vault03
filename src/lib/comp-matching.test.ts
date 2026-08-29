@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as cardsight from "./cardsight.server";
 import { scoreCompTitle, selectValuationComps } from "./cardsight.server";
-import { buildPt130SearchTiers, ebaySoldSearchUrl, ebaySoldSearchUrls } from "./pt130.server";
+import { buildPt130SearchTiers, ebaySoldSearchUrl, ebaySoldSearchUrls, parseApifySoldListings } from "./pt130.server";
 
 const ohtani = {
   player_name: "Shohei Ohtani",
@@ -230,6 +230,38 @@ describe("eBay sold search URLs", () => {
 
   it("keeps the US Baseball Cards category for Topps", () => {
     expect(ebaySoldSearchUrl("2024 Topps #503 Shohei Ohtani")).toContain("_sacat=26376");
+  });
+
+  const yamamotoSoldRow = {
+    title: "YOSHINOBU YAMAMOTO 2021 BBM 1ST VERSION #140 FACSIMILE AUTO PRE DODGERS, MVP!",
+    price: "$65.00",
+    priceValue: 65,
+    currency: "USD",
+    sold: true,
+    soldDate: "Sold  Aug 5, 2026",
+    url: "https://www.ebay.com/itm/1",
+  };
+
+  it("reads sold rows out of Lovable's { data: [...] } gateway wrapper", () => {
+    const sales = parseApifySoldListings({ data: [yamamotoSoldRow] });
+    expect(sales).toHaveLength(1);
+    expect(sales[0].price).toBe(65);
+    expect(sales[0].title).toMatch(/YAMAMOTO/i);
+  });
+
+  it("reads sold rows out of { data: { items: [...] } }", () => {
+    expect(parseApifySoldListings({ data: { items: [yamamotoSoldRow] } })).toHaveLength(1);
+  });
+
+  it("keeps the row when soldDate is missing but the listing has a price", () => {
+    const { soldDate: _soldDate, ...row } = yamamotoSoldRow;
+    expect(parseApifySoldListings({ data: [row] })).toHaveLength(1);
+  });
+
+  it("is the live production failure: wrapped payload is not an array", () => {
+    const wrapped = { data: [yamamotoSoldRow] };
+    expect(Array.isArray(wrapped)).toBe(false);
+    expect(parseApifySoldListings(wrapped as unknown as unknown[])).toHaveLength(1);
   });
 
   it("searches the same identity string as 130point, without an extra auto token", () => {
