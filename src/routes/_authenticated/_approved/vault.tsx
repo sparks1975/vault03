@@ -1659,9 +1659,17 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
       try {
         const r = await fetchFn({ data: { card_id: cardId } });
         if (!alive) return;
-        setCandidates(r.candidates as CompCandidate[]);
-        setExisting(r.selected);
-        setSelectedKeys(new Set((r.selected as ExistingComp[]).map((s) => candidateKey(s))));
+        const nextCandidates = r.candidates as CompCandidate[];
+        const nextExisting = r.selected as ExistingComp[];
+        setCandidates(nextCandidates);
+        setExisting(nextExisting);
+        setSelectedKeys(new Set(
+          nextExisting.length > 0
+            ? nextExisting.map((s) => candidateKey(s))
+            : nextCandidates
+                .filter((c) => c.level === "exact" || c.level === "strong")
+                .map((c) => candidateKey(c)),
+        ));
         setLoadNote((r as { note?: string | null }).note ?? null);
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to load candidates");
@@ -1767,8 +1775,11 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
           <div>
             <h3 className="text-sm font-mono uppercase tracking-widest">Manage comps</h3>
             <p className="text-[10px] text-muted-foreground mt-1">
-              Current comps are checked. Deselect bad matches and select replacements to set the card value.
+              Matched sold listings are checked. Wrong player, year, set, or number are hidden.
             </p>
+            {loadNote && (
+              <p className="text-[10px] text-muted-foreground mt-1">{loadNote}</p>
+            )}
           </div>
           <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
             <X className="size-4" />
@@ -1840,6 +1851,16 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
                         )}
                         {existing.some((e) => candidateMatchesExisting(c, e) && e.is_manual) && (
                           <span className="shrink-0 border border-primary/40 px-1.5 py-0.5 text-[9px] font-mono uppercase text-primary">Manual</span>
+                        )}
+                        {c.level === "exact" && (
+                          <span className="shrink-0 border border-primary/40 px-1.5 py-0.5 text-[9px] font-mono uppercase text-primary">
+                            Match
+                          </span>
+                        )}
+                        {c.level === "strong" && (
+                          <span className="shrink-0 border border-border px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground">
+                            Likely
+                          </span>
                         )}
                         {c.level === "weak" && (
                           <span className="shrink-0 border border-border px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground">

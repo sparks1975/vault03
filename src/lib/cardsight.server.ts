@@ -1976,3 +1976,12 @@ export function selectValuationComps<T extends ValuationComp>(
     levels,
   };
 }
+
+/** Manage Comps list: hide rejects; if any listing is identified, drop weak noise. */
+export function selectManageCompCandidates<T extends { level: CompMatchLevel | "exact" | "strong" | "weak" }>(
+  rows: T[],
+): T[] {
+  const usable = rows.filter((row) => row.level === "exact" || row.level === "strong" || row.level === "weak");
+  const identified = usable.filter((row) => row.level === "exact" || row.level === "strong");
+  return identified.length > 0 ? identified : usable;
+}

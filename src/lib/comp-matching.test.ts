@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as cardsight from "./cardsight.server";
-import { scoreCompTitle, selectValuationComps } from "./cardsight.server";
+import { scoreCompTitle, selectManageCompCandidates, selectValuationComps } from "./cardsight.server";
 import { buildPt130SearchTiers, ebaySoldSearchUrl, ebaySoldSearchUrls, parseApifySoldListings } from "./pt130.server";
 
 const ohtani = {
@@ -212,6 +212,19 @@ describe("2021 BBM 1st Version #140 Yoshinobu Yamamoto", () => {
     expect(scoreCompTitle("Yoshinobu Yamamoto 2021 BBM 2nd Version #140", yamamotoBbm).level).toBe(
       "reject",
     );
+  });
+
+  it("keeps only identified listings when the scrape also returned junk", () => {
+    const rows = [
+      { title: "YOSHINOBU YAMAMOTO 2021 BBM 1ST VERSION #140 FACSIMILE AUTO", level: scoreCompTitle("YOSHINOBU YAMAMOTO 2021 BBM 1ST VERSION #140 FACSIMILE AUTO", yamamotoBbm).level },
+      { title: "Yoshinobu Yamamoto 2021 BBM 2nd Version #140", level: scoreCompTitle("Yoshinobu Yamamoto 2021 BBM 2nd Version #140", yamamotoBbm).level },
+      { title: "2021 Topps Chrome #50 Yoshinobu Yamamoto", level: scoreCompTitle("2021 Topps Chrome #50 Yoshinobu Yamamoto", yamamotoBbm).level },
+      { title: "2021 BBM Yoshinobu Yamamoto lot of 10", level: scoreCompTitle("2021 BBM Yoshinobu Yamamoto lot of 10", yamamotoBbm).level },
+    ];
+    const shown = selectManageCompCandidates(rows);
+    expect(shown).toHaveLength(1);
+    expect(shown[0].title).toMatch(/1ST VERSION #140/i);
+    expect(shown[0].level).toBe("exact");
   });
 });
 

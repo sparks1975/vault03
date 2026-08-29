@@ -658,7 +658,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) throw error;
     if (!card) throw new Error("Card not found");
-    const { getParallelNameForCard, scoreCompTitle, isNonSingleCardListing } = await import("./cardsight.server");
+    const { getParallelNameForCard, scoreCompTitle, isNonSingleCardListing, selectManageCompCandidates } = await import("./cardsight.server");
     const selectedParallelName = card.cardsight_card_id
       ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
       : null;
@@ -798,6 +798,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       if (!Number.isFinite(price) || price <= 0) continue;
       if (isNonSingleCardListing(r.title)) continue;
       const scored = candidateLevel(r.title);
+      if (scored === "reject") continue;
       candidates.push({
         title: r.title ?? null,
         image_url: r.image_url ?? null,
@@ -805,7 +806,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
         sold_at: r.sold_at ?? null,
         source: "eBay sold",
         url: r.url ?? null,
-        level: scored === "reject" ? "weak" : scored,
+        level: scored,
       });
     }
 
@@ -819,7 +820,14 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
         dedupedByKey.set(key, candidate);
       }
     }
-    const deduped = Array.from(dedupedByKey.values());
+    const scored = Array.from(dedupedByKey.values());
+    const identifiedCount = scored.filter((c) => c.level === "exact" || c.level === "strong").length;
+    const deduped = selectManageCompCandidates(scored);
+    if (identifiedCount > 0 && scored.length > deduped.length) {
+      ebayNote = ebayNote ?? `Hid ${scored.length - deduped.length} listings that are not this card.`;
+    } else if (identifiedCount === 0 && deduped.length > 0) {
+      ebayNote = ebayNote ?? "No listing matched this exact card. These are close enough to review.";
+    }
     const levelRank = { exact: 0, strong: 1, weak: 2 } as const;
     deduped.sort((a, b) => {
       if (levelRank[a.level] !== levelRank[b.level]) return levelRank[a.level] - levelRank[b.level];
