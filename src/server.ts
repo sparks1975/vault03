@@ -20,7 +20,28 @@ async function getServerEntry(): Promise<ServerEntry> {
 
 // h3 swallows in-handler throws into a normal 500 Response with body
 // {"unhandled":true,"message":"HTTPError"} — try/catch alone never fires for those.
-async function normalizeCatastrophicSsrResponse(response: Response): Promise<Response> {
+function isClientDisconnect(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const cause = error.cause;
+  return (
+    error.message === "aborted" ||
+    (cause instanceof Error &&
+      (cause.message === "aborted" || ("code" in cause && cause.code === "ECONNRESET")))
+  );
+}
+
+function clientClosedResponse(): Response {
+  return new Response(null, { status: 499, statusText: "Client Closed Request" });
+}
+
+async function normalizeCatastrophicSsrResponse(
+  response: Response,
+  requestSignal: AbortSignal,
+): Promise<Response> {
+  // TanStack Start currently turns a disconnected client into h3's generic
+  // unhandled 500. Treat it as the expected closed request instead of
+  // generating an error page for a document the client is no longer reading.
+  if (requestSignal.aborted) return clientClosedResponse();
   if (response.status < 500) return response;
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) return response;
@@ -49,8 +70,11 @@ export default {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      return await normalizeCatastrophicSsrResponse(response, request.signal);
     } catch (error) {
+      if (request.signal.aborted || isClientDisconnect(error)) {
+        return clientClosedResponse();
+      }
       console.error(error);
       return new Response(renderErrorPage(), {
         status: 500,
