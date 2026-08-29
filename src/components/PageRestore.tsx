@@ -14,6 +14,8 @@ export function PageRestore() {
 
   useEffect(() => {
     let alive = true;
+    let recoveryTimer: number | undefined;
+    const RELOAD_GUARD_KEY = "vault03-page-restore-reload";
 
     const looksBlank = () => {
       const root = document.body;
@@ -21,23 +23,37 @@ export function PageRestore() {
       return root.innerText.trim().length === 0;
     };
 
-    const recover = (persisted: boolean) => {
+    const recover = async (persisted: boolean) => {
       if (!alive) return;
-      if (looksBlank()) {
-        window.location.reload();
-        return;
+
+      // A visible PageRestore means the React tree is still mounted. Let the
+      // router repair it first instead of immediately aborting the document
+      // request with location.reload().
+      if (persisted || looksBlank()) {
+        await router.invalidate().catch(() => undefined);
       }
-      if (persisted) void router.invalidate();
+
+      if (!alive || !looksBlank() || document.readyState !== "complete") return;
+
+      // WebKit can briefly report an empty body while repainting a restored
+      // page. Only reload after it stayed blank, and never enter a reload loop.
+      recoveryTimer = window.setTimeout(() => {
+        if (!alive || !looksBlank()) return;
+        const lastReload = Number(window.sessionStorage.getItem(RELOAD_GUARD_KEY) ?? 0);
+        if (Date.now() - lastReload < 10_000) return;
+        window.sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()));
+        window.location.reload();
+      }, 750);
     };
 
     const onPageShow = (e: PageTransitionEvent) => {
-      // Give WebKit a tick to paint the restored page before measuring.
-      window.setTimeout(() => recover(e.persisted), 60);
+      // Give WebKit time to paint the restored page before measuring.
+      window.setTimeout(() => void recover(e.persisted), 150);
     };
 
     const onVisible = () => {
       if (document.visibilityState === "visible") {
-        window.setTimeout(() => recover(false), 60);
+        window.setTimeout(() => void recover(false), 150);
       }
     };
 
@@ -45,6 +61,7 @@ export function PageRestore() {
     document.addEventListener("visibilitychange", onVisible);
     return () => {
       alive = false;
+      if (recoveryTimer !== undefined) window.clearTimeout(recoveryTimer);
       window.removeEventListener("pageshow", onPageShow);
       document.removeEventListener("visibilitychange", onVisible);
     };
