@@ -1035,7 +1035,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           compLookup,
         );
 
-        if (selection.value != null && selection.comps.length >= 2) {
+        if (selection.comps.length > 0) {
           sales = selection.comps.map((row) => ({
             sold_at: row.sold_at ?? null,
             grade: data.grader && data.grade ? `${data.grader} ${data.grade}` : null,
@@ -1044,7 +1044,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             url: row.url ?? null,
             title: row.title ?? null,
           }));
-          currentValue = selection.value;
+          if (selection.value != null) currentValue = selection.value;
           usedCardsight = true;
           compsNote = selection.note;
         } else if (rows.length > 0) {

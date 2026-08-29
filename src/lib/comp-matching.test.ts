@@ -116,8 +116,10 @@ describe("valuation selection", () => {
     expect(result.comps).toHaveLength(0);
   });
 
-  it("returns no value from a single comp", () => {
-    expect(selectValuationComps([rows[0]], ohtani).value).toBeNull();
+  it("values a single verified comp instead of hiding it", () => {
+    const result = selectValuationComps([rows[0]], ohtani);
+    expect(result.value).toBe(10);
+    expect(result.comps).toHaveLength(1);
   });
 
   it("keeps manual picks regardless of title", () => {
@@ -180,6 +182,24 @@ describe("2021 BBM 1st Version #140 Yoshinobu Yamamoto", () => {
     expect(scoreCompTitle("Yoshinobu Yamamoto 2021 BBM 1st Version #140 RC", yamamotoBbm).level).toBe(
       "exact",
     );
+  });
+
+  it("still matches facsimile titles when the scan marked the card as an autograph", () => {
+    expect(
+      scoreCompTitle(
+        "YOSHINOBU YAMAMOTO 2021 BBM 1ST VERSION #140 FACSIMILE AUTO PRE DODGERS, MVP!",
+        { ...yamamotoBbm, is_autograph: true },
+      ).level,
+    ).toBe("exact");
+  });
+
+  it("still matches print-auto titles when the scan marked the card as an autograph", () => {
+    expect(
+      scoreCompTitle(
+        "Yoshinobu Yamamoto 2021 BBM 1st Version Print Auto #140 Card LA Dodgers",
+        { ...yamamotoBbm, is_autograph: true },
+      ).level,
+    ).toBe("exact");
   });
 
   it("rejects a real on-card auto for a non-auto vault card", () => {

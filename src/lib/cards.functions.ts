@@ -738,35 +738,45 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       }
     }
 
-    // Older cached 130point rows predate image storage. Refresh those rows once
-    // from the same verified sold-results search so Manage Comps can display
-    // the listing photo without relying on ended eBay pages or active listings.
-    const { data: missingPhotoRows } = await supabase
+    // Refresh eBay sold rows when photos are missing OR when nothing in the
+    // cache verifies as this card. Otherwise Manage Comps keeps showing a
+    // stale empty/wrong scrape from before the matcher fix.
+    const { data: existingPt } = await supabase
       .from("pt130_comps")
-      .select("id")
+      .select("id, title, image_url, scraped_at")
       .eq("card_id", data.card_id)
-      .eq("user_id", userId)
-      .is("image_url", null)
-      .limit(1);
-    if ((missingPhotoRows?.length ?? 0) > 0) {
-      try {
-        const { buildPt130Descriptors, refreshPt130ForCard } = await import("./pt130.server");
-        await refreshPt130ForCard(supabase, {
-          card_id: data.card_id,
-          user_id: userId,
-          descriptor: buildPt130Descriptors({
-            year: card.year,
-            set_name: card.set_name,
-            player_name: card.player_name,
+      .eq("user_id", userId);
+    const hasVerifiedEbay = (existingPt ?? []).some((r) => {
+      const level = candidateLevel(r.title);
+      return level === "exact" || level === "strong";
+    });
+    const missingPhoto = (existingPt ?? []).some((r) => !r.image_url);
+    const newestScrape = (existingPt ?? []).reduce((latest, row) => {
+      const time = new Date(row.scraped_at ?? 0).getTime();
+      return Number.isFinite(time) && time > latest ? time : latest;
+    }, 0);
+    const cacheFresh = newestScrape > 0 && Date.now() - newestScrape < 24 * 60 * 60 * 1000;
+    if (!hasVerifiedEbay || missingPhoto) {
+      if (!hasVerifiedEbay || !cacheFresh) {
+        try {
+          const { buildPt130Descriptors, refreshPt130ForCard } = await import("./pt130.server");
+          await refreshPt130ForCard(supabase, {
+            card_id: data.card_id,
+            user_id: userId,
+            descriptor: buildPt130Descriptors({
+              year: card.year,
+              set_name: card.set_name,
+              player_name: card.player_name,
+              card_number: card.card_number,
+              is_autograph: card.is_autograph,
+              serial_number: card.serial_number,
+              selected_parallel_name: selectedParallelName,
+            }),
             card_number: card.card_number,
-            is_autograph: card.is_autograph,
-            serial_number: card.serial_number,
-            selected_parallel_name: selectedParallelName,
-          }),
-          card_number: card.card_number,
-        });
-      } catch (err) {
-        console.error("fetchCompCandidates photo backfill failed", err);
+          });
+        } catch (err) {
+          console.error("fetchCompCandidates eBay refresh failed", err);
+        }
       }
     }
 

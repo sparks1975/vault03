@@ -701,11 +701,15 @@ export function scoreCompTitle(
   }
 
   const isAutoTitle = titleHasSignedAutograph(rawTitle);
+  const hasPrintedAuto = titleHasPrintedAuto(rawTitle);
   const exactNumberedAutoInsert = Boolean(
     isAutoTitle && wantedNumber && numberStated && cardNumberImpliesAutograph(lookup.card_number),
   );
+  // A printed/facsimile signature is the standard BBM card, not ink. Treat it
+  // as an autograph marker only so a scan that checked is_autograph still
+  // matches the real sold titles — never as a reason to reject a base card.
   const effectiveIsAutograph = lookup.is_autograph || exactNumberedAutoInsert;
-  if (lookup.is_autograph && !isAutoTitle) {
+  if (lookup.is_autograph && !isAutoTitle && !hasPrintedAuto) {
     return { level: "reject", reasons: ["missing autograph marker"] };
   }
   if (!effectiveIsAutograph && isAutoTitle) {
@@ -853,6 +857,10 @@ function stripPrintedAuto(title: string): string {
 
 function titleHasSignedAutograph(title: string): boolean {
   return AUTO_RE.test(stripPrintedAuto(title));
+}
+
+function titleHasPrintedAuto(title: string): boolean {
+  return new RegExp(PRINTED_AUTO_RE.source, "i").test(title);
 }
 // Reject non-single-card listings: breaks, sealed wax, cases, packs, lots, sets.
 // This stays separate from card-identity matching so we can block obvious junk
@@ -1954,7 +1962,7 @@ export function selectValuationComps<T extends ValuationComp>(
     if (selected.length > recent.length) notes.push("limited recent sales");
   }
 
-  if (selected.length < 2) {
+  if (selected.length === 0) {
     return { comps: selected, value: null, note: notes.join(" · ") || null, levels };
   }
 
