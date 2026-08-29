@@ -45,43 +45,62 @@ type ApifyEbayItem = {
   title?: string | null;
   name?: string | null;
   itemTitle?: string | null;
-  price?: string | number | { value?: number; amount?: number } | null;
+  itemName?: string | null;
+  heading?: string | null;
+  price?: string | number | { value?: number; amount?: number; currency?: string } | null;
   priceValue?: number | string | null;
+  soldPrice?: string | number | { value?: number; amount?: number } | null;
+  currentPrice?: string | number | { value?: number; amount?: number } | null;
   currency?: string | null;
   soldDate?: string | null;
   date?: string | null;
+  endDate?: string | null;
   sold?: boolean | null;
   url?: string | null;
   itemUrl?: string | null;
   image?: string | null;
   imageUrl?: string | null;
   basic_info?: ApifyEbayItem;
+  item?: ApifyEbayItem;
+  listing?: ApifyEbayItem;
 };
 
 function flattenApifyItem(raw: unknown): ApifyEbayItem {
   if (!raw || typeof raw !== "object") return {};
   const item = raw as ApifyEbayItem;
-  if (item.basic_info && typeof item.basic_info === "object") return { ...item.basic_info, ...item };
+  const nested = item.basic_info ?? item.item ?? item.listing;
+  if (nested && typeof nested === "object") return { ...nested, ...item };
   return item;
 }
 
 function apifyTitle(item: ApifyEbayItem): string | null {
-  const title = item.title ?? item.name ?? item.itemTitle;
+  const title = item.title ?? item.name ?? item.itemTitle ?? item.itemName ?? item.heading;
   return typeof title === "string" && title.trim() ? title.trim() : null;
 }
 
+function apifyUsd(raw: unknown): boolean {
+  const currency = String(raw ?? "USD").trim().toUpperCase().replace(/\s+/g, "");
+  return !currency || currency === "USD" || currency === "$" || currency === "US" || currency === "US$" || currency === "USD$";
+}
+
 function apifyPrice(item: ApifyEbayItem): number {
-  if (typeof item.priceValue === "number" && Number.isFinite(item.priceValue)) return item.priceValue;
-  if (typeof item.price === "number" && Number.isFinite(item.price)) return item.price;
-  if (item.price && typeof item.price === "object") {
-    const nested = Number(item.price.value ?? item.price.amount);
-    if (Number.isFinite(nested) && nested > 0) return nested;
+  const candidates: unknown[] = [item.priceValue, item.price, item.soldPrice, item.currentPrice];
+  for (const value of candidates) {
+    if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
+    if (value && typeof value === "object") {
+      const nested = Number((value as { value?: number; amount?: number }).value ?? (value as { amount?: number }).amount);
+      if (Number.isFinite(nested) && nested > 0) return nested;
+    }
+    if (typeof value === "string") {
+      const parsed = Number(value.replace(/[^0-9.]/g, ""));
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
   }
-  return Number(String(item.priceValue ?? item.price ?? "").replace(/[^0-9.]/g, ""));
+  return Number.NaN;
 }
 
 function apifySoldAt(item: ApifyEbayItem): string | null {
-  const raw = [item.soldDate, item.date].find((v) => typeof v === "string" && v.trim());
+  const raw = [item.soldDate, item.date, item.endDate].find((v) => typeof v === "string" && v.trim());
   if (!raw) return null;
   return toIsoDate(String(raw).replace(/^sold\s*/i, "").trim());
 }
@@ -95,15 +114,34 @@ export function apifyDatasetItems(payload: unknown): unknown[] {
       return [];
     }
   }
-  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload)) return flattenNestedListingRows(payload);
   if (!payload || typeof payload !== "object") return [];
   const body = payload as { data?: unknown; items?: unknown; results?: unknown };
-  if (Array.isArray(body.data)) return body.data;
-  if (Array.isArray(body.items)) return body.items;
-  if (Array.isArray(body.results)) return body.results;
+  if (Array.isArray(body.data)) return flattenNestedListingRows(body.data);
+  if (Array.isArray(body.items)) return flattenNestedListingRows(body.items);
+  if (Array.isArray(body.results)) return flattenNestedListingRows(body.results);
   if (body.data != null) return apifyDatasetItems(body.data);
   if (body.items != null) return apifyDatasetItems(body.items);
   return [];
+}
+
+function flattenNestedListingRows(items: unknown[]): unknown[] {
+  const out: unknown[] = [];
+  for (const raw of items) {
+    if (raw && typeof raw === "object") {
+      const nested = (raw as { items?: unknown; results?: unknown }).items
+        ?? (raw as { results?: unknown }).results;
+      if (
+        Array.isArray(nested) &&
+        nested.some((row) => row && typeof row === "object" && ("title" in row || "price" in row || "priceValue" in row))
+      ) {
+        out.push(...nested);
+        continue;
+      }
+    }
+    out.push(raw);
+  }
+  return out;
 }
 
 export function parseApifySoldListings(payload: unknown): Pt130Sale[] {
@@ -111,13 +149,15 @@ export function parseApifySoldListings(payload: unknown): Pt130Sale[] {
   const out: Pt130Sale[] = [];
   for (const raw of items) {
     const item = flattenApifyItem(raw);
-    const currency = String(item.currency ?? "USD").toUpperCase();
-    if (currency && currency !== "USD") continue;
+    const currency = item.currency
+      ?? (item.price && typeof item.price === "object" ? item.price.currency : null);
+    if (!apifyUsd(currency)) continue;
     const title = apifyTitle(item);
     const price = apifyPrice(item);
     if (!Number.isFinite(price) || price <= 0) continue;
     const soldIso = apifySoldAt(item);
-    if (!soldIso && item.sold === false) continue;
+    // mode=sold already asked eBay for completed listings. The actor's `sold`
+    // flag is often false/missing even on real sales — do not drop those.
     if (soldIso && new Date(soldIso).getTime() > Date.now() + 24 * 60 * 60 * 1000) continue;
     out.push({
       title,

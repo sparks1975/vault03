@@ -610,18 +610,27 @@ function strictSetTitleMatches(title: string, setName: string | null | undefined
   return titleMentionsProduct(titleNorm, setName, true);
 }
 
-// Sellers write years as 2024, '24, 24 or 2024-25.
-function titleMentionsYear(rawTitle: string, year: string | number | null | undefined): boolean {
-  const y = compact(year);
-  if (!y) return true;
-  const patterns = [y];
-  if (/^\d{4}$/.test(y)) {
-    const yy = y.slice(2);
-    const next = String(Number(y) + 1).slice(2);
-    patterns.push(`'${yy}`, `${y}-${next}`, `${y}/${next}`);
-    if (new RegExp(`(^|[^0-9#])${escapeRegex(yy)}($|[^0-9])`).test(rawTitle)) return true;
+function extractStatedYears(rawTitle: string): number[] {
+  const years = new Set<number>();
+  for (const match of rawTitle.matchAll(/(^|[^0-9])((?:19|20)\d{2})(?=$|[^0-9])/g)) {
+    years.add(Number(match[2]));
   }
-  return patterns.some((p) => new RegExp(`(^|[^0-9])${escapeRegex(p)}($|[^0-9])`).test(rawTitle));
+  for (const match of rawTitle.matchAll(/(^|[^0-9])'(\d{2})(?=$|[^0-9])/g)) {
+    const yy = Number(match[2]);
+    years.add(yy >= 80 ? 1900 + yy : 2000 + yy);
+  }
+  return [...years];
+}
+
+function titleYearConflicts(rawTitle: string, year: string | number | null | undefined): boolean {
+  const wanted = Number(compact(year));
+  if (!Number.isFinite(wanted) || wanted < 1900) return false;
+  const found = extractStatedYears(rawTitle);
+  if (found.length === 0) return false;
+  if (found.includes(wanted)) return false;
+  const season = new RegExp(`${wanted}\\s*[-/]\\s*${String(wanted + 1).slice(2)}`);
+  if (found.includes(wanted + 1) && season.test(rawTitle)) return false;
+  return true;
 }
 
 export type CompMatchLevel = "exact" | "strong" | "weak" | "reject";
@@ -676,7 +685,9 @@ export function scoreCompTitle(
     return { level: "reject", reasons: ["player name mismatch"] };
   }
 
-  if (!titleMentionsYear(rawTitle, lookup.year)) {
+  // The sold search already scoped the year. Titles often omit it
+  // ("BBM 1st Version #140 Yamamoto"). Only reject a *different* year.
+  if (titleYearConflicts(rawTitle, lookup.year)) {
     return { level: "reject", reasons: ["year mismatch"] };
   }
 

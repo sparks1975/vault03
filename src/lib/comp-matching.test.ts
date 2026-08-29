@@ -184,6 +184,18 @@ describe("2021 BBM 1st Version #140 Yoshinobu Yamamoto", () => {
     );
   });
 
+  it("still matches when the sold title omits the year", () => {
+    expect(scoreCompTitle("Yoshinobu Yamamoto BBM 1st Version #140 FACSIMILE AUTO", yamamotoBbm).level).toBe(
+      "exact",
+    );
+  });
+
+  it("rejects a stated different year", () => {
+    expect(scoreCompTitle("Yoshinobu Yamamoto 2022 BBM 1st Version #140", yamamotoBbm).level).toBe(
+      "reject",
+    );
+  });
+
   it("still matches facsimile titles when the scan marked the card as an autograph", () => {
     expect(
       scoreCompTitle(
@@ -269,6 +281,18 @@ describe("eBay sold search URLs", () => {
   it("keeps the row when soldDate is missing but the listing has a price", () => {
     const { soldDate: _soldDate, ...row } = yamamotoSoldRow;
     expect(parseApifySoldListings({ data: [row] })).toHaveLength(1);
+  });
+
+  it("keeps completed-search rows even when the actor marks sold=false", () => {
+    expect(parseApifySoldListings({
+      data: [{ ...yamamotoSoldRow, sold: false, soldDate: undefined }],
+    })).toHaveLength(1);
+  });
+
+  it("treats US$ as USD", () => {
+    expect(parseApifySoldListings({
+      data: [{ ...yamamotoSoldRow, currency: "US $" }],
+    })).toHaveLength(1);
   });
 
   it("is the live production failure: wrapped payload is not an array", () => {

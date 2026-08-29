@@ -827,6 +827,9 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       ebayNote = ebayNote ?? `Hid ${scored.length - deduped.length} listings that are not this card.`;
     } else if (identifiedCount === 0 && deduped.length > 0) {
       ebayNote = ebayNote ?? "No listing matched this exact card. These are close enough to review.";
+    } else if (deduped.length === 0 && (pt?.length ?? 0) > 0) {
+      ebayNote = ebayNote ??
+        `eBay returned ${pt?.length ?? 0} sold listings, but none matched this card's player, year, set, or number.`;
     }
     const levelRank = { exact: 0, strong: 1, weak: 2 } as const;
     deduped.sort((a, b) => {
