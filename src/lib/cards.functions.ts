@@ -663,9 +663,8 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       ? await getParallelNameForCard(card.cardsight_card_id, card.cardsight_parallel_id)
       : null;
     const cardLookup = { ...card, selected_parallel_name: selectedParallelName };
-    // Manage Comps shows verified matches plus weak "needs review" suggestions;
-    // only outright rejects (lots, wrong player/number/parallel) are hidden.
-    const candidateLevel = (title: string | null | undefined) => scoreCompTitle(title, cardLookup).level;
+    const scoreTitle = (title: string | null | undefined) => scoreCompTitle(title, cardLookup);
+    const candidateLevel = (title: string | null | undefined) => scoreTitle(title).level;
 
     const candidates: Array<{
       title: string | null;
@@ -674,7 +673,8 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       sold_at: string | null;
       source: string;
       url: string | null;
-      level: "exact" | "strong" | "weak";
+      level: "exact" | "strong" | "weak" | "reject";
+      reason?: string | null;
     }> = [];
 
     // A saved catalog link is authoritative — it was either resolved and
@@ -731,6 +731,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
             source: r.source || "eBay sold",
             url: r.url ?? null,
             level,
+            reason: scoreTitle(r.title).reasons[0] ?? null,
           });
         }
       } catch (err) {
@@ -793,12 +794,13 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       .select("title, image_url, price, sold_at, url")
       .eq("card_id", data.card_id)
       .eq("user_id", userId);
+    const rejectReasons: string[] = [];
     for (const r of pt ?? []) {
       const price = Number(r.price);
       if (!Number.isFinite(price) || price <= 0) continue;
       if (isNonSingleCardListing(r.title)) continue;
-      const scored = candidateLevel(r.title);
-      if (scored === "reject") continue;
+      const match = scoreTitle(r.title);
+      if (match.level === "reject") rejectReasons.push(match.reasons[0] ?? "unmatched");
       candidates.push({
         title: r.title ?? null,
         image_url: r.image_url ?? null,
@@ -806,7 +808,8 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
         sold_at: r.sold_at ?? null,
         source: "eBay sold",
         url: r.url ?? null,
-        level: scored,
+        level: match.level,
+        reason: match.reasons[0] ?? null,
       });
     }
 
@@ -822,15 +825,25 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
     }
     const scored = Array.from(dedupedByKey.values());
     const identifiedCount = scored.filter((c) => c.level === "exact" || c.level === "strong").length;
-    const deduped = selectManageCompCandidates(scored);
-    if (identifiedCount > 0 && scored.length > deduped.length) {
-      ebayNote = ebayNote ?? `Hid ${scored.length - deduped.length} listings that are not this card.`;
-    } else if (identifiedCount === 0 && deduped.length > 0) {
+    const visible = selectManageCompCandidates(scored);
+    const reasonCounts = new Map<string, number>();
+    for (const reason of rejectReasons) reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1);
+    const reasonSummary = [...reasonCounts.entries()].map(([reason, count]) => `${reason} ×${count}`).join(", ");
+    if (identifiedCount > 0 && scored.length > visible.length) {
+      ebayNote = ebayNote ?? `Hid ${scored.length - visible.length} listings that are not this card.`;
+    } else if (identifiedCount === 0 && visible.some((c) => c.level === "weak")) {
       ebayNote = ebayNote ?? "No listing matched this exact card. These are close enough to review.";
-    } else if (deduped.length === 0 && (pt?.length ?? 0) > 0) {
+    } else if (identifiedCount === 0 && visible.length > 0) {
+      ebayNote = ebayNote ??
+        `None of the ${visible.length} eBay listings auto-matched (${reasonSummary || "unmatched"}). Select the ones that are this card.`;
+    } else if (visible.length === 0 && (pt?.length ?? 0) > 0) {
       ebayNote = ebayNote ??
         `eBay returned ${pt?.length ?? 0} sold listings, but none matched this card's player, year, set, or number.`;
     }
+    const deduped = visible.map((c) => ({
+      ...c,
+      level: (c.level === "reject" ? "weak" : c.level) as "exact" | "strong" | "weak",
+    }));
     const levelRank = { exact: 0, strong: 1, weak: 2 } as const;
     deduped.sort((a, b) => {
       if (levelRank[a.level] !== levelRank[b.level]) return levelRank[a.level] - levelRank[b.level];

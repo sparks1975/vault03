@@ -622,6 +622,42 @@ function extractStatedYears(rawTitle: string): number[] {
   return [...years];
 }
 
+const LISTING_IDENTITY_STOP = new Set([
+  "the", "and", "for", "with", "from", "card", "cards", "baseball", "hobby", "retail", "jumbo",
+  "rc", "rookie", "debut", "mvp", "cy", "young", "award", "winner", "pre", "post",
+  "facsimile", "print", "printed", "stamped", "stamp", "auto", "autograph", "autographs",
+  "signed", "signature", "signatures", "ink", "psa", "bgs", "sgc", "cgc", "csg", "beckett",
+  "gem", "mint", "graded", "grade", "raw", "nm", "excellent", "good", "poor",
+  "version", "first", "second", "third", "1st", "2nd", "3rd", "edition", "series", "update",
+  "chrome", "flagship", "topps", "bowman", "panini", "donruss", "prizm", "select", "mosaic",
+  "optic", "bbm", "epoch", "calbee", "upper", "deck", "parallel", "base", "insert",
+  "japan", "npb", "mlb", "usa", "official", "authentic", "guaranteed", "nice", "rare",
+  "dodgers", "yankees", "cubs", "giants", "mets", "angels", "padres", "mariners",
+  "rangers", "astros", "braves", "phillies", "orioles", "twins", "guardians", "tigers",
+  "royals", "sox", "jays", "rockies", "diamondbacks", "nationals", "pirates", "brewers",
+  "reds", "marlins", "rays", "athletics", "angeles", "york", "boston", "chicago",
+  "francisco", "diego", "seattle", "texas", "houston", "atlanta", "los", "new", "san",
+]);
+
+function titleHasForeignIdentityTokens(rawTitle: string, lookup: CompLookup): boolean {
+  const stop = new Set(LISTING_IDENTITY_STOP);
+  for (const token of normalizeText(lookup.player_name).split(" ")) {
+    if (token.length > 1) stop.add(token);
+  }
+  for (const token of normalizeText(lookup.set_name).split(" ")) {
+    if (token.length > 1) stop.add(token);
+  }
+  for (const token of normalizeText(cardSetBrand(lookup.set_name)).split(" ")) {
+    if (token.length > 1) stop.add(token);
+  }
+  const number = normalizeCardNumber(lookup.card_number);
+  if (number) stop.add(number);
+  return normalizeText(rawTitle)
+    .split(" ")
+    .filter((token) => token.length > 2 && !/^\d+$/.test(token))
+    .some((token) => !stop.has(token));
+}
+
 function titleYearConflicts(rawTitle: string, year: string | number | null | undefined): boolean {
   const wanted = Number(compact(year));
   if (!Number.isFinite(wanted) || wanted < 1900) return false;
@@ -679,11 +715,11 @@ export function scoreCompTitle(
 
   // Player identity hangs on the surname. First names are frequently dropped or
   // written as nicknames, so requiring every token throws away real comps.
+  // Japanese listings often omit the romanized name entirely; allow that only
+  // when year/product/number already identify the card.
   const playerTokens = normalizeText(lookup.player_name).split(" ").filter((t) => t.length > 1);
   const surname = playerTokens[playerTokens.length - 1];
-  if (surname && !titleHasPhrase(titleNorm, surname)) {
-    return { level: "reject", reasons: ["player name mismatch"] };
-  }
+  const playerOmitted = Boolean(surname && !titleHasPhrase(titleNorm, surname));
 
   // The sold search already scoped the year. Titles often omit it
   // ("BBM 1st Version #140 Yamamoto"). Only reject a *different* year.
@@ -759,12 +795,23 @@ export function scoreCompTitle(
 
   const productStrict = titleMentionsProduct(titleNorm, lookup.set_name, false);
   const productRelaxed = productStrict || titleMentionsProduct(titleNorm, lookup.set_name, true);
+  if (playerOmitted) {
+    if (
+      !productRelaxed ||
+      !wantedNumber ||
+      numberOmitted ||
+      titleHasForeignIdentityTokens(rawTitle, lookup)
+    ) {
+      return { level: "reject", reasons: ["player name mismatch"] };
+    }
+    reasons.push("player name omitted");
+  }
   if (!productRelaxed) {
     reasons.push("set/product not stated");
     return { level: "weak", reasons };
   }
 
-  if (productStrict && !numberOmitted) return { level: "exact", reasons };
+  if (productStrict && !numberOmitted && !playerOmitted) return { level: "exact", reasons };
   if (numberOmitted) reasons.push("card number omitted");
   if (!productStrict) reasons.push("product matched loosely");
   return { level: "strong", reasons };
@@ -1988,11 +2035,13 @@ export function selectValuationComps<T extends ValuationComp>(
   };
 }
 
-/** Manage Comps list: hide rejects; if any listing is identified, drop weak noise. */
-export function selectManageCompCandidates<T extends { level: CompMatchLevel | "exact" | "strong" | "weak" }>(
+/** Manage Comps list: hide rejects only when something actually matched. */
+export function selectManageCompCandidates<T extends { level: CompMatchLevel }>(
   rows: T[],
 ): T[] {
-  const usable = rows.filter((row) => row.level === "exact" || row.level === "strong" || row.level === "weak");
-  const identified = usable.filter((row) => row.level === "exact" || row.level === "strong");
-  return identified.length > 0 ? identified : usable;
+  const identified = rows.filter((row) => row.level === "exact" || row.level === "strong");
+  if (identified.length > 0) return identified;
+  const weaks = rows.filter((row) => row.level === "weak");
+  if (weaks.length > 0) return weaks;
+  return rows.filter((row) => row.level === "reject");
 }

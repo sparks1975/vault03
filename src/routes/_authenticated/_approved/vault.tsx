@@ -1584,6 +1584,7 @@ type CompCandidate = {
   url: string | null;
   /** "weak" rows are suggestions only — they never affect the saved value. */
   level?: "exact" | "strong" | "weak";
+  reason?: string | null;
 };
 
 type ExistingComp = {
@@ -1864,7 +1865,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
                         )}
                         {c.level === "weak" && (
                           <span className="shrink-0 border border-border px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground">
-                            Needs review
+                            {c.reason ? c.reason : "Needs review"}
                           </span>
                         )}
                       </div>

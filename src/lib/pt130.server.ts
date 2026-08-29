@@ -65,17 +65,43 @@ type ApifyEbayItem = {
   listing?: ApifyEbayItem;
 };
 
+function assignDefined(base: ApifyEbayItem, overlay: ApifyEbayItem): ApifyEbayItem {
+  const out: ApifyEbayItem = { ...base };
+  for (const [key, value] of Object.entries(overlay) as Array<[keyof ApifyEbayItem, ApifyEbayItem[keyof ApifyEbayItem]]>) {
+    if (value !== null && value !== undefined && value !== "") out[key] = value as never;
+  }
+  return out;
+}
+
+function asTitle(value: unknown, depth = 0): string | null {
+  if (typeof value === "string") {
+    const title = value.trim();
+    return title && !/^https?:/i.test(title) ? title : null;
+  }
+  if (depth > 3 || !value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  for (const key of ["title", "name", "itemTitle", "itemName", "heading", "productTitle", "listingTitle"]) {
+    const title = asTitle(record[key], depth + 1);
+    if (title) return title;
+  }
+  return null;
+}
+
 function flattenApifyItem(raw: unknown): ApifyEbayItem {
   if (!raw || typeof raw !== "object") return {};
   const item = raw as ApifyEbayItem;
-  const nested = item.basic_info ?? item.item ?? item.listing;
-  if (nested && typeof nested === "object") return { ...nested, ...item };
-  return item;
+  let merged: ApifyEbayItem = {};
+  for (const nested of [item.basic_info, item.item, item.listing]) {
+    if (nested && typeof nested === "object") merged = assignDefined(merged, nested);
+  }
+  merged = assignDefined(merged, item);
+  const title = asTitle(raw);
+  if (title) merged.title = title;
+  return merged;
 }
 
 function apifyTitle(item: ApifyEbayItem): string | null {
-  const title = item.title ?? item.name ?? item.itemTitle ?? item.itemName ?? item.heading;
-  return typeof title === "string" && title.trim() ? title.trim() : null;
+  return asTitle(item.title) ?? asTitle(item.name) ?? asTitle(item.itemTitle) ?? asTitle(item.itemName) ?? asTitle(item.heading);
 }
 
 function apifyUsd(raw: unknown): boolean {

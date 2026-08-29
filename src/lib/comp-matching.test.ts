@@ -238,6 +238,22 @@ describe("2021 BBM 1st Version #140 Yoshinobu Yamamoto", () => {
     expect(shown[0].title).toMatch(/1ST VERSION #140/i);
     expect(shown[0].level).toBe("exact");
   });
+
+  it("shows unmatched listings when the matcher finds nothing", () => {
+    const rows = [
+      { title: "2021 Topps Chrome #50 Yoshinobu Yamamoto", level: scoreCompTitle("2021 Topps Chrome #50 Yoshinobu Yamamoto", yamamotoBbm).level },
+      { title: "Yoshinobu Yamamoto 2021 BBM 2nd Version #140", level: scoreCompTitle("Yoshinobu Yamamoto 2021 BBM 2nd Version #140", yamamotoBbm).level },
+    ];
+    const shown = selectManageCompCandidates(rows);
+    expect(shown.length).toBeGreaterThan(0);
+    expect(shown.every((row) => row.level === "reject" || row.level === "weak")).toBe(true);
+  });
+
+  it("matches a listing that states set and number but omits the romanized name", () => {
+    expect(
+      scoreCompTitle("2021 BBM 1st Version #140 FACSIMILE AUTO", yamamotoBbm).level,
+    ).toBe("strong");
+  });
 });
 
 describe("eBay sold search URLs", () => {
@@ -293,6 +309,24 @@ describe("eBay sold search URLs", () => {
     expect(parseApifySoldListings({
       data: [{ ...yamamotoSoldRow, currency: "US $" }],
     })).toHaveLength(1);
+  });
+
+  it("keeps a nested title when the top-level title is null", () => {
+    const sales = parseApifySoldListings({
+      data: [{
+        title: null,
+        price: "$50.00",
+        priceValue: 50,
+        currency: "USD",
+        sold: true,
+        basic_info: {
+          title: "YOSHINOBU YAMAMOTO 2021 BBM 1ST VERSION #140 FACSIMILE AUTO",
+        },
+        url: "https://www.ebay.com/itm/2",
+      }],
+    });
+    expect(sales).toHaveLength(1);
+    expect(sales[0].title).toMatch(/YAMAMOTO/i);
   });
 
   it("is the live production failure: wrapped payload is not an array", () => {
