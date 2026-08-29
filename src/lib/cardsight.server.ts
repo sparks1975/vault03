@@ -534,88 +534,162 @@ function titleMatchesKnownSetAlias(titleNorm: string, setName: string): boolean 
   return (SET_TITLE_ALIASES[setName] ?? []).some((phrase) => titleHasPhrase(titleNorm, phrase));
 }
 
-function strictSetTitleMatches(title: string, setName: string | null | undefined): boolean {
-  const brand = cardSetBrand(setName);
-  if (!brand) return true;
-  const titleNorm = normalizeText(title);
-  return titleHasPhrase(titleNorm, brand);
+// Words in a product name that carry no identity on their own, so a title that
+// omits them still names the same product ("Topps Series 2" <-> "Topps").
+const GENERIC_PRODUCT_WORDS = new Set([
+  "series", "one", "two", "1", "2", "base", "set", "sets", "update", "complete",
+  "factory", "edition", "baseball", "cards", "card", "and", "the", "mlb", "npb", "of",
+]);
+
+function dropAnd(value: string): string {
+  return value.replace(/\band\b/g, " ").replace(/\s+/g, " ").trim();
 }
 
-export function verifyCompTitle(
+function productIdentity(setName: string | null | undefined): {
+  brand: string | null;
+  product: string;
+  distinctive: string[];
+  aliases: string[];
+} {
+  const brand = cardSetBrand(setName);
+  const approved = toApprovedCardSet(setName) ?? compact(setName);
+  const product = normalizeText(compact(approved).replace(/\s*&\s*/g, " and "));
+  const brandTokens = new Set(normalizeText(brand).split(" "));
+  const distinctive = product
+    .split(" ")
+    .filter((t) => t.length > 1 && !GENERIC_PRODUCT_WORDS.has(t) && !brandTokens.has(t));
+  return { brand, product, distinctive, aliases: SET_TITLE_ALIASES[approved] ?? [] };
+}
+
+/**
+ * Product-level set verification. "Bowman" must never satisfy "Bowman Chrome".
+ * Strict mode wants the product name (or a known alias) as a contiguous phrase;
+ * relaxed mode — the retry path — accepts the brand plus every distinctive
+ * product word appearing anywhere in the title.
+ */
+function titleMentionsProduct(
+  titleNorm: string,
+  setName: string | null | undefined,
+  relaxed = false,
+): boolean {
+  const { brand, product, distinctive, aliases } = productIdentity(setName);
+  if (!brand) return true;
+  const brandOk = titleMentionsSetBrand(titleNorm, setName);
+  // Flagship releases: the brand alone identifies the product.
+  if (distinctive.length === 0) return brandOk;
+  const haystack = dropAnd(titleNorm);
+  if (titleHasPhrase(haystack, dropAnd(product))) return true;
+  if (aliases.some((a) => titleHasPhrase(haystack, dropAnd(normalizeText(a))))) return true;
+  if (relaxed) return brandOk && distinctive.every((t) => titleHasPhrase(haystack, t));
+  return false;
+}
+
+function strictSetTitleMatches(title: string, setName: string | null | undefined): boolean {
+  const titleNorm = normalizeText(title);
+  return titleMentionsProduct(titleNorm, setName, true);
+}
+
+// Sellers write years as 2024, '24, 24 or 2024-25.
+function titleMentionsYear(rawTitle: string, year: string | number | null | undefined): boolean {
+  const y = compact(year);
+  if (!y) return true;
+  const patterns = [y];
+  if (/^\d{4}$/.test(y)) {
+    const yy = y.slice(2);
+    const next = String(Number(y) + 1).slice(2);
+    patterns.push(`'${yy}`, `${y}-${next}`, `${y}/${next}`);
+    if (new RegExp(`(^|[^0-9#])${escapeRegex(yy)}($|[^0-9])`).test(rawTitle)) return true;
+  }
+  return patterns.some((p) => new RegExp(`(^|[^0-9])${escapeRegex(p)}($|[^0-9])`).test(rawTitle));
+}
+
+export type CompMatchLevel = "exact" | "strong" | "weak" | "reject";
+
+export type CompMatchScore = { level: CompMatchLevel; reasons: string[] };
+
+export type CompLookup = {
+  player_name?: string | null;
+  year?: string | number | null;
+  set_name?: string | null;
+  card_number?: string | null;
+  is_autograph?: boolean | null;
+  serial_number?: string | null;
+  is_first_bowman?: boolean | null;
+  selected_parallel_name?: string | null;
+  hasSelectedParallel?: boolean;
+  relaxedSetMatch?: boolean;
+};
+
+/**
+ * Graduated comp matching.
+ *
+ * exact  — player surname, year, product (phrase/alias), full card number,
+ *          autograph + parallel + serial all agree. Safe to auto-value.
+ * strong — same, but the card number is absent from the title and nothing in
+ *          the title conflicts with it (or the product only matched loosely).
+ *          Safe to auto-value alongside exact comps.
+ * weak   — same player and year (or card number) but the product is missing.
+ *          Suggestion only: never allowed to move current_value.
+ * reject — lots/boxes/breaks, wrong player, wrong year, conflicting card
+ *          number, autograph mismatch, parallel/serial mismatch.
+ */
+export function scoreCompTitle(
   title: string | null | undefined,
-  lookup: {
-    player_name?: string | null;
-    year?: string | number | null;
-    set_name?: string | null;
-    card_number?: string | null;
-    is_autograph?: boolean | null;
-    serial_number?: string | null;
-    is_first_bowman?: boolean | null;
-    selected_parallel_name?: string | null;
-    hasSelectedParallel?: boolean;
-    relaxedSetMatch?: boolean;
-  },
-): { verified: boolean; reasons: string[] } {
+  lookup: CompLookup,
+): CompMatchScore {
   const rawTitle = compact(title);
   const reasons: string[] = [];
-  if (!rawTitle) return { verified: false, reasons: ["missing title"] };
+  if (!rawTitle) return { level: "reject", reasons: ["missing title"] };
+  if (isNonSingleCardListing(rawTitle)) {
+    return { level: "reject", reasons: ["sealed/lot/non-single listing"] };
+  }
 
   const titleNorm = normalizeText(rawTitle);
   const serial = serialSearchTerm(lookup.serial_number);
-  const playerTokens = normalizeText(lookup.player_name)
-    .split(" ")
-    .filter((t) => t.length > 1);
-  if (playerTokens.length > 0 && !playerTokens.every((t) => titleHasPhrase(titleNorm, t))) {
-    reasons.push("player name mismatch");
+
+  // Player identity hangs on the surname. First names are frequently dropped or
+  // written as nicknames, so requiring every token throws away real comps.
+  const playerTokens = normalizeText(lookup.player_name).split(" ").filter((t) => t.length > 1);
+  const surname = playerTokens[playerTokens.length - 1];
+  if (surname && !titleHasPhrase(titleNorm, surname)) {
+    return { level: "reject", reasons: ["player name mismatch"] };
   }
 
-  const year = compact(lookup.year);
-  if (year && !new RegExp(`(^|[^0-9])${escapeRegex(year)}($|[^0-9])`).test(rawTitle)) {
-    reasons.push("year mismatch");
+  if (!titleMentionsYear(rawTitle, lookup.year)) {
+    return { level: "reject", reasons: ["year mismatch"] };
   }
 
   const wantedNumber = normalizeCardNumber(lookup.card_number);
   let explicitNumbers: string[] = [];
   let numberStated = false;
-  let strongNumberlessMatch = false;
+  let numberOmitted = false;
   if (wantedNumber) {
     explicitNumbers = extractMarketplaceCardNumbers(rawTitle);
-    // Card number is identity, not a fuzzy hint. A comp must state the complete
-    // submitted number, including every prefix/suffix (112 is not 112-SP).
-    // Missing numbers are usually unverifiable, but many sold rows omit insert
-    // numbers entirely. Allow that only when there is no conflicting explicit
-    // number and the title has strong identity evidence such as the exact serial
-    // denominator or an autograph insert prefix encoded in the saved number.
     numberStated = titleMentionsCardNumber(rawTitle, wantedNumber);
-    strongNumberlessMatch =
-      !numberStated &&
-      !explicitCardNumberConflicts(explicitNumbers, wantedNumber) &&
-      (
-        Boolean(serial && rawTitle.toLowerCase().includes(serial.toLowerCase())) ||
-        (cardNumberImpliesAutograph(lookup.card_number) && AUTO_RE.test(rawTitle))
-      );
-    if (!numberStated && !strongNumberlessMatch) {
-      const label = compact(lookup.card_number).replace(/^#\s*/, "");
-      reasons.push(`card number #${label} mismatch`);
+    if (!numberStated) {
+      if (explicitCardNumberConflicts(explicitNumbers, wantedNumber)) {
+        const label = compact(lookup.card_number).replace(/^#\s*/, "");
+        return { level: "reject", reasons: [`card number #${label} mismatch`] };
+      }
+      numberOmitted = true;
     }
-  }
-
-  if (!titleMentionsSetBrand(titleNorm, lookup.set_name)) {
-    reasons.push("set brand mismatch");
   }
 
   const isAutoTitle = AUTO_RE.test(rawTitle);
   const exactNumberedAutoInsert = Boolean(
-    isAutoTitle &&
-    wantedNumber &&
-    (numberStated || strongNumberlessMatch) &&
-    cardNumberImpliesAutograph(lookup.card_number),
+    isAutoTitle && wantedNumber && numberStated && cardNumberImpliesAutograph(lookup.card_number),
   );
   const effectiveIsAutograph = lookup.is_autograph || exactNumberedAutoInsert;
-  if (lookup.is_autograph && !isAutoTitle) reasons.push("missing autograph marker");
-  if (!effectiveIsAutograph && isAutoTitle) reasons.push("autograph mismatch");
+  if (lookup.is_autograph && !isAutoTitle) {
+    return { level: "reject", reasons: ["missing autograph marker"] };
+  }
+  if (!effectiveIsAutograph && isAutoTitle) {
+    return { level: "reject", reasons: ["autograph mismatch"] };
+  }
 
-  if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) reasons.push("serial mismatch");
+  if (serial && !rawTitle.toLowerCase().includes(serial.toLowerCase())) {
+    return { level: "reject", reasons: ["serial mismatch"] };
+  }
 
   // Remove the exact card-number token before looking for variant words. A
   // suffix such as 112-SP identifies the card itself; treating that SP as an
@@ -629,9 +703,6 @@ export function verifyCompTitle(
         " ",
       )
     : rawTitle;
-  // Some catalog card numbers encode the variation itself (112-SP/SSP). In
-  // that case seller phrases such as "image variation" and "short print" are
-  // confirming the exact card, not evidence of a different parallel.
   const identityAwareVariantTitle = /(?:sp|ssp)$/i.test(wantedNumber)
     ? variantTitle.replace(/\b(image|photo)\s+variations?\b|\bshort\s*prints?\b|\bss?p\b/gi, " ")
     : variantTitle;
@@ -643,10 +714,54 @@ export function verifyCompTitle(
     serial_number: lookup.serial_number,
     is_first_bowman: lookup.is_first_bowman,
   })) {
-    reasons.push(isNonSingleCardListing(rawTitle) ? "sealed/lot/non-single listing" : "parallel or variation mismatch");
+    return { level: "reject", reasons: ["parallel or variation mismatch"] };
   }
 
-  return { verified: reasons.length === 0, reasons };
+  const productStrict = titleMentionsProduct(titleNorm, lookup.set_name, false);
+  const productRelaxed = productStrict || titleMentionsProduct(titleNorm, lookup.set_name, true);
+  if (!productRelaxed) {
+    reasons.push("set/product not stated");
+    return { level: "weak", reasons };
+  }
+
+  if (productStrict && !numberOmitted) return { level: "exact", reasons };
+  if (numberOmitted) reasons.push("card number omitted");
+  if (!productStrict) reasons.push("product matched loosely");
+  return { level: "strong", reasons };
+}
+
+export function verifyCompTitle(
+  title: string | null | undefined,
+  lookup: CompLookup,
+): { verified: boolean; reasons: string[]; level: CompMatchLevel } {
+  const score = scoreCompTitle(title, lookup);
+  return {
+    verified: score.level === "exact" || score.level === "strong",
+    reasons: score.reasons,
+    level: score.level,
+  };
+}
+
+/**
+ * Manual picks: the collector is the filter. Only refuse rows that are provably
+ * not this card — multi-card listings and a stated, conflicting card number.
+ */
+export function compAcceptableForManual(
+  title: string | null | undefined,
+  lookup: { card_number?: string | null },
+): { ok: boolean; reason: string | null } {
+  const rawTitle = compact(title);
+  if (rawTitle && isNonSingleCardListing(rawTitle)) {
+    return { ok: false, reason: "A selected listing is a box, lot or break, not a single card." };
+  }
+  const wanted = normalizeCardNumber(lookup.card_number);
+  if (rawTitle && wanted && !titleMentionsCardNumber(rawTitle, wanted)) {
+    const explicit = extractMarketplaceCardNumbers(rawTitle);
+    if (explicitCardNumberConflicts(explicit, wanted)) {
+      return { ok: false, reason: "A selected sale states a different card number." };
+    }
+  }
+  return { ok: true, reason: null };
 }
 
 export function extractMarketplaceCardNumbers(title: string): string[] {
@@ -693,7 +808,7 @@ function pricingRecordMatches(
 // catch open-ended families ("<anything> refractor", "<color> wave", numbered
 // parallels, printing plates, 1/1s, image variations) so we don't have to
 // enumerate every new parallel Topps/Panini/Bowman invents.
-const PARALLEL_COLOR_RE = /\b(atomic|black|blue|bronze|camo|clear cut|cracked ice|die[- ]?cut|diamante|foil|foilfractor|gold|green|holiday|logo foil|mojo|negative|orange|pink|platinum|prism|prizm|purple|rainbow|red|rose gold|sepia|shimmer|silver|sun|superfractor|refractor|red hot|x-?fractor|yellow|aqua|teal|wave|nebula|scope|hyper|lava|dragon|tiger|zebra|snake|choice|holo|holographic|ssp|sp|printing plate|lunar|seismic|cosmic|galactic|sapphire|ruby|emerald|onyx|ice|velocity|genesis|disco|kaleidoscope|stained glass|independence|father'?s day|mother'?s day|memorial day|independence day|fireworks|checkerboard|magenta|clear|acetate|shortprint|short print|variation|image variation|photo variation|sp variation|ssp variation|1\s*of\s*1|1\/1)\b/i;
+const PARALLEL_COLOR_RE = /\b(atomic|black|blue|bronze|camo|clear cut|cracked ice|die[- ]?cut|diamante|foil|foilfractor|gold|green|holiday|logo foil|mojo|negative|orange|pink|platinum|prism|prizm|purple|rainbow|red|rose gold|sepia|shimmer|silver|sun|superfractor|refractor|red hot|x-?fractor|yellow|aqua|teal|wave|nebula|scope|hyper|lava|dragon|tiger|zebra|snake|choice|holo|holographic|printing plate|lunar|seismic|cosmic|galactic|sapphire|ruby|emerald|onyx|ice|velocity|genesis|disco|kaleidoscope|stained glass|independence|father'?s day|mother'?s day|memorial day|independence day|fireworks|checkerboard|magenta|clear|acetate|shortprint|short print|variation|image variation|photo variation|sp variation|ssp variation|1\s*of\s*1|1\/1)\b/i;
 // Catches any "<word> fractor" / "<word> refractor" not covered above.
 const REFRACTOR_FAMILY_RE = /\b[a-z]*fractor\b/i;
 // "Wave" family: prizmatic, mojo wave, blue wave, etc.
@@ -713,28 +828,6 @@ export function isNonSingleCardListing(title: string | null | undefined): boolea
   return NON_SINGLE_CARD_RE.test(raw) || (SEALED_PRODUCT_WORDS_RE.test(raw) && PRODUCT_CONTAINER_WORDS_RE.test(raw));
 }
 // (graded regex intentionally inlined at call sites)
-
-// Last-resort comp match. Used only when strict verification accepted nothing:
-// showing approximate comps the collector can refine beats showing none. Keeps
-// out sealed product/lots and obviously different players, nothing else.
-export function looseCompMatch(
-  title: string | null | undefined,
-  lookup: { player_name?: string | null; year?: string | number | null },
-): boolean {
-  const rawTitle = compact(title);
-  if (!rawTitle || isNonSingleCardListing(rawTitle)) return false;
-  const titleNorm = normalizeText(rawTitle);
-  const playerTokens = normalizeText(lookup.player_name)
-    .split(" ")
-    .filter((t) => t.length > 1);
-  if (playerTokens.length > 0) {
-    const hits = playerTokens.filter((t) => titleHasPhrase(titleNorm, t)).length;
-    // Require the surname-level majority of the name, so a different player
-    // never sneaks in on a shared first name.
-    if (hits < Math.max(1, playerTokens.length - 1)) return false;
-  }
-  return true;
-}
 
 // Reject titles that clearly indicate a different variation than the submitted
 // base card. Applies to both structured Cardsight pricing and pt130 comps.
