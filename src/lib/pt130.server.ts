@@ -7,11 +7,11 @@
 // The cache table is still named pt130_comps for backward compatibility.
 //
 // SERVER-ONLY module — never import from client code.
-import { cardSetBrand } from "./card-sets";
+import { cardSetBrand, toApprovedCardSet } from "./card-sets";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/apify";
 const ACTOR_ID = "memo23~ebay-search-scraper-ppe";
-const RESULTS_PER_SEARCH = 15; // ~$0.045 per card; fewer than this loses real comps
+const RESULTS_PER_SEARCH = 40; // 15 was starving the comp pool before verification
 const BASEBALL_CARDS_CATEGORY = "26376"; // eBay Baseball Cards — filters boxes/lots at the source
 
 export type Pt130Sale = {
@@ -91,9 +91,14 @@ export function buildPt130Descriptor(fields: {
     null;
   // Brand and set are searched independently: the set-specific query finds the
   // exact release, the brand-only query catches sellers who list just "Topps".
+  // Never put the raw catalog string in the query — subset names like
+  // "Bowman Chrome Sapphire Prospects Image Variation" match nothing on eBay.
+  // Use the approved product name (Bowman Chrome) instead.
   const setLabel =
     opts.setLabel === "set"
-      ? (fields.set_name ?? "").replace(/\s+/g, " ").trim() || cardSetBrand(fields.set_name)
+      ? toApprovedCardSet(fields.set_name) ??
+        (fields.set_name ?? "").replace(/\s+/g, " ").trim() ||
+        cardSetBrand(fields.set_name)
       : cardSetBrand(fields.set_name);
   const parts = [
     fields.year ? String(fields.year) : null,
@@ -114,17 +119,26 @@ export function buildPt130Descriptor(fields: {
 
 }
 
-// Two searches at most: the set-specific descriptor and, when the set name is
-// more detailed than its brand, a brand-only descriptor. Both keep the card
-// number so result counts — and Apify cost — stay low.
+// Search tiers, run on demand so cost only grows when comps are missing:
+//  1. year + product + card number + player (+ auto/parallel traits)
+//  2. year + brand + card number + player      (fewer than 8 verified comps)
+//  3. year + product + player, no card number  (fewer than 5 verified comps)
+export function buildPt130SearchTiers(
+  fields: Parameters<typeof buildPt130Descriptor>[0],
+): { primary: string; brand: string | null; noNumber: string | null } {
+  const primary = buildPt130Descriptor(fields, { includeCardNumber: true, setLabel: "set" });
+  const brand = buildPt130Descriptor(fields, { includeCardNumber: true, setLabel: "brand" });
+  const noNumber = buildPt130Descriptor(fields, { includeCardNumber: false, setLabel: "set" });
+  return {
+    primary,
+    brand: brand && brand !== primary ? brand : null,
+    noNumber: noNumber && noNumber !== primary ? noNumber : null,
+  };
+}
+
 export function buildPt130Descriptors(fields: Parameters<typeof buildPt130Descriptor>[0]): string[] {
-  const bySet = buildPt130Descriptor(fields, { includeCardNumber: true, setLabel: "set" });
-  const byBrand = buildPt130Descriptor(fields, { includeCardNumber: true, setLabel: "brand" });
-  const out: string[] = [];
-  for (const d of [bySet, byBrand]) {
-    if (d && !out.includes(d)) out.push(d);
-  }
-  return out;
+  const tiers = buildPt130SearchTiers(fields);
+  return [tiers.primary, tiers.brand].filter((d): d is string => Boolean(d));
 }
 
 
@@ -213,19 +227,19 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
   if (!Array.isArray(items)) return [];
 
   const out: Pt130Sale[] = [];
+  const dropped = { currency: 0, notSold: 0, price: 0, date: 0 };
   for (const item of items) {
     // Only USD sales — mixing currencies would corrupt the valuation math.
-    if (item.currency && item.currency !== "USD") continue;
-    // Sold-only: the actor flags completed sales explicitly. Anything without
-    // both the flag and a sold date is an active listing and never a comp.
-    if (item.sold !== true) continue;
-    const price = Number(item.priceValue ?? String(item.price ?? "").replace(/[^0-9.]/g, ""));
-    if (!Number.isFinite(price) || price <= 0) continue;
-    // "Sold  Aug 18, 2026" -> parseable date
+    if (item.currency && item.currency !== "USD") { dropped.currency++; continue; }
+    // A parseable sold date is itself proof of a completed sale: the actor's
+    // `sold` flag is missing on some rows even for real sales.
     const soldRaw = item.soldDate?.replace(/^sold\s*/i, "").trim() || null;
     const soldIso = toIsoDate(soldRaw);
-    if (!soldIso) continue;
-    if (new Date(soldRaw as string).getTime() > Date.now() + 24 * 60 * 60 * 1000) continue;
+    if (!soldIso && item.sold !== true) { dropped.notSold++; continue; }
+    if (!soldIso) { dropped.date++; continue; }
+    const price = Number(item.priceValue ?? String(item.price ?? "").replace(/[^0-9.]/g, ""));
+    if (!Number.isFinite(price) || price <= 0) { dropped.price++; continue; }
+    if (new Date(soldRaw as string).getTime() > Date.now() + 24 * 60 * 60 * 1000) { dropped.date++; continue; }
 
     out.push({
       title: item.title?.trim() || null,
@@ -239,6 +253,10 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
     });
   }
 
+  console.log(
+    `[ebay] keywords=${keywords.length} raw=${items.length} kept=${out.length} ` +
+    `dropped: currency=${dropped.currency} notSold=${dropped.notSold} price=${dropped.price} date=${dropped.date}`,
+  );
   return out;
 }
 
