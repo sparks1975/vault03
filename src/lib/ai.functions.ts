@@ -370,9 +370,14 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }): Promise<ScanResponse> => {
-    await assertBaseballCard(data.imageDataUrl);
     const { bytes, contentType } = dataUrlToBytes(data.imageDataUrl);
     const backUrl = data.backImageDataUrl ?? null;
+
+    // Baseball-only validation runs concurrently with identification instead of
+    // gating it: the check still rejects non-baseball photos (the identify
+    // result is thrown away), but the common valid case pays no serial wait.
+    const validationPromise = assertBaseballCard(data.imageDataUrl);
+    validationPromise.catch(() => {});
 
     // The back read runs as part of the normal scan (not a secondary step) and
     // in parallel with the structured identify, so it costs no extra wall time.
@@ -388,24 +393,28 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
     // number, subset name, serial) is what identification depends on, and the
     // display-oriented compressor resizes to 640x896, which destroys it. Only
     // very large uploads get shrunk, purely to stay inside request limits.
-    let ident: ScanResult | null = null;
-    try {
-      const { identifyCardRest } = await import("./cardsight.server");
-      let identifyBytes = bytes;
-      let identifyType = contentType;
-      if (bytes.byteLength > 4_000_000) {
-        const { compressBytes } = await import("./tinypng.server");
-        const compressed = await compressBytes(bytes, contentType);
-        identifyBytes = compressed.bytes;
-        identifyType = compressed.contentType;
+    const identPromise: Promise<ScanResult | null> = (async () => {
+      try {
+        const { identifyCardRest } = await import("./cardsight.server");
+        let identifyBytes = bytes;
+        let identifyType = contentType;
+        if (bytes.byteLength > 4_000_000) {
+          const { compressBytes } = await import("./tinypng.server");
+          const compressed = await compressBytes(bytes, contentType);
+          identifyBytes = compressed.bytes;
+          identifyType = compressed.contentType;
+        }
+        return (await identifyCardRest(identifyBytes, identifyType)) as ScanResult | null;
+      } catch (err) {
+        console.error("Cardsight identify failed:", err);
+        return null;
       }
-      ident = (await identifyCardRest(identifyBytes, identifyType)) as ScanResult | null;
+    })();
 
-    } catch (err) {
-      console.error("Cardsight identify failed:", err);
-    }
+    const [ident, back] = await Promise.all([identPromise, backPromise]);
+    // Rejection wins over whatever identification produced.
+    await validationPromise;
 
-    const back = await backPromise;
 
     const finish = async (
       r: ScanResult,
