@@ -434,11 +434,20 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
 
     if (ident?.player_name) {
       // A high-confidence structured match is trusted directly — the common,
-      // cheap, fast path. Without a back photo there's nothing to corroborate
-      // it with; with one, the printed back still gets the final word.
-      if (ident.confidence === "high" && !back) {
+      // cheap, fast path. When a back photo independently confirms the printed
+      // identity (same player, or same card number), that corroboration is
+      // stronger than a second front-face vision read, so skip the extra call.
+      const norm = (v: string | null | undefined) =>
+        (v ?? "").toString().replace(/[^a-z0-9]/gi, "").toLowerCase();
+      const backConfirms =
+        !!back &&
+        back.confidence !== "low" &&
+        ((!!back.card_number && !!ident.card_number && norm(back.card_number) === norm(ident.card_number)) ||
+          (!!back.player_name && namesLikelyMatch(ident.player_name, back.player_name)));
+      if (ident.confidence === "high" && (!back || backConfirms)) {
         return finish(await enrichWithMlb(ident), "catalog");
       }
+
       // Medium/low confidence (or a back photo available): a wrong guess here
       // reads as "identification returned the wrong player/number" with nothing
       // to catch it, so corroborate with an independent vision read of both faces.
