@@ -1026,7 +1026,6 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             card_number: valuationLookup.card_number,
             append,
           });
-          rows = await loadRows();
         };
         const qualifiedCount = () =>
           rows.filter((row) => {
@@ -1037,11 +1036,28 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         // Tier 1: exact product + card number. Re-scrape when the cache is stale
         // OR when nothing in the cache verifies — a fresh cache of unusable
         // rows (wrong category, printed-auto rejects) is still no comps.
-        if (tiers.primary && (!cacheFresh || qualifiedCount() === 0)) await runSearch(tiers.primary, false);
+        if (tiers.primary && (!cacheFresh || qualifiedCount() === 0)) {
+          await runSearch(tiers.primary, false);
+          rows = await loadRows();
+        }
         // Tiers 2 and 3 run whenever the verified pool is thin — even on a fresh
         // cache, because a fresh cache full of unusable rows is still no comps.
-        if (qualifiedCount() < 8 && tiers.brand) await runSearch(tiers.brand, true);
-        if (qualifiedCount() < 5 && tiers.noNumber) await runSearch(tiers.noNumber, true);
+        // When tier 1 produced nothing usable at all, both broader tiers are
+        // certain to be needed, so run them concurrently instead of end-to-end.
+        if (qualifiedCount() === 0 && tiers.brand && tiers.noNumber) {
+          await Promise.all([runSearch(tiers.brand, true), runSearch(tiers.noNumber, true)]);
+          rows = await loadRows();
+        } else {
+          if (qualifiedCount() < 8 && tiers.brand) {
+            await runSearch(tiers.brand, true);
+            rows = await loadRows();
+          }
+          if (qualifiedCount() < 5 && tiers.noNumber) {
+            await runSearch(tiers.noNumber, true);
+            rows = await loadRows();
+          }
+        }
+
 
         const selection = selectValuationComps(
           rows.map((row) => ({
