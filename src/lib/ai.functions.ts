@@ -370,9 +370,14 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
       .parse(d),
   )
   .handler(async ({ data }): Promise<ScanResponse> => {
-    await assertBaseballCard(data.imageDataUrl);
     const { bytes, contentType } = dataUrlToBytes(data.imageDataUrl);
     const backUrl = data.backImageDataUrl ?? null;
+
+    // Baseball-only validation runs concurrently with identification instead of
+    // gating it: the check still rejects non-baseball photos (the identify
+    // result is thrown away), but the common valid case pays no serial wait.
+    const validationPromise = assertBaseballCard(data.imageDataUrl);
+    validationPromise.catch(() => {});
 
     // The back read runs as part of the normal scan (not a secondary step) and
     // in parallel with the structured identify, so it costs no extra wall time.
@@ -388,24 +393,28 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
     // number, subset name, serial) is what identification depends on, and the
     // display-oriented compressor resizes to 640x896, which destroys it. Only
     // very large uploads get shrunk, purely to stay inside request limits.
-    let ident: ScanResult | null = null;
-    try {
-      const { identifyCardRest } = await import("./cardsight.server");
-      let identifyBytes = bytes;
-      let identifyType = contentType;
-      if (bytes.byteLength > 4_000_000) {
-        const { compressBytes } = await import("./tinypng.server");
-        const compressed = await compressBytes(bytes, contentType);
-        identifyBytes = compressed.bytes;
-        identifyType = compressed.contentType;
+    const identPromise: Promise<ScanResult | null> = (async () => {
+      try {
+        const { identifyCardRest } = await import("./cardsight.server");
+        let identifyBytes = bytes;
+        let identifyType = contentType;
+        if (bytes.byteLength > 4_000_000) {
+          const { compressBytes } = await import("./tinypng.server");
+          const compressed = await compressBytes(bytes, contentType);
+          identifyBytes = compressed.bytes;
+          identifyType = compressed.contentType;
+        }
+        return (await identifyCardRest(identifyBytes, identifyType)) as ScanResult | null;
+      } catch (err) {
+        console.error("Cardsight identify failed:", err);
+        return null;
       }
-      ident = (await identifyCardRest(identifyBytes, identifyType)) as ScanResult | null;
+    })();
 
-    } catch (err) {
-      console.error("Cardsight identify failed:", err);
-    }
+    const [ident, back] = await Promise.all([identPromise, backPromise]);
+    // Rejection wins over whatever identification produced.
+    await validationPromise;
 
-    const back = await backPromise;
 
     const finish = async (
       r: ScanResult,
@@ -425,11 +434,20 @@ export const scanCardPhoto = createServerFn({ method: "POST" })
 
     if (ident?.player_name) {
       // A high-confidence structured match is trusted directly — the common,
-      // cheap, fast path. Without a back photo there's nothing to corroborate
-      // it with; with one, the printed back still gets the final word.
-      if (ident.confidence === "high" && !back) {
+      // cheap, fast path. When a back photo independently confirms the printed
+      // identity (same player, or same card number), that corroboration is
+      // stronger than a second front-face vision read, so skip the extra call.
+      const norm = (v: string | null | undefined) =>
+        (v ?? "").toString().replace(/[^a-z0-9]/gi, "").toLowerCase();
+      const backConfirms =
+        !!back &&
+        back.confidence !== "low" &&
+        ((!!back.card_number && !!ident.card_number && norm(back.card_number) === norm(ident.card_number)) ||
+          (!!back.player_name && namesLikelyMatch(ident.player_name, back.player_name)));
+      if (ident.confidence === "high" && (!back || backConfirms)) {
         return finish(await enrichWithMlb(ident), "catalog");
       }
+
       // Medium/low confidence (or a back photo available): a wrong guess here
       // reads as "identification returned the wrong player/number" with nothing
       // to catch it, so corroborate with an independent vision read of both faces.
@@ -1008,7 +1026,6 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             card_number: valuationLookup.card_number,
             append,
           });
-          rows = await loadRows();
         };
         const qualifiedCount = () =>
           rows.filter((row) => {
@@ -1019,11 +1036,28 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         // Tier 1: exact product + card number. Re-scrape when the cache is stale
         // OR when nothing in the cache verifies — a fresh cache of unusable
         // rows (wrong category, printed-auto rejects) is still no comps.
-        if (tiers.primary && (!cacheFresh || qualifiedCount() === 0)) await runSearch(tiers.primary, false);
+        if (tiers.primary && (!cacheFresh || qualifiedCount() === 0)) {
+          await runSearch(tiers.primary, false);
+          rows = await loadRows();
+        }
         // Tiers 2 and 3 run whenever the verified pool is thin — even on a fresh
         // cache, because a fresh cache full of unusable rows is still no comps.
-        if (qualifiedCount() < 8 && tiers.brand) await runSearch(tiers.brand, true);
-        if (qualifiedCount() < 5 && tiers.noNumber) await runSearch(tiers.noNumber, true);
+        // When tier 1 produced nothing usable at all, both broader tiers are
+        // certain to be needed, so run them concurrently instead of end-to-end.
+        if (qualifiedCount() === 0 && tiers.brand && tiers.noNumber) {
+          await Promise.all([runSearch(tiers.brand, true), runSearch(tiers.noNumber, true)]);
+          rows = await loadRows();
+        } else {
+          if (qualifiedCount() < 8 && tiers.brand) {
+            await runSearch(tiers.brand, true);
+            rows = await loadRows();
+          }
+          if (qualifiedCount() < 5 && tiers.noNumber) {
+            await runSearch(tiers.noNumber, true);
+            rows = await loadRows();
+          }
+        }
+
 
         const selection = selectValuationComps(
           rows.map((row) => ({
