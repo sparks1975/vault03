@@ -362,8 +362,11 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
   let datasetId = started.data?.defaultDatasetId ?? null;
   const deadline = Date.now() + 240_000;
   let status = "READY";
+  let wait = 1_500;
   while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 5_000));
+    await new Promise((r) => setTimeout(r, wait));
+    wait = 3_000;
+
     const statusRes = await fetch(`${GATEWAY_URL}/actor-runs/${runId}`, { headers });
     if (!statusRes.ok) continue;
     const body = (await statusRes.json()) as {
