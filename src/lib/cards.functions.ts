@@ -339,7 +339,7 @@ async function applyValuation(
 ) {
   const { data: cardIdentity, error: cardIdentityError } = await supabase
     .from("cards")
-    .select("player_name, year, set_name, card_number, is_autograph, serial_number, is_first_bowman, cardsight_card_id, cardsight_parallel_id")
+    .select("player_name, year, set_name, card_number, grade, grader, is_autograph, serial_number, is_first_bowman, cardsight_card_id, cardsight_parallel_id")
     .eq("id", cardId)
     .eq("user_id", userId)
     .maybeSingle();
