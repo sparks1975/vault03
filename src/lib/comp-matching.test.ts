@@ -335,7 +335,9 @@ describe("eBay sold search URLs", () => {
     expect(parseApifySoldListings(wrapped as unknown as unknown[])).toHaveLength(1);
   });
 
-  it("searches the same identity string as 130point, without an extra auto token", () => {
+  // The verification pass rejects listings that don't show the autograph,
+  // parallel, or serial trait, so the search itself has to ask for them.
+  it("states value-affecting traits in the search words", () => {
     const tiers = buildPt130SearchTiers({
       year: 2021,
       set_name: "BBM 1st Version",
@@ -343,6 +345,18 @@ describe("eBay sold search URLs", () => {
       player_name: "Yoshinobu Yamamoto",
       is_autograph: true,
     });
-    expect(tiers.primary).toBe("2021 BBM 1st Version #140 Yoshinobu Yamamoto");
+    expect(tiers.primary).toBe("2021 BBM 1st Version #140 Yoshinobu Yamamoto auto");
+  });
+
+  it("includes the parallel name and serial denominator", () => {
+    const tiers = buildPt130SearchTiers({
+      year: 2024,
+      set_name: "Topps Chrome",
+      card_number: "150",
+      player_name: "Elly De La Cruz",
+      selected_parallel_name: "Red Refractor /5",
+      serial_number: "3/5",
+    });
+    expect(tiers.primary).toBe("2024 Topps Chrome #150 Elly De La Cruz Red Refractor /5");
   });
 });

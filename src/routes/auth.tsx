@@ -148,7 +148,14 @@ function AuthPage() {
       setCodeSent(true);
       toast.success("We emailed you a 6-digit sign-in code");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not send code");
+      const message = err instanceof Error ? err.message : "Could not send code";
+      // Email sign-in is a backend provider toggle, so surface something
+      // actionable instead of the raw "Email logins are disabled".
+      toast.error(
+        /email logins are disabled|email_provider_disabled/i.test(message)
+          ? "Email sign-in isn't available right now — please continue with Google or Apple."
+          : message,
+      );
     } finally {
       setEmailBusy(false);
     }
