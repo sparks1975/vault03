@@ -95,6 +95,32 @@ async function signPhotoVariants(
   return { photo_url, photo_url_2x, photo_thumb_url, photo_thumb_url_2x };
 }
 
+async function signCardPhotosBatch(
+  supabase: Awaited<ReturnType<typeof import("@supabase/supabase-js").createClient>>,
+  paths: Array<string | null>,
+): Promise<Map<string, string>> {
+  const storagePaths = [...new Set(
+    paths.filter(
+      (path): path is string => Boolean(path && !path.startsWith("http") && !path.startsWith("data:")),
+    ),
+  )];
+  if (storagePaths.length === 0) return new Map();
+
+  const { data, error } = await supabase.storage
+    .from("card-photos")
+    .createSignedUrls(storagePaths, SALE_TTL);
+  if (error) {
+    console.error("[listCards] Could not sign card photos", error);
+    return new Map();
+  }
+
+  return new Map(
+    (data ?? []).flatMap((item) =>
+      item.path && item.signedUrl ? [[item.path, item.signedUrl] as const] : [],
+    ),
+  );
+}
+
 export const uploadCardPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { imageDataUrl: string }) =>
@@ -124,12 +150,25 @@ export const listCards = createServerFn({ method: "GET" })
       .select("*, sales:card_sales(*), history:card_value_history(*)")
       .order("created_at", { ascending: false });
     if (error) throw error;
-    const withUrls = await Promise.all(
-      (cards ?? []).map(async (c) => {
-        const variants = await signPhotoVariants(supabase as never, c.photo_url);
-        return { ...c, ...variants };
-      }),
+    const signedPhotos = await signCardPhotosBatch(
+      supabase as never,
+      (cards ?? []).map((card) => card.photo_url),
     );
+    const withUrls = (cards ?? []).map((card) => {
+      const passthrough =
+        card.photo_url && (card.photo_url.startsWith("http") || card.photo_url.startsWith("data:"))
+          ? card.photo_url
+          : null;
+      const signed = card.photo_url ? signedPhotos.get(card.photo_url) ?? null : null;
+      const photoUrl = passthrough ?? signed;
+      return {
+        ...card,
+        photo_url: photoUrl,
+        photo_url_2x: photoUrl,
+        photo_thumb_url: photoUrl,
+        photo_thumb_url_2x: photoUrl,
+      };
+    });
     return withUrls;
   });
 
