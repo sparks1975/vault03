@@ -236,7 +236,7 @@ export function buildPt130Descriptor(fields: {
   grade?: string | null;
 }, opts: { includeCardNumber?: boolean; setLabel?: "brand" | "set"; includeTraits?: boolean } = {}): string {
   const includeCardNumber = opts.includeCardNumber ?? true;
-  const includeTraits = opts.includeTraits ?? false;
+  const includeTraits = opts.includeTraits ?? true;
   // Sold-search discovery must state the same value-affecting traits that the
   // verification pass later requires, otherwise autographed / parallel /
   // serial-numbered cards search as base cards and every returned listing gets
