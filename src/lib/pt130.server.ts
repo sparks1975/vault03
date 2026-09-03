@@ -347,7 +347,7 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
 
   // The connector gateway cuts requests off at ~60s, so run-sync-get-dataset-items
   // always returned 502 for runs that take longer. Start the run async and poll.
-  const startRes = await fetch(`${GATEWAY_URL}/acts/${ACTOR_ID}/runs?timeout=300`, {
+  const startRes = await fetch(`${GATEWAY_URL}/acts/${ACTOR_ID}/runs?timeout=90`, {
     method: "POST",
     headers,
     body: JSON.stringify(input),
