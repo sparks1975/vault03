@@ -894,7 +894,7 @@ function CardDetail({
     }
   }
 
-  async function refreshValue() {
+  async function refreshValue(broaden = false) {
     setValuing(true);
     try {
       const est = await estimateFn({
