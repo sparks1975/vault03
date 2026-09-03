@@ -1011,12 +1011,20 @@ function CardDetail({
                 <Pencil className="size-3" /> Edit
               </button>
               <button
-                onClick={refreshValue}
+                onClick={() => refreshValue()}
                 disabled={valuing}
                 className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary disabled:opacity-50 inline-flex items-center gap-1"
               >
                 {valuing ? <Loader2 className="size-3 animate-spin" /> : null}
                 {valuing ? "Valuing" : "Refresh value"}
+              </button>
+              <button
+                onClick={() => refreshValue(true)}
+                disabled={valuing}
+                title="Search the parent brand and without the card number too"
+                className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                Broaden search
               </button>
               <button
                 onClick={() => confirm("Remove this card?") && deleteSelected()}
