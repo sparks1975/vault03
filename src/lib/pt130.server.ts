@@ -365,12 +365,16 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
   // The dataset id on the start payload is not reliable while the run is still
   // READY — always take it from the final run status.
   let datasetId = started.data?.defaultDatasetId ?? null;
-  const deadline = Date.now() + 240_000;
+  // One search per valuation, so a tight ceiling: a run that hasn't finished in
+  // 45s is not worth making the collector wait for. Partial dataset rows are
+  // still read below.
+  const deadline = Date.now() + 45_000;
   let status = "READY";
-  let wait = 1_500;
+  let wait = 1_000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, wait));
-    wait = 3_000;
+    wait = 2_000;
+
 
     const statusRes = await fetch(`${GATEWAY_URL}/actor-runs/${runId}`, { headers });
     if (!statusRes.ok) continue;
