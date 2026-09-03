@@ -1863,7 +1863,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
                             Likely
                           </span>
                         )}
-                        {c.level === "weak" && (
+                        {(c.level === "weak" || c.level === "reject") && (
                           <span className="shrink-0 border border-border px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground">
                             {c.reason ? c.reason : "Needs review"}
                           </span>
