@@ -335,9 +335,9 @@ describe("eBay sold search URLs", () => {
     expect(parseApifySoldListings(wrapped as unknown as unknown[])).toHaveLength(1);
   });
 
-  // The verification pass rejects listings that don't show the autograph,
-  // parallel, or serial trait, so the search itself has to ask for them.
-  it("states value-affecting traits in the search words", () => {
+  // Searches are identity-only: eBay ranks by keyword relevance, so trait words
+  // pull in other players' parallels. Traits are enforced in verification.
+  it("keeps autograph wording out of the search words", () => {
     const tiers = buildPt130SearchTiers({
       year: 2021,
       set_name: "BBM 1st Version",
@@ -345,10 +345,10 @@ describe("eBay sold search URLs", () => {
       player_name: "Yoshinobu Yamamoto",
       is_autograph: true,
     });
-    expect(tiers.primary).toBe("2021 BBM 1st Version #140 Yoshinobu Yamamoto auto");
+    expect(tiers.primary).toBe("2021 BBM 1st Version #140 Yoshinobu Yamamoto");
   });
 
-  it("includes the parallel name and serial denominator", () => {
+  it("keeps the parallel name and serial denominator out of the search words", () => {
     const tiers = buildPt130SearchTiers({
       year: 2024,
       set_name: "Topps Chrome",
@@ -357,6 +357,17 @@ describe("eBay sold search URLs", () => {
       selected_parallel_name: "Red Refractor /5",
       serial_number: "3/5",
     });
-    expect(tiers.primary).toBe("2024 Topps Chrome #150 Elly De La Cruz Red Refractor /5");
+    expect(tiers.primary).toBe("2024 Topps Chrome #150 Elly De La Cruz");
+  });
+
+  it("broadening tiers drop the card number and narrow to the parent brand", () => {
+    const tiers = buildPt130SearchTiers({
+      year: 2024,
+      set_name: "Bowman Sterling",
+      card_number: "BSR-40",
+      player_name: "Roki Sasaki",
+    });
+    expect(tiers.noNumber).toBe("2024 Bowman Sterling Roki Sasaki");
+    expect(tiers.brand).toBe("2024 Bowman #BSR 40 Roki Sasaki");
   });
 });

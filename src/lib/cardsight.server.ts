@@ -830,6 +830,31 @@ export function verifyCompTitle(
 }
 
 /**
+ * Collector-readable label for why a returned sold listing wasn't used for the
+ * value. The UI shows these so search results are never silently discarded.
+ */
+export function compExclusionLabel(reason: string | null | undefined): string {
+  const r = String(reason ?? "").toLowerCase();
+  if (!r) return "needs review";
+  if (r.includes("sealed") || r.includes("lot")) return "lot / box";
+  if (r.includes("player name")) return "different player";
+  if (r.includes("year")) return "different year";
+  if (r.includes("set") || r.includes("product")) return "different set";
+  if (r.includes("card number")) return "different card number";
+  if (r.includes("autograph")) return "autograph mismatch";
+  if (r.includes("serial")) return "different serial run";
+  if (r.includes("parallel") || r.includes("variation")) return "different parallel";
+  if (r.includes("missing title")) return "no title";
+  return r;
+}
+
+/** Rows so clearly not this card that caching them only pollutes future pulls. */
+export function isUnusableCompReason(reason: string | null | undefined): boolean {
+  const r = String(reason ?? "").toLowerCase();
+  return r.includes("player name") || r.includes("sealed") || r.includes("lot");
+}
+
+/**
  * Manual picks: the collector is the filter. Only refuse rows that are provably
  * not this card — multi-card listings and a stated, conflicting card number.
  */

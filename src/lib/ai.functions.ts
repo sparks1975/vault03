@@ -627,6 +627,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         cardsight_lookup_failed_at: z.string().optional().nullable(),
         // Bypass the 24h sold-comp cache and the 7-day lookup cooldown.
         force_refresh: z.boolean().optional().nullable(),
+        // Opt-in wider eBay searches (brand-only, no card number). Off by
+        // default so a normal valuation is one search.
+        broaden: z.boolean().optional().nullable(),
       })
 
       .parse(d),
@@ -1033,31 +1036,45 @@ export const estimateCardValue = createServerFn({ method: "POST" })
             return level === "exact" || level === "strong";
           }).length;
 
-        // Tier 1: exact product + card number. Re-scrape when the cache is stale
-        // OR when nothing in the cache verifies — a fresh cache of unusable
-        // rows (wrong category, printed-auto rejects) is still no comps.
+        // ONE search per valuation: year + product + card number + player.
+        // Broader brand-only / no-card-number searches are opt-in ("Broaden
+        // search"), because running them every time is what made valuation
+        // take minutes and filled the cache with other players' parallels.
         if (tiers.primary && (!cacheFresh || qualifiedCount() === 0)) {
           await runSearch(tiers.primary, false);
           rows = await loadRows();
         }
-        // Tiers 2 and 3 run whenever the verified pool is thin — even on a fresh
-        // cache, because a fresh cache full of unusable rows is still no comps.
-        // When tier 1 produced nothing usable at all, both broader tiers are
-        // certain to be needed, so run them concurrently instead of end-to-end.
-        if (qualifiedCount() === 0 && tiers.brand && tiers.noNumber) {
-          await Promise.all([runSearch(tiers.brand, true), runSearch(tiers.noNumber, true)]);
-          rows = await loadRows();
-        } else {
-          if (qualifiedCount() < 8 && tiers.brand) {
-            await runSearch(tiers.brand, true);
-            rows = await loadRows();
-          }
-          if (qualifiedCount() < 5 && tiers.noNumber) {
-            await runSearch(tiers.noNumber, true);
+        if (data.broaden && qualifiedCount() === 0) {
+          const broader = [tiers.brand, tiers.noNumber].filter((d): d is string => Boolean(d));
+          if (broader.length > 0) {
+            await Promise.all(broader.map((d) => runSearch(d, true)));
             rows = await loadRows();
           }
         }
 
+        // Purge cached rows that can never be this card (other players, lots and
+        // boxes) so future pulls aren't back-filled with noise. Everything else
+        // stays cached and visible in Manage Comps with its exclusion reason.
+        try {
+          const { isUnusableCompReason } = await import("./cardsight.server");
+          const junkUrls = rows
+            .filter((row) => {
+              const score = scoreCompTitle(row.title ?? "", compLookup);
+              return score.level === "reject" && isUnusableCompReason(score.reasons[0]);
+            })
+            .map((row) => row.url)
+            .filter((u): u is string => Boolean(u));
+          if (junkUrls.length > 0) {
+            await context.supabase
+              .from("pt130_comps")
+              .delete()
+              .eq("card_id", data.card_id as string)
+              .in("url", junkUrls.slice(0, 200));
+            rows = await loadRows();
+          }
+        } catch (err) {
+          console.error("comp cache purge failed:", err);
+        }
 
         const selection = selectValuationComps(
           rows.map((row) => ({
@@ -1083,7 +1100,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           compsNote = selection.note;
         } else if (rows.length > 0) {
           compsNote =
-            "Found sold listings but fewer than two matched this exact card — open Manage Comps to pick the right ones.";
+            `eBay returned ${rows.length} sold listings but none matched this exact card — open Manage Comps to see them and pick the right ones.`;
         }
         pricingSourceResponded = true;
 
@@ -1094,9 +1111,18 @@ export const estimateCardValue = createServerFn({ method: "POST" })
 
     };
 
-    // Real sold data first, CardSight catalog pricing only as a backstop.
-    await ebaySoldPass();
-    if (!usedCardsight) await cardsightPass();
+    // Catalog pricing first when the card is linked: one structured request
+    // already scoped to this card + parallel + grade is both faster and more
+    // accurate than guessing eBay keywords. Scraping is the fallback for cards
+    // with no catalog link (or no sales on the catalog card).
+    if (data.cardsight_card_id) {
+      await cardsightPass();
+      if (!usedCardsight) await ebaySoldPass();
+    } else {
+      await ebaySoldPass();
+      if (!usedCardsight) await cardsightPass();
+    }
+
 
 
     // No generic fallback median here: `sales` is only ever populated with

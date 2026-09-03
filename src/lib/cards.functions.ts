@@ -760,8 +760,8 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
 
         for (const r of rows) {
           const price = Number(r.price);
-          const level = candidateLevel(r.title);
-          if (!Number.isFinite(price) || price <= 0 || level === "reject") continue;
+          if (!Number.isFinite(price) || price <= 0) continue;
+          const score = scoreTitle(r.title);
           candidates.push({
             title: r.title ?? null,
             image_url: null,
@@ -769,8 +769,8 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
             sold_at: r.date ?? null,
             source: r.source || "eBay sold",
             url: r.url ?? null,
-            level,
-            reason: scoreTitle(r.title).reasons[0] ?? null,
+            level: score.level,
+            reason: score.reasons[0] ?? null,
           });
         }
       } catch (err) {
@@ -833,13 +833,11 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       .select("title, image_url, price, sold_at, url")
       .eq("card_id", data.card_id)
       .eq("user_id", userId);
-    const rejectReasons: string[] = [];
     for (const r of pt ?? []) {
       const price = Number(r.price);
       if (!Number.isFinite(price) || price <= 0) continue;
       if (isNonSingleCardListing(r.title)) continue;
       const match = scoreTitle(r.title);
-      if (match.level === "reject") rejectReasons.push(match.reasons[0] ?? "unmatched");
       candidates.push({
         title: r.title ?? null,
         image_url: r.image_url ?? null,
@@ -864,32 +862,27 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
     }
     const scored = Array.from(dedupedByKey.values());
     const identifiedCount = scored.filter((c) => c.level === "exact" || c.level === "strong").length;
-    const visible = selectManageCompCandidates(scored);
-    const reasonCounts = new Map<string, number>();
-    for (const reason of rejectReasons) reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1);
-    const reasonSummary = [...reasonCounts.entries()].map(([reason, count]) => `${reason} ×${count}`).join(", ");
-    if (identifiedCount > 0 && scored.length > visible.length) {
-      ebayNote = ebayNote ?? `Hid ${scored.length - visible.length} listings that are not this card.`;
-    } else if (identifiedCount === 0 && visible.some((c) => c.level === "weak")) {
-      ebayNote = ebayNote ?? "No listing matched this exact card. These are close enough to review.";
-    } else if (identifiedCount === 0 && visible.length > 0) {
+    // Never hide what the sources returned. Matches come first, everything else
+    // follows labelled with why it wasn't used, so the collector can promote a
+    // listing instead of staring at an empty panel.
+    const { compExclusionLabel } = await import("./cardsight.server");
+    void selectManageCompCandidates;
+    if (identifiedCount === 0 && scored.length > 0) {
       ebayNote = ebayNote ??
-        `None of the ${visible.length} eBay listings auto-matched (${reasonSummary || "unmatched"}). Select the ones that are this card.`;
-    } else if (visible.length === 0 && (pt?.length ?? 0) > 0) {
-      ebayNote = ebayNote ??
-        `eBay returned ${pt?.length ?? 0} sold listings, but none matched this card's player, year, set, or number.`;
+        `None of the ${scored.length} sold listings auto-matched this card. Check the ones that are this card, or broaden the search.`;
     }
-    const deduped = visible.map((c) => ({
+    const deduped = scored.map((c) => ({
       ...c,
-      level: (c.level === "reject" ? "weak" : c.level) as "exact" | "strong" | "weak",
+      reason: c.level === "exact" || c.level === "strong" ? null : compExclusionLabel(c.reason),
     }));
-    const levelRank = { exact: 0, strong: 1, weak: 2 } as const;
+    const levelRank = { exact: 0, strong: 1, weak: 2, reject: 3 } as const;
     deduped.sort((a, b) => {
       if (levelRank[a.level] !== levelRank[b.level]) return levelRank[a.level] - levelRank[b.level];
       const ta = a.sold_at ? new Date(a.sold_at).getTime() : 0;
       const tb = b.sold_at ? new Date(b.sold_at).getTime() : 0;
       return tb - ta;
     });
+
 
     const { data: selected } = await supabase
       .from("card_sales")

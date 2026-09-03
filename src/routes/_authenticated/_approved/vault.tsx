@@ -894,7 +894,7 @@ function CardDetail({
     }
   }
 
-  async function refreshValue() {
+  async function refreshValue(broaden = false) {
     setValuing(true);
     try {
       const est = await estimateFn({
@@ -915,6 +915,9 @@ function CardDetail({
           // Manual per-card refresh always re-scrapes: ignore the 24h comp
           // cache and the 7-day failed-lookup cooldown.
           force_refresh: true,
+          // Only the explicit "Broaden search" action runs the wider,
+          // slower brand-only / no-card-number searches.
+          broaden,
         },
 
       });
@@ -1011,12 +1014,20 @@ function CardDetail({
                 <Pencil className="size-3" /> Edit
               </button>
               <button
-                onClick={refreshValue}
+                onClick={() => refreshValue()}
                 disabled={valuing}
                 className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary disabled:opacity-50 inline-flex items-center gap-1"
               >
                 {valuing ? <Loader2 className="size-3 animate-spin" /> : null}
                 {valuing ? "Valuing" : "Refresh value"}
+              </button>
+              <button
+                onClick={() => refreshValue(true)}
+                disabled={valuing}
+                title="Search the parent brand and without the card number too"
+                className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                Broaden search
               </button>
               <button
                 onClick={() => confirm("Remove this card?") && deleteSelected()}
@@ -1582,8 +1593,8 @@ type CompCandidate = {
   sold_at: string | null;
   source: string;
   url: string | null;
-  /** "weak" rows are suggestions only — they never affect the saved value. */
-  level?: "exact" | "strong" | "weak";
+  /** "weak"/"reject" rows are shown for review — they never affect the saved value. */
+  level?: "exact" | "strong" | "weak" | "reject";
   reason?: string | null;
 };
 
@@ -1776,7 +1787,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
           <div>
             <h3 className="text-sm font-mono uppercase tracking-widest">Manage comps</h3>
             <p className="text-[10px] text-muted-foreground mt-1">
-              Matched sold listings are checked. Wrong player, year, set, or number are hidden.
+              Matched sold listings are checked and used for the value. Everything eBay returned is listed below it, tagged with why it wasn't used — check any that are this card.
             </p>
             {loadNote && (
               <p className="text-[10px] text-muted-foreground mt-1">{loadNote}</p>
@@ -1863,7 +1874,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
                             Likely
                           </span>
                         )}
-                        {c.level === "weak" && (
+                        {(c.level === "weak" || c.level === "reject") && (
                           <span className="shrink-0 border border-border px-1.5 py-0.5 text-[9px] font-mono uppercase text-muted-foreground">
                             {c.reason ? c.reason : "Needs review"}
                           </span>

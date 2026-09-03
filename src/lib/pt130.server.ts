@@ -281,16 +281,21 @@ export function buildPt130Descriptor(fields: {
 
 }
 
-// Search tiers, run on demand so cost only grows when comps are missing:
-//  1. year + product + card number + player (+ auto/parallel traits)
-//  2. year + brand + card number + player      (fewer than 8 verified comps)
-//  3. year + product + player, no card number  (fewer than 5 verified comps)
+// Search tiers. Identity ONLY (year + product + card number + player): eBay
+// ranks keyword relevance, so adding parallel/finish words ("Mini Diamond
+// Refractor"), a serial denominator, or "auto" makes eBay return other
+// players' parallels instead of this card. Those traits stay in verification
+// (scoreCompTitle) where they belong.
+//  1. primary  — year + product + card number + player
+//  2. brand    — year + parent brand + card number + player   (broaden only)
+//  3. noNumber — year + product + player, no card number      (broaden only)
 export function buildPt130SearchTiers(
   fields: Parameters<typeof buildPt130Descriptor>[0],
 ): { primary: string; brand: string | null; noNumber: string | null } {
-  const primary = buildPt130Descriptor(fields, { includeCardNumber: true, setLabel: "set" });
-  const brand = buildPt130Descriptor(fields, { includeCardNumber: true, setLabel: "brand" });
-  const noNumber = buildPt130Descriptor(fields, { includeCardNumber: false, setLabel: "set" });
+  const identity = { includeTraits: false } as const;
+  const primary = buildPt130Descriptor(fields, { ...identity, includeCardNumber: true, setLabel: "set" });
+  const brand = buildPt130Descriptor(fields, { ...identity, includeCardNumber: true, setLabel: "brand" });
+  const noNumber = buildPt130Descriptor(fields, { ...identity, includeCardNumber: false, setLabel: "set" });
   return {
     primary,
     brand: brand && brand !== primary ? brand : null,
@@ -342,7 +347,7 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
 
   // The connector gateway cuts requests off at ~60s, so run-sync-get-dataset-items
   // always returned 502 for runs that take longer. Start the run async and poll.
-  const startRes = await fetch(`${GATEWAY_URL}/acts/${ACTOR_ID}/runs?timeout=300`, {
+  const startRes = await fetch(`${GATEWAY_URL}/acts/${ACTOR_ID}/runs?timeout=90`, {
     method: "POST",
     headers,
     body: JSON.stringify(input),
@@ -360,12 +365,16 @@ export async function scrapePt130(descriptor: string | string[]): Promise<Pt130S
   // The dataset id on the start payload is not reliable while the run is still
   // READY — always take it from the final run status.
   let datasetId = started.data?.defaultDatasetId ?? null;
-  const deadline = Date.now() + 240_000;
+  // One search per valuation, so a tight ceiling: a run that hasn't finished in
+  // 45s is not worth making the collector wait for. Partial dataset rows are
+  // still read below.
+  const deadline = Date.now() + 45_000;
   let status = "READY";
-  let wait = 1_500;
+  let wait = 1_000;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, wait));
-    wait = 3_000;
+    wait = 2_000;
+
 
     const statusRes = await fetch(`${GATEWAY_URL}/actor-runs/${runId}`, { headers });
     if (!statusRes.ok) continue;
