@@ -281,16 +281,21 @@ export function buildPt130Descriptor(fields: {
 
 }
 
-// Search tiers, run on demand so cost only grows when comps are missing:
-//  1. year + product + card number + player (+ auto/parallel traits)
-//  2. year + brand + card number + player      (fewer than 8 verified comps)
-//  3. year + product + player, no card number  (fewer than 5 verified comps)
+// Search tiers. Identity ONLY (year + product + card number + player): eBay
+// ranks keyword relevance, so adding parallel/finish words ("Mini Diamond
+// Refractor"), a serial denominator, or "auto" makes eBay return other
+// players' parallels instead of this card. Those traits stay in verification
+// (scoreCompTitle) where they belong.
+//  1. primary  — year + product + card number + player
+//  2. brand    — year + parent brand + card number + player   (broaden only)
+//  3. noNumber — year + product + player, no card number      (broaden only)
 export function buildPt130SearchTiers(
   fields: Parameters<typeof buildPt130Descriptor>[0],
 ): { primary: string; brand: string | null; noNumber: string | null } {
-  const primary = buildPt130Descriptor(fields, { includeCardNumber: true, setLabel: "set" });
-  const brand = buildPt130Descriptor(fields, { includeCardNumber: true, setLabel: "brand" });
-  const noNumber = buildPt130Descriptor(fields, { includeCardNumber: false, setLabel: "set" });
+  const identity = { includeTraits: false } as const;
+  const primary = buildPt130Descriptor(fields, { ...identity, includeCardNumber: true, setLabel: "set" });
+  const brand = buildPt130Descriptor(fields, { ...identity, includeCardNumber: true, setLabel: "brand" });
+  const noNumber = buildPt130Descriptor(fields, { ...identity, includeCardNumber: false, setLabel: "set" });
   return {
     primary,
     brand: brand && brand !== primary ? brand : null,
