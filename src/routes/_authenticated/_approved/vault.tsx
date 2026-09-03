@@ -915,6 +915,9 @@ function CardDetail({
           // Manual per-card refresh always re-scrapes: ignore the 24h comp
           // cache and the 7-day failed-lookup cooldown.
           force_refresh: true,
+          // Only the explicit "Broaden search" action runs the wider,
+          // slower brand-only / no-card-number searches.
+          broaden,
         },
 
       });
