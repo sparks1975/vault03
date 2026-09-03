@@ -627,6 +627,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         cardsight_lookup_failed_at: z.string().optional().nullable(),
         // Bypass the 24h sold-comp cache and the 7-day lookup cooldown.
         force_refresh: z.boolean().optional().nullable(),
+        // Opt-in wider eBay searches (brand-only, no card number). Off by
+        // default so a normal valuation is one search.
+        broaden: z.boolean().optional().nullable(),
       })
 
       .parse(d),
