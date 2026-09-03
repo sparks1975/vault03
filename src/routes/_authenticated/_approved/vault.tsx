@@ -1776,7 +1776,7 @@ function ManageCompsDialog({ cardId, onClose }: { cardId: string; onClose: () =>
           <div>
             <h3 className="text-sm font-mono uppercase tracking-widest">Manage comps</h3>
             <p className="text-[10px] text-muted-foreground mt-1">
-              Matched sold listings are checked. Wrong player, year, set, or number are hidden.
+              Matched sold listings are checked and used for the value. Everything eBay returned is listed below it, tagged with why it wasn't used — check any that are this card.
             </p>
             {loadNote && (
               <p className="text-[10px] text-muted-foreground mt-1">{loadNote}</p>
