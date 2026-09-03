@@ -760,8 +760,8 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
 
         for (const r of rows) {
           const price = Number(r.price);
-          const level = candidateLevel(r.title);
-          if (!Number.isFinite(price) || price <= 0 || level === "reject") continue;
+          if (!Number.isFinite(price) || price <= 0) continue;
+          const score = scoreTitle(r.title);
           candidates.push({
             title: r.title ?? null,
             image_url: null,
@@ -769,8 +769,8 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
             sold_at: r.date ?? null,
             source: r.source || "eBay sold",
             url: r.url ?? null,
-            level,
-            reason: scoreTitle(r.title).reasons[0] ?? null,
+            level: score.level,
+            reason: score.reasons[0] ?? null,
           });
         }
       } catch (err) {
