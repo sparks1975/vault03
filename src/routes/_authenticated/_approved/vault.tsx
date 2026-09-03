@@ -1582,8 +1582,8 @@ type CompCandidate = {
   sold_at: string | null;
   source: string;
   url: string | null;
-  /** "weak" rows are suggestions only — they never affect the saved value. */
-  level?: "exact" | "strong" | "weak";
+  /** "weak"/"reject" rows are shown for review — they never affect the saved value. */
+  level?: "exact" | "strong" | "weak" | "reject";
   reason?: string | null;
 };
 
