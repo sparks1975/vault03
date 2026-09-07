@@ -50,6 +50,35 @@ export function buildTheCardApiQuery(descriptor: string): string {
   return `${cleaned} ${EXCLUSIONS}`.trim();
 }
 
+function headerInt(res: Response, names: string[]): number | null {
+  for (const n of names) {
+    const v = res.headers.get(n);
+    if (v != null && v !== "" && Number.isFinite(Number(v))) return Number(v);
+  }
+  return null;
+}
+
+// Usage telemetry: one row per outbound market request so the dashboard can
+// report request volume and the remaining daily allowance.
+async function logUsage(row: {
+  endpoint: string;
+  query: string;
+  ok: boolean;
+  status: number | null;
+  result_count: number | null;
+  raw_count: number | null;
+  duration_ms: number;
+  daily_limit: number | null;
+  remaining: number | null;
+}) {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("api_usage_events").insert({ provider: "thecardapi", ...row });
+  } catch (err) {
+    console.error("[thecardapi] usage log failed:", err);
+  }
+}
+
 export async function searchTheCardApiSales(
   descriptor: string,
   opts: { limit?: number } = {},
@@ -67,11 +96,43 @@ export async function searchTheCardApiSales(
     sort: "date_desc",
   });
 
-  const res = await fetch(`${BASE_URL}/sales?${params.toString()}`, {
-    headers: { "x-market-api-key": key, Accept: "application/json" },
-  });
+  const startedAt = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}/sales?${params.toString()}`, {
+      headers: { "x-market-api-key": key, Accept: "application/json" },
+    });
+  } catch (err) {
+    await logUsage({
+      endpoint: "market/sales",
+      query,
+      ok: false,
+      status: null,
+      result_count: null,
+      raw_count: null,
+      duration_ms: Date.now() - startedAt,
+      daily_limit: null,
+      remaining: null,
+    });
+    throw err;
+  }
+
+  const dailyLimit = headerInt(res, ["x-ratelimit-limit", "x-rate-limit-limit", "ratelimit-limit"]);
+  const remaining = headerInt(res, ["x-ratelimit-remaining", "x-rate-limit-remaining", "ratelimit-remaining"]);
+
   if (!res.ok) {
     const text = await res.text();
+    await logUsage({
+      endpoint: "market/sales",
+      query,
+      ok: false,
+      status: res.status,
+      result_count: null,
+      raw_count: null,
+      duration_ms: Date.now() - startedAt,
+      daily_limit: dailyLimit,
+      remaining,
+    });
     throw new Error(`thecardapi sales search failed [${res.status}]: ${text.slice(0, 300)}`);
   }
   const payload = (await res.json()) as { data?: SaleRow[]; pagination?: { total?: number } };
@@ -97,5 +158,17 @@ export async function searchTheCardApiSales(
     });
   }
   console.log(`[thecardapi] q="${query}" raw=${rows.length} kept=${sales.length}`);
+  await logUsage({
+    endpoint: "market/sales",
+    query,
+    ok: true,
+    status: res.status,
+    result_count: sales.length,
+    raw_count: rows.length,
+    duration_ms: Date.now() - startedAt,
+    daily_limit: dailyLimit,
+    remaining,
+  });
   return { sales, raw_count: rows.length, query };
 }
+
