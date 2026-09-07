@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as cardsight from "./cardsight.server";
 import { scoreCompTitle, selectManageCompCandidates, selectValuationComps } from "./cardsight.server";
-import { buildPt130SearchTiers, ebaySoldSearchUrl, ebaySoldSearchUrls, parseApifySoldListings } from "./pt130.server";
+import { buildPt130SearchTiers } from "./pt130.server";
 
 const ohtani = {
   player_name: "Shohei Ohtani",
@@ -256,85 +256,7 @@ describe("2021 BBM 1st Version #140 Yoshinobu Yamamoto", () => {
   });
 });
 
-describe("eBay sold search URLs", () => {
-  it("does not lock Japanese brands to the US Baseball Cards category", () => {
-    const url = ebaySoldSearchUrl("2021 BBM 1st Version #140 Yoshinobu Yamamoto");
-    expect(url).toContain("LH_Sold=1");
-    expect(url).not.toContain("_sacat=");
-  });
-
-  it("also tries the US category as a second BBM URL", () => {
-    const urls = ebaySoldSearchUrls("2021 BBM 1st Version #140 Yoshinobu Yamamoto");
-    expect(urls).toHaveLength(2);
-    expect(urls[1]).toContain("_sacat=26376");
-  });
-
-  it("keeps the US Baseball Cards category for Topps", () => {
-    expect(ebaySoldSearchUrl("2024 Topps #503 Shohei Ohtani")).toContain("_sacat=26376");
-  });
-
-  const yamamotoSoldRow = {
-    title: "YOSHINOBU YAMAMOTO 2021 BBM 1ST VERSION #140 FACSIMILE AUTO PRE DODGERS, MVP!",
-    price: "$65.00",
-    priceValue: 65,
-    currency: "USD",
-    sold: true,
-    soldDate: "Sold  Aug 5, 2026",
-    url: "https://www.ebay.com/itm/1",
-  };
-
-  it("reads sold rows out of Lovable's { data: [...] } gateway wrapper", () => {
-    const sales = parseApifySoldListings({ data: [yamamotoSoldRow] });
-    expect(sales).toHaveLength(1);
-    expect(sales[0].price).toBe(65);
-    expect(sales[0].title).toMatch(/YAMAMOTO/i);
-  });
-
-  it("reads sold rows out of { data: { items: [...] } }", () => {
-    expect(parseApifySoldListings({ data: { items: [yamamotoSoldRow] } })).toHaveLength(1);
-  });
-
-  it("keeps the row when soldDate is missing but the listing has a price", () => {
-    const { soldDate: _soldDate, ...row } = yamamotoSoldRow;
-    expect(parseApifySoldListings({ data: [row] })).toHaveLength(1);
-  });
-
-  it("keeps completed-search rows even when the actor marks sold=false", () => {
-    expect(parseApifySoldListings({
-      data: [{ ...yamamotoSoldRow, sold: false, soldDate: undefined }],
-    })).toHaveLength(1);
-  });
-
-  it("treats US$ as USD", () => {
-    expect(parseApifySoldListings({
-      data: [{ ...yamamotoSoldRow, currency: "US $" }],
-    })).toHaveLength(1);
-  });
-
-  it("keeps a nested title when the top-level title is null", () => {
-    const sales = parseApifySoldListings({
-      data: [{
-        title: null,
-        price: "$50.00",
-        priceValue: 50,
-        currency: "USD",
-        sold: true,
-        basic_info: {
-          title: "YOSHINOBU YAMAMOTO 2021 BBM 1ST VERSION #140 FACSIMILE AUTO",
-        },
-        url: "https://www.ebay.com/itm/2",
-      }],
-    });
-    expect(sales).toHaveLength(1);
-    expect(sales[0].title).toMatch(/YAMAMOTO/i);
-  });
-
-  it("is the live production failure: wrapped payload is not an array", () => {
-    const wrapped = { data: [yamamotoSoldRow] };
-    expect(Array.isArray(wrapped)).toBe(false);
-    expect(parseApifySoldListings(wrapped as unknown as unknown[])).toHaveLength(1);
-  });
-
+describe("sold search descriptors", () => {
   // Searches are identity-only: eBay ranks by keyword relevance, so trait words
   // pull in other players' parallels. Traits are enforced in verification.
   it("keeps autograph wording out of the search words", () => {

@@ -778,7 +778,7 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
       }
     }
 
-    // Refresh eBay sold rows when photos are missing OR when nothing in the
+    // Refresh sold rows when photos are missing OR when nothing in the
     // cache verifies as this card. Otherwise Manage Comps keeps showing a
     // stale empty/wrong scrape from before the matcher fix.
     const { data: existingPt } = await supabase
@@ -818,12 +818,12 @@ export const fetchCompCandidates = createServerFn({ method: "POST" })
         });
         if (result.stored === 0) {
           ebayNote = result.scraped === 0
-            ? "eBay sold scrape returned no listings. Check the Apify actor / API keys."
+            ? "Sold-sales search returned no listings."
             : "eBay returned listings but none could be stored.";
         }
       } catch (err) {
         console.error("fetchCompCandidates eBay refresh failed", err);
-        ebayNote = err instanceof Error ? err.message : "eBay sold scrape failed.";
+        ebayNote = err instanceof Error ? err.message : "Sold-sales search failed.";
       }
     }
 
