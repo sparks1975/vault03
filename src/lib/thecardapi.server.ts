@@ -1,16 +1,21 @@
-// EXPERIMENTAL sold-comp source: thecardapi.com REST market API.
-// Used only when a valuation is explicitly run with pricing_source="thecardapi"
-// so we can compare its results against the current Apify/eBay pull without
-// changing the default pipeline.
+// Sold-comp source: thecardapi.com REST market API (Builder tier).
+// This is the only sold-listing source; Apify/eBay scraping was removed.
 //
 // SERVER-ONLY module — never import from client code.
-import type { Pt130Sale } from "./pt130.server";
+export type SoldSale = {
+  title: string | null;
+  image_url: string | null;
+  price: number;
+  sold_at: string | null; // ISO date (YYYY-MM-DD) if parseable
+  listing_type: "fixed" | "auction" | "best_offer" | "other";
+  url: string | null;
+};
 
 // Must be the www host: thecardapi.com 307-redirects every API path.
 const BASE_URL = "https://www.thecardapi.com/api/v1/market";
 
 export type TheCardApiResult = {
-  sales: Pt130Sale[];
+  sales: SoldSale[];
   raw_count: number;
   query: string;
 };
@@ -28,7 +33,7 @@ type SaleRow = {
   sport?: string | null;
 };
 
-function listingType(raw: string | null | undefined): Pt130Sale["listing_type"] {
+function listingType(raw: string | null | undefined): SoldSale["listing_type"] {
   const v = (raw ?? "").toLowerCase();
   if (v.includes("auction")) return "auction";
   if (v.includes("best")) return "best_offer";
@@ -74,7 +79,7 @@ export async function searchTheCardApiSales(
     (row) => !row.sport || /baseball/i.test(row.sport),
   );
 
-  const sales: Pt130Sale[] = [];
+  const sales: SoldSale[] = [];
   for (const row of rows) {
     const price = Number(row.price);
     if (!Number.isFinite(price) || price <= 0) continue;
