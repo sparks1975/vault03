@@ -630,6 +630,9 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         // Opt-in wider eBay searches (brand-only, no card number). Off by
         // default so a normal valuation is one search.
         broaden: z.boolean().optional().nullable(),
+        // EXPERIMENT: "thecardapi" swaps the sold-comp source for this single
+        // valuation only. Default (undefined/"default") keeps the normal pipeline.
+        pricing_source: z.enum(["default", "thecardapi"]).optional().nullable(),
       })
 
       .parse(d),
@@ -1111,11 +1114,67 @@ export const estimateCardValue = createServerFn({ method: "POST" })
 
     };
 
+    // EXPERIMENTAL alternative sold-comp source (thecardapi.com). Runs alone so
+    // the comparison is clean: no catalog pricing, no Apify scrape, and nothing
+    // written to the cached comp table.
+    const theCardApiPass = async () => {
+      try {
+        const { selectValuationComps } = await import("./cardsight.server");
+        const { buildPt130SearchTiers } = await import("./pt130.server");
+        const { searchTheCardApiSales } = await import("./thecardapi.server");
+
+        const compLookup = {
+          player_name: valuationLookup.player_name,
+          year: valuationLookup.year,
+          set_name: valuationLookup.set_name,
+          card_number: valuationLookup.card_number,
+          selected_parallel_name: selectedParallelName,
+          is_autograph: valuationLookup.is_autograph,
+          serial_number: data.serial_number,
+          is_first_bowman: valuationLookup.is_first_bowman,
+          grader: data.grader,
+          grade: data.grade,
+        };
+        const tiers = buildPt130SearchTiers(compLookup);
+        if (!tiers.primary) {
+          compsNote = "Not enough card details to search The Card API.";
+          return;
+        }
+        const result = await searchTheCardApiSales(tiers.primary);
+        pricingSourceResponded = true;
+        const selection = selectValuationComps(
+          result.sales.map((s) => ({ title: s.title, price: s.price, sold_at: s.sold_at, url: s.url })),
+          compLookup,
+        );
+        if (selection.comps.length > 0) {
+          sales = selection.comps.map((row) => ({
+            sold_at: row.sold_at ?? null,
+            grade: data.grader && data.grade ? `${data.grader} ${data.grade}` : null,
+            price: Number(row.price),
+            source: "The Card API (test)",
+            url: row.url ?? null,
+            title: row.title ?? null,
+          }));
+          if (selection.value != null) currentValue = selection.value;
+          usedCardsight = true;
+          compsNote = `The Card API test: ${result.raw_count} sold listings returned, ${selection.comps.length} matched. ${selection.note ?? ""}`.trim();
+        } else {
+          compsNote = `The Card API test: ${result.raw_count} sold listings returned, none matched this exact card.`;
+        }
+      } catch (err) {
+        console.error("thecardapi pass failed:", err);
+        pipelineError = true;
+        compsNote = err instanceof Error ? err.message : String(err);
+      }
+    };
+
     // Catalog pricing first when the card is linked: one structured request
     // already scoped to this card + parallel + grade is both faster and more
     // accurate than guessing eBay keywords. Scraping is the fallback for cards
     // with no catalog link (or no sales on the catalog card).
-    if (data.cardsight_card_id) {
+    if (data.pricing_source === "thecardapi") {
+      await theCardApiPass();
+    } else if (data.cardsight_card_id) {
       await cardsightPass();
       if (!usedCardsight) await ebaySoldPass();
     } else {

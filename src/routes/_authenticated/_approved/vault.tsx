@@ -894,7 +894,7 @@ function CardDetail({
     }
   }
 
-  async function refreshValue(broaden = false) {
+  async function refreshValue(broaden = false, pricingSource: "default" | "thecardapi" = "default") {
     setValuing(true);
     try {
       const est = await estimateFn({
@@ -918,6 +918,8 @@ function CardDetail({
           // Only the explicit "Broaden search" action runs the wider,
           // slower brand-only / no-card-number searches.
           broaden,
+          // Experimental one-off source swap; default leaves the pipeline alone.
+          pricing_source: pricingSource,
         },
 
       });
@@ -1028,6 +1030,14 @@ function CardDetail({
                 className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary disabled:opacity-50 inline-flex items-center gap-1"
               >
                 Broaden search
+              </button>
+              <button
+                onClick={() => refreshValue(false, "thecardapi")}
+                disabled={valuing}
+                title="Test valuation using The Card API sold data instead of the usual source"
+                className="text-[10px] font-mono uppercase tracking-widest border border-accent text-accent px-2 py-1 hover:bg-accent hover:text-accent-foreground disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                Test: Card API
               </button>
               <button
                 onClick={() => confirm("Remove this card?") && deleteSelected()}
