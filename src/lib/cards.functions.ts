@@ -189,14 +189,13 @@ export const listCards = createServerFn({ method: "GET" })
         card.photo_url && (card.photo_url.startsWith("http") || card.photo_url.startsWith("data:"))
           ? card.photo_url
           : null;
-      const signed = card.photo_url ? signedPhotos.get(card.photo_url) ?? null : null;
-      const photoUrl = passthrough ?? signed;
+      const signed = card.photo_url ? signedPhotos.get(card.photo_url) : undefined;
       return {
         ...card,
-        photo_url: photoUrl,
-        photo_url_2x: photoUrl,
-        photo_thumb_url: photoUrl,
-        photo_thumb_url_2x: photoUrl,
+        photo_url: passthrough ?? signed?.photo_url ?? null,
+        photo_url_2x: passthrough ?? signed?.photo_url_2x ?? null,
+        photo_thumb_url: passthrough ?? signed?.photo_thumb_url ?? null,
+        photo_thumb_url_2x: passthrough ?? signed?.photo_thumb_url_2x ?? null,
       };
     });
     return withUrls;
