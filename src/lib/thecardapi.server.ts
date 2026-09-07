@@ -25,6 +25,7 @@ type SaleRow = {
   image_url?: string | null;
   thumbnail_url?: string | null;
   listing_type?: string | null;
+  sport?: string | null;
 };
 
 function listingType(raw: string | null | undefined): Pt130Sale["listing_type"] {
