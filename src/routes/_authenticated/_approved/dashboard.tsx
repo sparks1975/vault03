@@ -288,6 +288,8 @@ function DashboardPage() {
 
                 <PricingApiUsage />
 
+                <IdentificationApiUsage />
+
 
 
               </aside>
