@@ -284,6 +284,10 @@ function DashboardPage() {
 
                 <ShowdownSummary />
 
+                <PricingApiUsage />
+
+
+
               </aside>
             </div>
           </>
