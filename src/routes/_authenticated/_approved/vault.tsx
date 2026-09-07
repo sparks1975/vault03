@@ -894,7 +894,7 @@ function CardDetail({
     }
   }
 
-  async function refreshValue(broaden = false, pricingSource: "default" | "thecardapi" = "default") {
+  async function refreshValue(broaden = false) {
     setValuing(true);
     try {
       const est = await estimateFn({
@@ -918,8 +918,6 @@ function CardDetail({
           // Only the explicit "Broaden search" action runs the wider,
           // slower brand-only / no-card-number searches.
           broaden,
-          // Experimental one-off source swap; default leaves the pipeline alone.
-          pricing_source: pricingSource,
         },
 
       });
