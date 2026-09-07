@@ -126,7 +126,9 @@ async function signCardPhotosBatch(
     variants.map((variant) =>
       supabase.storage
         .from("card-photos")
-        .createSignedUrls(storagePaths, SALE_TTL, { transform: variant.transform })
+        // The batched signer accepts the same transform option as createSignedUrl;
+        // the installed supabase-js types just don't declare it yet.
+        .createSignedUrls(storagePaths, SALE_TTL, { transform: variant.transform } as never)
         .then(({ data, error }) => {
           if (error) console.error(`[listCards] Could not sign ${variant.key} photos`, error);
           return data ?? [];
