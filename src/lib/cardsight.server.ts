@@ -70,14 +70,22 @@ async function csFetchUncached<T>(path: string, init?: RequestInit): Promise<T> 
   // logical lookup into six billed calls.
   for (let attempt = 0; attempt < 2; attempt++) {
     await reserveSlot();
-    const res = await fetch(`${REST_BASE}${path}`, {
-      ...init,
-      headers: {
-        "X-API-Key": apiKey(),
-        Accept: "application/json",
-        ...(init?.headers ?? {}),
-      },
-    });
+    const startedAt = Date.now();
+    let res: Response;
+    try {
+      res = await fetch(`${REST_BASE}${path}`, {
+        ...init,
+        headers: {
+          "X-API-Key": apiKey(),
+          Accept: "application/json",
+          ...(init?.headers ?? {}),
+        },
+      });
+    } catch (err) {
+      await logCardsightUsage({ path, ok: false, status: null, duration_ms: Date.now() - startedAt });
+      throw err;
+    }
+    await logCardsightUsage({ path, ok: res.ok, status: res.status, duration_ms: Date.now() - startedAt });
     if (res.ok) return (await res.json()) as T;
     lastStatus = res.status;
     lastBody = await res.text().catch(() => "");
