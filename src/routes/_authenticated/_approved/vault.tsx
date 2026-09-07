@@ -987,9 +987,9 @@ function CardDetail({
         </div>
       )}
       <div className={`bg-card border border-border p-6 shadow-sm ${contentReady ? "" : "invisible"}`}>
-      <div className="flex justify-between mb-8">
-        <span className="text-[10px] font-mono bg-accent text-accent-foreground px-2 h-5 inline-flex items-center">ASSET DETAIL</span>
-        <div className="flex gap-2">
+      <div className="flex flex-col items-start gap-3 mb-8 sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-[10px] font-mono bg-accent text-accent-foreground px-2 h-5 inline-flex items-center whitespace-nowrap shrink-0">ASSET DETAIL</span>
+        <div className="flex flex-wrap gap-2">
           {editing ? (
             <>
               <button
