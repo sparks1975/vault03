@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 
-import { getPricingApiUsage } from "@/lib/usage.functions";
+import { getIdentificationApiUsage, getPricingApiUsage, type UsageSummary } from "@/lib/usage.functions";
 import { Skeleton } from "@/components/ui/skeleton";
 
 function fmtDay(date: string) {
@@ -9,9 +9,17 @@ function fmtDay(date: string) {
   return d.toLocaleDateString(undefined, { month: "numeric", day: "numeric" });
 }
 
-export function PricingApiUsage() {
-  const usageFn = useServerFn(getPricingApiUsage);
-  const q = useQuery({ queryKey: ["pricing-api-usage"], queryFn: () => usageFn() });
+type PanelProps = {
+  title: string;
+  queryKey: string;
+  fetcher: () => Promise<UsageSummary>;
+  resultLabel: string;
+  showAllowance?: boolean;
+  showEmpty?: boolean;
+};
+
+function ApiUsagePanel({ title, queryKey, fetcher, resultLabel, showAllowance = true, showEmpty = true }: PanelProps) {
+  const q = useQuery({ queryKey: [queryKey], queryFn: fetcher });
 
   if (q.isLoading) {
     return (
@@ -27,12 +35,13 @@ export function PricingApiUsage() {
   if (!u || !u.visible) return null;
 
   const max = Math.max(1, ...u.daily.map((d) => d.count));
-  const usedToday = u.daily_limit != null && u.remaining != null ? u.daily_limit - u.remaining : null;
+  const usedToday =
+    showAllowance && u.daily_limit != null && u.remaining != null ? u.daily_limit - u.remaining : null;
 
   return (
     <div className="border border-border p-6">
       <div className="flex items-baseline justify-between gap-3 mb-4">
-        <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Valuation API usage</p>
+        <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">{title}</p>
         <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Last 30 days</span>
       </div>
 
@@ -46,7 +55,6 @@ export function PricingApiUsage() {
             <p className="text-[10px] font-mono text-muted-foreground mt-1">{u.today} logged here</p>
           )}
         </div>
-
         <div>
           <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">7 days</p>
           <p className="text-2xl font-black leading-tight tracking-tight">{u.last7.toLocaleString()}</p>
@@ -57,7 +65,7 @@ export function PricingApiUsage() {
         </div>
       </div>
 
-      {u.daily_limit != null && (
+      {showAllowance && u.daily_limit != null && (
         <div className="mb-5">
           <div className="flex items-baseline justify-between mb-2">
             <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Daily allowance</p>
@@ -68,9 +76,7 @@ export function PricingApiUsage() {
           <span className="block h-1 w-full bg-secondary">
             <span
               className="block h-1 bg-accent"
-              style={{
-                width: `${Math.min(100, Math.round(((usedToday ?? 0) / u.daily_limit) * 100))}%`,
-              }}
+              style={{ width: `${Math.min(100, Math.round(((usedToday ?? 0) / u.daily_limit) * 100))}%` }}
             />
           </span>
           {u.remaining != null && (
@@ -108,10 +114,12 @@ export function PricingApiUsage() {
           <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Failed today</p>
           <p className="text-sm font-mono font-bold">{u.today_failed}</p>
         </div>
-        <div>
-          <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">No results</p>
-          <p className="text-sm font-mono font-bold">{u.today_empty}</p>
-        </div>
+        {showEmpty && (
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">No results</p>
+            <p className="text-sm font-mono font-bold">{u.today_empty}</p>
+          </div>
+        )}
         <div>
           <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Avg time</p>
           <p className="text-sm font-mono font-bold">
@@ -133,7 +141,7 @@ export function PricingApiUsage() {
                 <span
                   className={`shrink-0 text-[10px] font-mono ${!r.ok ? "text-[color:var(--negative)]" : "text-muted-foreground"}`}
                 >
-                  {!r.ok ? "error" : `${r.result_count ?? 0} sales`}
+                  {!r.ok ? "error" : r.result_count == null ? "ok" : `${r.result_count} ${resultLabel}`}
                 </span>
               </li>
             ))}
@@ -141,5 +149,31 @@ export function PricingApiUsage() {
         </>
       )}
     </div>
+  );
+}
+
+export function PricingApiUsage() {
+  const fetcher = useServerFn(getPricingApiUsage);
+  return (
+    <ApiUsagePanel
+      title="Valuation API usage"
+      queryKey="pricing-api-usage"
+      fetcher={() => fetcher()}
+      resultLabel="sales"
+    />
+  );
+}
+
+export function IdentificationApiUsage() {
+  const fetcher = useServerFn(getIdentificationApiUsage);
+  return (
+    <ApiUsagePanel
+      title="Identification API usage"
+      queryKey="identification-api-usage"
+      fetcher={() => fetcher()}
+      resultLabel="results"
+      showAllowance={false}
+      showEmpty={false}
+    />
   );
 }

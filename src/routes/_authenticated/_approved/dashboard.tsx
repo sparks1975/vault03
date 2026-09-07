@@ -9,7 +9,7 @@ import { getCurrentShowdown, getMyShowdownEntry } from "@/lib/showdown.functions
 import { AppNav, MobileNavTabs } from "@/components/AppNav";
 import { ShareDialog } from "@/components/ShareDialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { PricingApiUsage } from "@/components/PricingApiUsage";
+import { PricingApiUsage, IdentificationApiUsage } from "@/components/ApiUsagePanel";
 
 
 import topMoverAsset from "@/assets/dashboard.svg.asset.json";
@@ -287,6 +287,8 @@ function DashboardPage() {
                 <ShowdownSummary />
 
                 <PricingApiUsage />
+
+                <IdentificationApiUsage />
 
 
 
