@@ -630,9 +630,8 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         // Opt-in wider eBay searches (brand-only, no card number). Off by
         // default so a normal valuation is one search.
         broaden: z.boolean().optional().nullable(),
-        // EXPERIMENT: "thecardapi" swaps the sold-comp source for this single
-        // valuation only. Default (undefined/"default") keeps the normal pipeline.
-        pricing_source: z.enum(["default", "thecardapi"]).optional().nullable(),
+      })
+
       })
 
       .parse(d),
