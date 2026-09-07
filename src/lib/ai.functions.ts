@@ -12,17 +12,40 @@ const MODEL = "google/gemini-3.5-flash";
 // don't re-pay the full cost for a card that isn't in the catalog.
 const LOOKUP_RETRY_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
+async function logAiUsage(row: {
+  ok: boolean;
+  status: number | null;
+  duration_ms: number;
+}) {
+  const { logApiUsage } = await import("./api-usage.server");
+  await logApiUsage("lovable-ai", {
+    endpoint: "chat/completions",
+    query: MODEL,
+    ok: row.ok,
+    status: row.status,
+    duration_ms: row.duration_ms,
+  });
+}
+
 async function callAI(body: unknown): Promise<string> {
   const apiKey = process.env.LOVABLE_API_KEY;
   if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
-  const res = await fetch(AI_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  const startedAt = Date.now();
+  let res: Response;
+  try {
+    res = await fetch(AI_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    await logAiUsage({ ok: false, status: null, duration_ms: Date.now() - startedAt });
+    throw err;
+  }
+  await logAiUsage({ ok: res.ok, status: res.status, duration_ms: Date.now() - startedAt });
   if (res.status === 429) throw new Error("Rate limit — try again in a moment.");
   if (res.status === 402) throw new Error("AI credits exhausted. Please add credits.");
   if (!res.ok) throw new Error(`AI request failed: ${res.status} ${await res.text()}`);
