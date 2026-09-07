@@ -52,11 +52,13 @@ export async function searchTheCardApiSales(
   if (!key) throw new Error("THECARDAPI_API_KEY is not configured");
 
   const query = buildTheCardApiQuery(descriptor);
+  // No `category` filter: their category column is only populated for recent
+  // eBay rows, so category=sports silently returns zero results for everything.
+  // Sport is filtered below, on the rows that actually carry it.
   const params = new URLSearchParams({
     q: query,
     limit: String(opts.limit ?? 50),
     sort: "date_desc",
-    category: "sports",
   });
 
   const res = await fetch(`${BASE_URL}/sales?${params.toString()}`, {
@@ -66,8 +68,10 @@ export async function searchTheCardApiSales(
     const text = await res.text();
     throw new Error(`thecardapi sales search failed [${res.status}]: ${text.slice(0, 300)}`);
   }
-  const payload = (await res.json()) as { data?: SaleRow[] };
-  const rows = Array.isArray(payload.data) ? payload.data : [];
+  const payload = (await res.json()) as { data?: SaleRow[]; pagination?: { total?: number } };
+  const rows = (Array.isArray(payload.data) ? payload.data : []).filter(
+    (row) => !row.sport || /baseball/i.test(row.sport),
+  );
 
   const sales: Pt130Sale[] = [];
   for (const row of rows) {
