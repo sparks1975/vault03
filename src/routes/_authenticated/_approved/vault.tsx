@@ -1030,6 +1030,14 @@ function CardDetail({
                 Broaden search
               </button>
               <button
+                onClick={() => refreshValue(false, "thecardapi")}
+                disabled={valuing}
+                title="Test valuation using The Card API sold data instead of the usual source"
+                className="text-[10px] font-mono uppercase tracking-widest border border-accent text-accent px-2 py-1 hover:bg-accent hover:text-accent-foreground disabled:opacity-50 inline-flex items-center gap-1"
+              >
+                Test: Card API
+              </button>
+              <button
                 onClick={() => confirm("Remove this card?") && deleteSelected()}
                 className="size-6 border border-border grid place-items-center hover:bg-destructive hover:text-destructive-foreground transition-colors"
                 aria-label="Delete card"
