@@ -44,6 +44,51 @@ export type Database = {
         }
         Relationships: []
       }
+      api_usage_events: {
+        Row: {
+          created_at: string
+          daily_limit: number | null
+          duration_ms: number | null
+          endpoint: string
+          id: string
+          ok: boolean
+          provider: string
+          query: string | null
+          raw_count: number | null
+          remaining: number | null
+          result_count: number | null
+          status: number | null
+        }
+        Insert: {
+          created_at?: string
+          daily_limit?: number | null
+          duration_ms?: number | null
+          endpoint: string
+          id?: string
+          ok?: boolean
+          provider?: string
+          query?: string | null
+          raw_count?: number | null
+          remaining?: number | null
+          result_count?: number | null
+          status?: number | null
+        }
+        Update: {
+          created_at?: string
+          daily_limit?: number | null
+          duration_ms?: number | null
+          endpoint?: string
+          id?: string
+          ok?: boolean
+          provider?: string
+          query?: string | null
+          raw_count?: number | null
+          remaining?: number | null
+          result_count?: number | null
+          status?: number | null
+        }
+        Relationships: []
+      }
       card_sales: {
         Row: {
           card_id: string
