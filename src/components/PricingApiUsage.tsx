@@ -39,8 +39,14 @@ export function PricingApiUsage() {
       <div className="grid grid-cols-3 gap-4 mb-5">
         <div>
           <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">Today</p>
-          <p className="text-2xl font-black leading-tight tracking-tight">{u.today.toLocaleString()}</p>
+          <p className="text-2xl font-black leading-tight tracking-tight">
+            {(usedToday ?? u.today).toLocaleString()}
+          </p>
+          {usedToday != null && usedToday !== u.today && (
+            <p className="text-[10px] font-mono text-muted-foreground mt-1">{u.today} logged here</p>
+          )}
         </div>
+
         <div>
           <p className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground mb-1">7 days</p>
           <p className="text-2xl font-black leading-tight tracking-tight">{u.last7.toLocaleString()}</p>
