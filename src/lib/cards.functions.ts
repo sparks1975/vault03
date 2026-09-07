@@ -95,10 +95,17 @@ async function signPhotoVariants(
   return { photo_url, photo_url_2x, photo_thumb_url, photo_thumb_url_2x };
 }
 
+type SignedPhotoSet = {
+  photo_url: string | null;
+  photo_url_2x: string | null;
+  photo_thumb_url: string | null;
+  photo_thumb_url_2x: string | null;
+};
+
 async function signCardPhotosBatch(
   supabase: Awaited<ReturnType<typeof import("@supabase/supabase-js").createClient>>,
   paths: Array<string | null>,
-): Promise<Map<string, string>> {
+): Promise<Map<string, SignedPhotoSet>> {
   const storagePaths = [...new Set(
     paths.filter(
       (path): path is string => Boolean(path && !path.startsWith("http") && !path.startsWith("data:")),
@@ -106,19 +113,42 @@ async function signCardPhotosBatch(
   )];
   if (storagePaths.length === 0) return new Map();
 
-  const { data, error } = await supabase.storage
-    .from("card-photos")
-    .createSignedUrls(storagePaths, SALE_TTL);
-  if (error) {
-    console.error("[listCards] Could not sign card photos", error);
-    return new Map();
-  }
+  // One batched call per size variant keeps the request count at 4 total
+  // instead of 4 per card, while still serving resized images.
+  const variants = [
+    { key: "photo_url", transform: { width: 640, height: 896, resize: "contain", quality: 68 } },
+    { key: "photo_url_2x", transform: { width: 1280, height: 1792, resize: "contain", quality: 62 } },
+    { key: "photo_thumb_url", transform: { width: 160, height: 224, resize: "contain", quality: 52 } },
+    { key: "photo_thumb_url_2x", transform: { width: 320, height: 448, resize: "contain", quality: 55 } },
+  ] as const;
 
-  return new Map(
-    (data ?? []).flatMap((item) =>
-      item.path && item.signedUrl ? [[item.path, item.signedUrl] as const] : [],
+  const results = await Promise.all(
+    variants.map((variant) =>
+      supabase.storage
+        .from("card-photos")
+        .createSignedUrls(storagePaths, SALE_TTL, { transform: variant.transform })
+        .then(({ data, error }) => {
+          if (error) console.error(`[listCards] Could not sign ${variant.key} photos`, error);
+          return data ?? [];
+        }),
     ),
   );
+
+  const map = new Map<string, SignedPhotoSet>();
+  results.forEach((items, i) => {
+    for (const item of items) {
+      if (!item.path || !item.signedUrl) continue;
+      const existing = map.get(item.path) ?? {
+        photo_url: null,
+        photo_url_2x: null,
+        photo_thumb_url: null,
+        photo_thumb_url_2x: null,
+      };
+      existing[variants[i].key] = item.signedUrl;
+      map.set(item.path, existing);
+    }
+  });
+  return map;
 }
 
 export const uploadCardPhoto = createServerFn({ method: "POST" })
