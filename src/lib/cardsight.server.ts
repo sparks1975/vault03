@@ -46,6 +46,22 @@ function reserveSlot(): Promise<void> {
   return next;
 }
 
+async function logCardsightUsage(row: {
+  path: string;
+  ok: boolean;
+  status: number | null;
+  duration_ms: number;
+}) {
+  const { logApiUsage } = await import("./api-usage.server");
+  await logApiUsage("cardsight", {
+    endpoint: row.path.split("?")[0],
+    query: row.path,
+    ok: row.ok,
+    status: row.status,
+    duration_ms: row.duration_ms,
+  });
+}
+
 async function csFetchUncached<T>(path: string, init?: RequestInit): Promise<T> {
   let lastBody = "";
   let lastStatus = 0;
