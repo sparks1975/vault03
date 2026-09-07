@@ -6,7 +6,8 @@
 // SERVER-ONLY module — never import from client code.
 import type { Pt130Sale } from "./pt130.server";
 
-const BASE_URL = "https://thecardapi.com/api/v1/market";
+// Must be the www host: thecardapi.com 307-redirects every API path.
+const BASE_URL = "https://www.thecardapi.com/api/v1/market";
 
 export type TheCardApiResult = {
   sales: Pt130Sale[];
