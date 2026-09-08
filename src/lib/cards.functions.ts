@@ -141,34 +141,45 @@ async function signCardPhotosBatch(
     { key: "photo_thumb_url_2x", transform: { width: 320, height: 448, resize: "contain", quality: 55 } },
   ] as const;
 
-  const results = await Promise.all(
-    variants.map((variant) =>
-      supabase.storage
+  const map = new Map<string, SignedPhotoSet>();
+  const emptySet = (): SignedPhotoSet => ({
+    photo_url: null,
+    photo_url_2x: null,
+    photo_thumb_url: null,
+    photo_thumb_url_2x: null,
+  });
+
+  await Promise.all(
+    variants.map(async (variant) => {
+      // Reuse previously issued links so browsers keep their cached images.
+      const missing: string[] = [];
+      for (const path of storagePaths) {
+        const cached = cachedSignedUrl(`${variant.key}:${path}`);
+        if (cached) {
+          const existing = map.get(path) ?? emptySet();
+          existing[variant.key] = cached;
+          map.set(path, existing);
+        } else {
+          missing.push(path);
+        }
+      }
+      if (missing.length === 0) return;
+
+      const { data, error } = await supabase.storage
         .from("card-photos")
         // The batched signer accepts the same transform option as createSignedUrl;
         // the installed supabase-js types just don't declare it yet.
-        .createSignedUrls(storagePaths, SALE_TTL, { transform: variant.transform } as never)
-        .then(({ data, error }) => {
-          if (error) console.error(`[listCards] Could not sign ${variant.key} photos`, error);
-          return data ?? [];
-        }),
-    ),
+        .createSignedUrls(missing, SALE_TTL, { transform: variant.transform } as never);
+      if (error) console.error(`[listCards] Could not sign ${variant.key} photos`, error);
+      for (const item of data ?? []) {
+        if (!item.path || !item.signedUrl) continue;
+        rememberSignedUrl(`${variant.key}:${item.path}`, item.signedUrl);
+        const existing = map.get(item.path) ?? emptySet();
+        existing[variant.key] = item.signedUrl;
+        map.set(item.path, existing);
+      }
+    }),
   );
-
-  const map = new Map<string, SignedPhotoSet>();
-  results.forEach((items, i) => {
-    for (const item of items) {
-      if (!item.path || !item.signedUrl) continue;
-      const existing = map.get(item.path) ?? {
-        photo_url: null,
-        photo_url_2x: null,
-        photo_thumb_url: null,
-        photo_thumb_url_2x: null,
-      };
-      existing[variants[i].key] = item.signedUrl;
-      map.set(item.path, existing);
-    }
-  });
   return map;
 }
 
