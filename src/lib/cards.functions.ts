@@ -6,7 +6,26 @@ import { toApprovedCardSet } from "./card-sets";
 
 
 
-const SALE_TTL = 60 * 60; // 1 hour signed URL
+const SALE_TTL = 60 * 60 * 24 * 7; // 7 days signed URL
+
+// Signed URLs carry a fresh token on every call, which makes the browser treat
+// the same photo as a brand-new file on each page load and re-download it.
+// Reusing the same URL for a while lets the browser (and the image resizer)
+// serve straight from cache.
+const SIGNED_URL_REUSE_MS = 1000 * 60 * 60 * 24 * 5; // reuse for 5 of the 7 days
+const signedUrlCache = new Map<string, { url: string; expiresAt: number }>();
+
+function cachedSignedUrl(key: string): string | null {
+  const hit = signedUrlCache.get(key);
+  if (hit && hit.expiresAt > Date.now()) return hit.url;
+  if (hit) signedUrlCache.delete(key);
+  return null;
+}
+
+function rememberSignedUrl(key: string, url: string) {
+  if (signedUrlCache.size > 5000) signedUrlCache.clear();
+  signedUrlCache.set(key, { url, expiresAt: Date.now() + SIGNED_URL_REUSE_MS });
+}
 
 const cardInputSchema = z.object({
   player_name: z.string().min(1),
