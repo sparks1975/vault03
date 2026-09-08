@@ -4,7 +4,18 @@ import { routeTree } from "./routeTree.gen";
 import { RouteLoading } from "./components/RouteLoading";
 
 export const getRouter = () => {
-  const queryClient = new QueryClient();
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        // Keep already-loaded cards (and their image links) on screen instead of
+        // refetching every time the page or tab regains focus.
+        staleTime: 5 * 60 * 1000,
+        gcTime: 30 * 60 * 1000,
+        refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
+      },
+    },
+  });
 
   const router = createRouter({
     routeTree,
