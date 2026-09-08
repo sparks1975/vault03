@@ -2739,7 +2739,6 @@ function ApprovedSetSelect({
   // (dropping it is what emptied the parallel picker).
   onChange: (setName: string | null, keepCatalogLink: boolean) => void;
 }) {
-  const approvedValue = APPROVED_CARD_SETS.includes(value as (typeof APPROVED_CARD_SETS)[number]) ? value : "";
   const summary = useCatalogSummary(catalogCardId);
   const rawCatalogSet = summary.data?.set_name ?? null;
   // The catalog link's own release/subset text is the authority: resolve it to
@@ -2751,26 +2750,25 @@ function ApprovedSetSelect({
   return (
     <label className="block">
       <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Set</span>
-      <select
-        value={approvedValue}
+      {/* Free text with suggestions: vintage and oddball products are far too
+          numerous to whitelist, so anything typed is accepted. */}
+      <input
+        type="text"
+        list="approved-card-sets"
+        value={value}
+        placeholder="e.g. 1952 Topps, Fleer Ultra, Kellogg's"
         onChange={(e) => {
-          const next = e.target.value || null;
+          const next = e.target.value.trim() || null;
           onChange(next, !!next && !!catalogSet && next === catalogSet);
         }}
         className="mt-1 w-full h-10 px-3 border border-border rounded-sm text-sm bg-background focus:outline-none focus:border-accent"
-      >
-        <option value="">Select set</option>
+      />
+      <datalist id="approved-card-sets">
         {APPROVED_CARD_SETS.map((setName) => (
-          <option key={setName} value={setName}>
-            {setName}
-          </option>
+          <option key={setName} value={setName} />
         ))}
-      </select>
-      {value && !approvedValue && (
-        <span className="text-[9px] font-mono text-muted-foreground">
-          Current set is not approved. Choose one from the list before saving.
-        </span>
-      )}
+      </datalist>
+
       {mismatch && (
         <span className="mt-1 block text-[9px] font-mono text-muted-foreground">
           Catalog link says{" "}
