@@ -659,7 +659,29 @@ export function cardSetBrand(value: string | null | undefined): string | null {
     [/\bfleer\b/, "Fleer"],
     [/\bultra\b/, "Ultra"],
     [/\bleaf\b/, "Leaf"],
+    [/\bo pee chee\b|\bopc\b/, "O-Pee-Chee"],
+    [/\bpinnacle\b/, "Pinnacle"],
+    [/\bzenith\b/, "Zenith"],
+    [/\bscore\b/, "Score"],
+    [/\bpacific\b/, "Pacific"],
+    [/\bskybox\b/, "SkyBox"],
+    [/\bsportflics\b|\bsportflix\b/, "Sportflics"],
+    [/\bstudio\b/, "Studio"],
+    [/\bgoudey\b/, "Goudey"],
+    [/\bplay ball\b/, "Play Ball"],
+    [/\bcracker jack\b/, "Cracker Jack"],
+    [/\bkellogg s?\b/, "Kellogg's"],
+    [/\bpost\b/, "Post"],
+    [/\bhostess\b/, "Hostess"],
+    [/\bdrake s?\b/, "Drake's"],
+    [/\bclassic\b/, "Classic"],
+    [/\bprocards\b/, "ProCards"],
+    [/\bcollector s? edge\b/, "Collector's Edge"],
+    [/\baction packed\b/, "Action Packed"],
+    [/\btcma\b/, "TCMA"],
+    [/\bt20[567]\b/, "T206"],
   ];
+
   return brands.find(([pattern]) => pattern.test(normalized))?.[1] ?? normalized.split(" ")[0] ?? null;
 }
 // ---------------------------------------------------------------------------
