@@ -32,6 +32,15 @@ export async function initNativeShell(): Promise<void> {
 
   document.documentElement.classList.add("native-app", `native-${nativePlatform()}`);
 
+  // Hide the splash first: everything below is cosmetic and must never be able
+  // to keep the launch image on screen.
+  try {
+    const { SplashScreen } = await import("@capacitor/splash-screen");
+    await SplashScreen.hide();
+  } catch {
+    // splash plugin unavailable — ignore
+  }
+
   try {
     const { StatusBar, Style } = await import("@capacitor/status-bar");
     await StatusBar.setStyle({ style: Style.Dark });
@@ -40,12 +49,5 @@ export async function initNativeShell(): Promise<void> {
     }
   } catch {
     // status bar plugin unavailable — ignore
-  }
-
-  try {
-    const { SplashScreen } = await import("@capacitor/splash-screen");
-    await SplashScreen.hide();
-  } catch {
-    // splash plugin unavailable — ignore
   }
 }
