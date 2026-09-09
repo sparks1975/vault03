@@ -50,11 +50,4 @@ export async function initNativeShell(): Promise<void> {
   } catch {
     // status bar plugin unavailable — ignore
   }
-
-  try {
-    const { SplashScreen } = await import("@capacitor/splash-screen");
-    await SplashScreen.hide();
-  } catch {
-    // splash plugin unavailable — ignore
-  }
 }
