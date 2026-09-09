@@ -126,3 +126,19 @@
 
 }
 
+
+/* Native shell (Capacitor): keep content clear of the notch and home indicator. */
+html.native-app body {
+  padding-bottom: env(safe-area-inset-bottom);
+  overscroll-behavior-y: none;
+}
+html.native-app {
+  -webkit-user-select: none;
+  user-select: none;
+}
+html.native-app input,
+html.native-app textarea,
+html.native-app [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}

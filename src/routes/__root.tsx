@@ -12,6 +12,7 @@ import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { PageRestore } from "../components/PageRestore";
+import { NativeShell } from "../components/NativeShell";
 
 function NotFoundComponent() {
   return (
@@ -59,7 +60,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" },
       { name: "theme-color", content: "#6B21A8" },
       { title: "Vault.03 — Baseball Card Portfolio" },
       { name: "application-name", content: "Vault.03" },
@@ -111,6 +112,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <NativeShell />
       <PageRestore />
       <Outlet />
       <Toaster position="top-right" theme="light" />
