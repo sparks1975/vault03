@@ -12,6 +12,7 @@ import { Toaster } from "sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { PageRestore } from "../components/PageRestore";
+import { NativeShell } from "../components/NativeShell";
 
 function NotFoundComponent() {
   return (
