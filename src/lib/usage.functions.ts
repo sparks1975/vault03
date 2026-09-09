@@ -76,13 +76,13 @@ async function summarize(
   const rows = (data ?? []) as UsageEvent[];
   if (rows.length === 0) return { ...EMPTY, visible: true };
 
-  const dayKey = (iso: string) => new Date(iso).toISOString().slice(0, 10);
-  const todayKey = new Date().toISOString().slice(0, 10);
+  const dayKey = (iso: string) => dayKeyInTz(iso, timeZone);
+  const todayKey = dayKey(new Date().toISOString());
   const sevenAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
 
   const counts = new Map<string, { count: number; failed: number }>();
   for (let i = 13; i >= 0; i--) {
-    counts.set(new Date(Date.now() - i * 86400000).toISOString().slice(0, 10), { count: 0, failed: 0 });
+    counts.set(dayKey(new Date(Date.now() - i * 86400000).toISOString()), { count: 0, failed: 0 });
   }
 
   let today = 0;
