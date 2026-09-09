@@ -42,10 +42,26 @@ const EMPTY: UsageSummary = {
 };
 
 // Usage telemetry. RLS limits these rows to admins, so non-admins simply get
-// an empty summary (visible: false).
+// an empty summary (visible: false). Day buckets use the viewer's local time
+// zone (passed from the browser), not UTC, so evening usage counts as "today".
+function dayKeyInTz(iso: string, timeZone: string): string {
+  try {
+    // en-CA yields YYYY-MM-DD.
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(iso));
+  } catch {
+    return new Date(iso).toISOString().slice(0, 10);
+  }
+}
+
 async function summarize(
   supabase: { from: (t: "api_usage_events") => any },
   providers: string[],
+  timeZone: string,
 ): Promise<UsageSummary> {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const { data, error } = await supabase
