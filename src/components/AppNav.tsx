@@ -52,7 +52,7 @@ const links = [
 export function AppNav({ actions, leading }: { actions?: ReactNode; leading?: ReactNode }) {
   const isAdmin = useIsAdmin();
   return (
-    <nav className="sticky top-0 z-40 bg-black text-white px-4 md:px-6 h-16 flex items-center justify-between gap-3">
+    <nav className="sticky top-0 z-40 bg-black text-white px-4 md:px-6 min-h-16 pt-[env(safe-area-inset-top)] flex items-center justify-between gap-3">
       <div className="flex items-center gap-4 md:gap-8 min-w-0">
         {leading}
         <Link to="/dashboard" className="shrink-0 pr-1">
