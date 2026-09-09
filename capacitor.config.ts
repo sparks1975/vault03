@@ -37,7 +37,11 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchAutoHide: false,
+      // Auto-hide so a slow or failed first load can never leave the user
+      // stuck on the splash image forever.
+      launchAutoHide: true,
+      launchShowDuration: 1500,
+      launchFadeOutDuration: 250,
       backgroundColor: "#1A0B2E",
       showSpinner: false,
     },
