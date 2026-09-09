@@ -152,13 +152,15 @@ function ApiUsagePanel({ title, queryKey, fetcher, resultLabel, showAllowance = 
   );
 }
 
+const localTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+
 export function PricingApiUsage() {
   const fetcher = useServerFn(getPricingApiUsage);
   return (
     <ApiUsagePanel
       title="Valuation API usage"
       queryKey="pricing-api-usage"
-      fetcher={() => fetcher()}
+      fetcher={() => fetcher({ data: { timeZone: localTimeZone() } })}
       resultLabel="sales"
     />
   );
@@ -170,7 +172,7 @@ export function IdentificationApiUsage() {
     <ApiUsagePanel
       title="Identification API usage"
       queryKey="identification-api-usage"
-      fetcher={() => fetcher()}
+      fetcher={() => fetcher({ data: { timeZone: localTimeZone() } })}
       resultLabel="results"
       showAllowance={false}
       showEmpty={false}
