@@ -37,12 +37,12 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      // Auto-hide so a slow or failed first load can never leave the user
-      // stuck on the splash image forever.
+      // Do not wait for the remote site or React before removing the native
+      // launch screen. The web app renders its own loading state afterward.
       launchAutoHide: true,
-      launchShowDuration: 1500,
-      launchFadeOutDuration: 250,
-      backgroundColor: "#1A0B2E",
+      launchShowDuration: 0,
+      launchFadeOutDuration: 0,
+      backgroundColor: "#FFFFFF",
       showSpinner: false,
     },
   },
