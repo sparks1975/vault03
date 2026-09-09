@@ -9,6 +9,7 @@ instantly live in the app too — no re-submission needed for normal changes.
 ```bash
 npm install
 npx cap add ios
+npx capacitor-assets generate --ios
 npx cap sync ios
 npx cap open ios
 ```
@@ -33,7 +34,7 @@ points at production.
 ## App Store checklist
 
 - **Bundle ID**: `app.vault03.ios` (change in `capacitor.config.ts` and Xcode if you prefer another).
-- **App icon / splash**: add a 1024×1024 icon in Xcode (`App/Assets.xcassets`). Splash background is `#1A0B2E`.
+- **App icon / splash**: generated from `resources/icon.png` and `resources/splash.png`.
 - **Sign in with Apple**: Apple requires it whenever Google sign-in is offered in an iOS app.
   Enable the Apple provider in the backend auth settings and add the "Sign In with Apple"
   capability in Xcode before submitting.
@@ -54,11 +55,11 @@ points at production.
 ## Stuck on the blue Capacitor logo in the simulator
 
 That white screen with the blue logo is Capacitor's default launch image. It means
-the splash never got hidden (or the WebView had not finished loading the site yet).
-The splash now auto-hides after 1.5s, but the native project only picks that up
-after a sync:
+the native project still contains Capacitor's starter assets or old settings.
+Regenerate the branded assets before syncing:
 
 ```bash
+npx capacitor-assets generate --ios
 npx cap sync ios
 ```
 
@@ -72,12 +73,13 @@ iOS project from the project folder:
 
 ```bash
 rm -rf ios/App/App/public
+npx capacitor-assets generate --ios
 npx cap copy ios
 npx cap sync ios
 rm -rf ~/Library/Developer/Xcode/DerivedData/App-*
 npx cap open ios
 ```
 
-In Xcode, choose **Product → Clean Build Folder**, then run the app again. Also
-open Safari inside the simulator and confirm `https://vault03.app` loads there.
-If Safari cannot load it, the native app cannot load it either.
+In Xcode, choose **Product → Clean Build Folder**. Delete the Vault.03 app from
+the simulator, then run it again so iOS cannot reuse its cached icon or launch
+screen. Also confirm `https://vault03.app` loads in the simulator's Safari.
