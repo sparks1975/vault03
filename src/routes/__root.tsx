@@ -111,6 +111,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <NativeShell />
       <PageRestore />
       <Outlet />
       <Toaster position="top-right" theme="light" />
