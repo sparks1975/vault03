@@ -66,3 +66,18 @@ Then run again from Xcode. If it still stays on the logo, open Safari →
 Develop → Simulator → Vault.03 and check the console/network tab: it usually
 means the device could not reach `https://vault03.app` (no network in the
 simulator, or the site has not been published yet).
+
+If a normal sync does not replace the old native settings, fully refresh the
+iOS project from the project folder:
+
+```bash
+rm -rf ios/App/App/public
+npx cap copy ios
+npx cap sync ios
+rm -rf ~/Library/Developer/Xcode/DerivedData/App-*
+npx cap open ios
+```
+
+In Xcode, choose **Product → Clean Build Folder**, then run the app again. Also
+open Safari inside the simulator and confirm `https://vault03.app` loads there.
+If Safari cannot load it, the native app cannot load it either.
