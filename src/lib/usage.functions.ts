@@ -128,11 +128,21 @@ async function summarize(
   };
 }
 
+type TzInput = { timeZone?: string } | undefined;
+
 export const getPricingApiUsage = createServerFn({ method: "GET" })
+  .inputValidator((data: TzInput) => data ?? {})
   .middleware([requireSupabaseAuth])
-  .handler(({ context }): Promise<UsageSummary> => summarize(context.supabase as never, ["thecardapi"]));
+  .handler(
+    ({ context, data }): Promise<UsageSummary> =>
+      summarize(context.supabase as never, ["thecardapi"], data.timeZone || "UTC"),
+  );
 
 // Card identification: Cardsight catalog lookups + the AI vision reads.
 export const getIdentificationApiUsage = createServerFn({ method: "GET" })
+  .inputValidator((data: TzInput) => data ?? {})
   .middleware([requireSupabaseAuth])
-  .handler(({ context }): Promise<UsageSummary> => summarize(context.supabase as never, ["cardsight", "lovable-ai"]));
+  .handler(
+    ({ context, data }): Promise<UsageSummary> =>
+      summarize(context.supabase as never, ["cardsight", "lovable-ai"], data.timeZone || "UTC"),
+  );
