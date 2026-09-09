@@ -50,3 +50,19 @@ points at production.
 - `src/lib/native.ts` — detects the native shell, styles the status bar, hides the splash.
 - `src/components/NativeShell.tsx` — runs that setup after hydration.
 - `src/styles.css` — `html.native-app` safe-area and no-text-select rules.
+
+## Stuck on the blue Capacitor logo in the simulator
+
+That white screen with the blue logo is Capacitor's default launch image. It means
+the splash never got hidden (or the WebView had not finished loading the site yet).
+The splash now auto-hides after 1.5s, but the native project only picks that up
+after a sync:
+
+```bash
+npx cap sync ios
+```
+
+Then run again from Xcode. If it still stays on the logo, open Safari →
+Develop → Simulator → Vault.03 and check the console/network tab: it usually
+means the device could not reach `https://vault03.app` (no network in the
+simulator, or the site has not been published yet).
