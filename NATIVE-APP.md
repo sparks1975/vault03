@@ -34,7 +34,9 @@ points at production.
 ## App Store checklist
 
 - **Bundle ID**: `app.vault03.ios` (change in `capacitor.config.ts` and Xcode if you prefer another).
-- **App icon / splash**: generated from `resources/icon.png` and `resources/splash.png`.
+- **App icon / splash**: generated from `assets/icon.png`, `assets/splash.png` and
+  `assets/splash-dark.png` (the generator only reads the `assets/` folder; `resources/`
+  keeps the same source images as a copy).
 - **Sign in with Apple**: Apple requires it whenever Google sign-in is offered in an iOS app.
   Enable the Apple provider in the backend auth settings and add the "Sign In with Apple"
   capability in Xcode before submitting.
