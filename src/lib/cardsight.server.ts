@@ -1560,6 +1560,7 @@ export async function searchCatalogCardByFields(lookup: CardLookup): Promise<str
 export async function searchCatalogCard(descriptor: string): Promise<string | null> {
   const q = descriptor.trim().replace(/\s+/g, " ");
   if (q.length < 2) return null;
+  if (isUncataloguedBrand(q)) return null;
   try {
     const structured = await findCatalogCard({ descriptor: q });
     if (structured?.id) return structured.id;

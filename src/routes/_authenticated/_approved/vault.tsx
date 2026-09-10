@@ -2821,6 +2821,7 @@ function ParallelSelect({
 }) {
   const listFn = useServerFn(listCardsightParallels);
   const descriptor = cardDescriptor(lookup);
+  const uncatalogued = isUncataloguedBrand(lookup.set_name);
   const canLookup = !!cardId;
   const q = useQuery({
     queryKey: ["cardsight-parallels-v3", cardId],
@@ -2867,7 +2868,13 @@ function ParallelSelect({
       {q.isLoading && (
         <span className="text-[9px] font-mono text-muted-foreground">Loading scoped parallel/refractor options…</span>
       )}
-      {!canLookup && (
+      {!canLookup && uncatalogued && (
+        <span className="text-[9px] font-mono text-muted-foreground">
+          Japanese sets (BBM team sets, Epoch, Calbee) aren’t in the card catalog — type the parallel into the set or
+          serial field instead.
+        </span>
+      )}
+      {!canLookup && !uncatalogued && (
         <span className="text-[9px] font-mono text-muted-foreground">
           Link this card to the catalog above to choose a parallel/refractor.
         </span>
@@ -2917,6 +2924,7 @@ function CatalogLinkPicker({
   onLink: (id: string | null) => void;
 }) {
   const searchFn = useServerFn(searchCardsightCards);
+  const uncatalogued = isUncataloguedBrand(lookup.set_name);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [results, setResults] = useState<CatalogCandidate[] | null>(null);
@@ -2956,7 +2964,7 @@ function CatalogLinkPicker({
         <button
           type="button"
           onClick={run}
-          disabled={busy}
+          disabled={busy || uncatalogued}
           className="text-[10px] font-mono uppercase tracking-widest border border-border px-2 py-1 hover:bg-secondary disabled:opacity-50 inline-flex items-center gap-1"
         >
           {busy && <Loader2 className="size-3 animate-spin" />}
@@ -2964,9 +2972,11 @@ function CatalogLinkPicker({
         </button>
       </div>
       <p className="mt-1 text-[9px] font-mono text-muted-foreground">
-        {cardId
-          ? "This card is linked to the catalog — parallels and verified comps are available."
-          : "Not linked yet. Search and pick the exact card to enable parallels and verified comps."}
+        {uncatalogued
+          ? "Japanese manufacturers (BBM team sets, Epoch, Calbee) aren’t in the card catalog. Enter the set, parallel and serial by hand — the value still comes from sold listings."
+          : cardId
+            ? "This card is linked to the catalog — parallels and verified comps are available."
+            : "Not linked yet. Search and pick the exact card to enable parallels and verified comps."}
       </p>
       {open && (
         <div className="mt-3 space-y-1 max-h-56 overflow-y-auto">
