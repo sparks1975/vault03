@@ -65,7 +65,7 @@ function SharedCollection() {
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-20 overflow-x-hidden">
-      <nav className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border px-4 md:px-6 h-16 flex items-center justify-between gap-3">
+      <nav className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border px-4 md:px-6 min-h-16 pt-[env(safe-area-inset-top)] flex items-center justify-between gap-3">
         <span className="font-extrabold tracking-tighter text-lg md:text-xl italic">VAULT.03</span>
         <span className="text-xs uppercase tracking-widest text-muted-foreground">Shared Collection</span>
       </nav>

@@ -115,7 +115,7 @@ function RootComponent() {
       <NativeShell />
       <PageRestore />
       <Outlet />
-      <Toaster position="top-right" theme="light" />
+      <Toaster position="top-right" theme="light" style={{ top: "calc(env(safe-area-inset-top) + 1rem)" }} />
     </QueryClientProvider>
   );
 }
