@@ -132,13 +132,22 @@ html.native-app body {
   padding-bottom: env(safe-area-inset-bottom);
   overscroll-behavior-y: none;
 }
-html.native-app {
+/* Suppress the long-press copy/share callout on chrome only. A blanket
+   user-select:none on <html> makes WKWebView swallow the space bar inside text
+   fields, so selection is only disabled on non-editable UI. */
+html.native-app button,
+html.native-app a,
+html.native-app nav,
+html.native-app [role="button"] {
   -webkit-user-select: none;
   user-select: none;
+  -webkit-touch-callout: none;
 }
 html.native-app input,
 html.native-app textarea,
+html.native-app select,
 html.native-app [contenteditable="true"] {
   -webkit-user-select: text;
   user-select: text;
+  -webkit-touch-callout: default;
 }
