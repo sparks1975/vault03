@@ -54,6 +54,27 @@ points at production.
 - `src/components/NativeShell.tsx` — runs that setup after hydration.
 - `src/styles.css` — `html.native-app` safe-area and no-text-select rules.
 
+## Still seeing the default Capacitor icon
+
+The icon generator reads the `assets/` folder only. Run it from the project root and
+watch the output — it must list the generated iOS icons, not "no assets found":
+
+```bash
+npx capacitor-assets generate --ios
+npx cap sync ios
+```
+
+iOS caches icons hard, so also:
+
+```bash
+rm -rf ~/Library/Developer/Xcode/DerivedData/App-*
+```
+
+Delete the app from the simulator (long-press → Remove App), then in Xcode choose
+**Product → Clean Build Folder** and run again. If it still shows the old icon, in Xcode
+open `App → Assets.xcassets → AppIcon` and confirm the 1024 slot shows the Vault.03
+face; if it is empty, the generate step did not run in the project root.
+
 ## Stuck on the blue Capacitor logo in the simulator
 
 That white screen with the blue logo is Capacitor's default launch image. It means
