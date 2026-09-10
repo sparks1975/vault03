@@ -1,7 +1,7 @@
 // Server-only Cardsight REST client. Do not import from client-reachable modules
 // at top level. See https://cardsight.ai/documentation/api-reference.
 import { createClient } from "@supabase/supabase-js";
-import { cardSetBrand, toApprovedCardSet } from "./card-sets";
+import { cardSetBrand, isUncataloguedBrand, toApprovedCardSet } from "./card-sets";
 import type { Database } from "@/integrations/supabase/types";
 
 const REST_BASE = "https://api.cardsight.ai";
@@ -1192,6 +1192,7 @@ function setCandidateFromCard(card: CatalogCard, lookup: CardLookup): SetCandida
 }
 
 export async function listSetCandidatesForCard(lookup: CardLookup): Promise<SetCandidate[]> {
+  if (isUncataloguedBrand(lookup.set_name)) return [];
   const descriptorLookup = lookup.descriptor ? parseDescriptor(lookup.descriptor) : {};
   const merged: CardLookup = { ...descriptorLookup, ...lookup };
   const player = merged.player_name?.trim();
@@ -1292,6 +1293,7 @@ export type CatalogCardCandidate = {
 };
 
 export async function listCatalogCardCandidates(lookup: CardLookup): Promise<CatalogCardCandidate[]> {
+  if (isUncataloguedBrand(lookup.set_name)) return [];
   const descriptorLookup = lookup.descriptor ? parseDescriptor(lookup.descriptor) : {};
   const merged: CardLookup = { ...descriptorLookup, ...lookup };
   const player = merged.player_name?.trim();
@@ -1426,6 +1428,9 @@ const catalogLookupCache = new Map<string, { at: number; card: CatalogCard | nul
 const CATALOG_LOOKUP_TTL_MS = 15 * 60 * 1000;
 
 export async function findCatalogCard(lookup: CardLookup): Promise<CatalogCard | null> {
+  // Japanese manufacturers (BBM team sets, Epoch, Calbee) have no catalog
+  // coverage at all, so resolution can only ever fail. Skip the whole cascade.
+  if (isUncataloguedBrand(lookup.set_name) || isUncataloguedBrand(lookup.descriptor)) return null;
   const cacheKey = JSON.stringify([
     lookup.player_name ?? null,
     lookup.year ?? null,
@@ -1555,6 +1560,7 @@ export async function searchCatalogCardByFields(lookup: CardLookup): Promise<str
 export async function searchCatalogCard(descriptor: string): Promise<string | null> {
   const q = descriptor.trim().replace(/\s+/g, " ");
   if (q.length < 2) return null;
+  if (isUncataloguedBrand(q)) return null;
   try {
     const structured = await findCatalogCard({ descriptor: q });
     if (structured?.id) return structured.id;

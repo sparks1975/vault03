@@ -684,6 +684,27 @@ export function cardSetBrand(value: string | null | undefined): string | null {
 
   return brands.find(([pattern]) => pattern.test(normalized))?.[1] ?? normalized.split(" ")[0] ?? null;
 }
+
+// ---------------------------------------------------------------------------
+// Manufacturers the card catalog (Cardsight) does not index.
+//
+// Japanese manufacturers — BBM (including the per-club team sets), Epoch and
+// Calbee — have effectively no catalog coverage: a release search for e.g.
+// "BBM Yokohama BayStars" returns zero results, so catalog resolution can
+// never succeed. Detecting these up front avoids burning API calls on lookups
+// that always fail (and the 7-day "failed" cooldown churn), and lets the UI
+// say plainly that set/parallel are entered by hand while values still come
+// from sold listings.
+// ---------------------------------------------------------------------------
+const UNCATALOGUED_BRANDS = new Set(["BBM", "Epoch", "Calbee"]);
+
+export function isUncataloguedBrand(setName: string | null | undefined): boolean {
+  const brand = cardSetBrand(setName);
+  if (!brand) return false;
+  if (UNCATALOGUED_BRANDS.has(brand)) return true;
+  const normalized = normalizeSetText(setName);
+  return /\b(bbm|baseball magazine|epoch|calbee|takara)\b/.test(normalized ?? "");
+}
 // ---------------------------------------------------------------------------
 // Grouping helper for analytics ("Sets by count").
 //
