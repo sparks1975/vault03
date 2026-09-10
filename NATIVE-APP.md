@@ -34,7 +34,9 @@ points at production.
 ## App Store checklist
 
 - **Bundle ID**: `app.vault03.ios` (change in `capacitor.config.ts` and Xcode if you prefer another).
-- **App icon / splash**: generated from `resources/icon.png` and `resources/splash.png`.
+- **App icon / splash**: generated from `assets/icon.png`, `assets/splash.png` and
+  `assets/splash-dark.png` (the generator only reads the `assets/` folder; `resources/`
+  keeps the same source images as a copy).
 - **Sign in with Apple**: Apple requires it whenever Google sign-in is offered in an iOS app.
   Enable the Apple provider in the backend auth settings and add the "Sign In with Apple"
   capability in Xcode before submitting.
@@ -51,6 +53,27 @@ points at production.
 - `src/lib/native.ts` — detects the native shell, styles the status bar, hides the splash.
 - `src/components/NativeShell.tsx` — runs that setup after hydration.
 - `src/styles.css` — `html.native-app` safe-area and no-text-select rules.
+
+## Still seeing the default Capacitor icon
+
+The icon generator reads the `assets/` folder only. Run it from the project root and
+watch the output — it must list the generated iOS icons, not "no assets found":
+
+```bash
+npx capacitor-assets generate --ios
+npx cap sync ios
+```
+
+iOS caches icons hard, so also:
+
+```bash
+rm -rf ~/Library/Developer/Xcode/DerivedData/App-*
+```
+
+Delete the app from the simulator (long-press → Remove App), then in Xcode choose
+**Product → Clean Build Folder** and run again. If it still shows the old icon, in Xcode
+open `App → Assets.xcassets → AppIcon` and confirm the 1024 slot shows the Vault.03
+face; if it is empty, the generate step did not run in the project root.
 
 ## Stuck on the blue Capacitor logo in the simulator
 
