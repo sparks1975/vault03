@@ -6,6 +6,7 @@ import { Loader2, Wallet, TrendingUp, Search, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable/index";
 import { getPendingInviteCode } from "@/lib/invite-storage";
+import { isNativeApp } from "@/lib/native";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -236,9 +237,11 @@ function AuthPage() {
   async function handleOAuth(provider: "google" | "apple") {
     setLoading(provider);
     try {
-      // Lovable Cloud Auth's broker (/~oauth/initiate) only exists on the
-      // hosted app. Locally, send the user through Supabase OAuth instead.
-      if (isLocalDev()) {
+      // Inside the Capacitor shell there are no popups, so the Lovable OAuth
+      // broker can't deliver the session. Use a plain full-page redirect
+      // instead — the webview stays on our own domain the whole time.
+      // The local dev server has no broker either, so it uses the same path.
+      if (isNativeApp() || isLocalDev()) {
         const { error } = await supabase.auth.signInWithOAuth({
           provider,
           options: { redirectTo: window.location.origin + "/auth" },
