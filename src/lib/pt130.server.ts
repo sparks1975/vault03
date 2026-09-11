@@ -4,7 +4,7 @@
 // for backward compatibility).
 //
 // SERVER-ONLY module — never import from client code.
-import { cardSetBrand, toApprovedCardSet } from "./card-sets";
+import { cardSetBrand, isUncataloguedBrand, toApprovedCardSet } from "./card-sets";
 import { searchTheCardApiSales, type SoldSale } from "./thecardapi.server";
 
 export type Pt130Sale = SoldSale;
@@ -12,6 +12,7 @@ export type Pt130Sale = SoldSale;
 export function buildPt130Descriptor(fields: {
   year?: string | number | null;
   set_name?: string | null;
+  team?: string | null;
   player_name?: string | null;
   card_number?: string | null;
   is_autograph?: boolean | null;
@@ -40,9 +41,20 @@ export function buildPt130Descriptor(fields: {
       ? (toApprovedCardSet(fields.set_name) ??
           ((fields.set_name ?? "").replace(/\s+/g, " ").trim() || cardSetBrand(fields.set_name)))
       : cardSetBrand(fields.set_name);
+  const normalizedSet = String(fields.set_name ?? "").toLowerCase();
+  const team = String(fields.team ?? "").replace(/\s+/g, " ").trim();
+  // Japanese team-set cards may only have the generic product saved as "BBM
+  // Team Sets" while the club is stored separately. Add the club to the sold
+  // search when it is not already part of the set name; matching still relies
+  // on year/product/card number/player and never requires the team wording.
+  const searchTeam =
+    team && isUncataloguedBrand(fields.set_name) && !normalizedSet.includes(team.toLowerCase())
+      ? team
+      : null;
   const parts = [
     fields.year ? String(fields.year) : null,
     setLabel,
+    searchTeam,
     includeCardNumber && fields.card_number
       ? `#${String(fields.card_number).replace(/^#/, "").replace(/[-/]+/g, " ").replace(/\s+/g, " ").trim()}`
       : null,
