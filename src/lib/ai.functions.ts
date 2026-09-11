@@ -1075,7 +1075,11 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           await runSearch(tiers.primary, false);
           rows = await loadRows();
         }
-        if (data.broaden && qualifiedCount() === 0) {
+        // Catalog-less Japanese cards need automatic fallback searches because
+        // marketplace titles frequently omit the translated team or card
+        // number. Exact title verification still decides which rows can set a
+        // value, so broadening retrieval does not weaken valuation integrity.
+        if ((data.broaden || uncatalogued) && qualifiedCount() === 0) {
           const broader = [tiers.brand, tiers.noNumber].filter((d): d is string => Boolean(d));
           if (broader.length > 0) {
             await Promise.all(broader.map((d) => runSearch(d, true)));
