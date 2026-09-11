@@ -969,10 +969,14 @@ function titleHasSignedAutograph(title: string): boolean {
 function titleHasPrintedAuto(title: string): boolean {
   return new RegExp(PRINTED_AUTO_RE.source, "i").test(title);
 }
-// Reject non-single-card listings: breaks, sealed wax, cases, packs, lots, sets.
+// Reject non-single-card listings: breaks, sealed wax, cases, packs, lots, and
+// complete sets. Do not reject the bare phrase "team set": Japanese BBM/Epoch
+// sellers use that phrase as the product name on listings for individual cards.
+// A full team-set sale must state that it is complete/full or contain a card
+// count, which keeps those multi-card listings out without hiding single cards.
 // This stays separate from card-identity matching so we can block obvious junk
 // without making real single-card comps disappear.
-const NON_SINGLE_CARD_RE = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|factory\s*set|master\s*set|team\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
+const NON_SINGLE_CARD_RE = /\b(case\s*break|player\s*break|team\s*break|group\s*break|random\s*(team|player|division)|box\s*break|break\s*#?\d*|factory\s*sealed|sealed\s*(wax|box|case|pack|packs|product)|unopened|hobby\s*(box|case|pack|packs)|jumbo\s*(box|pack|packs)|blaster\s*(box|pack|packs)|retail\s*(box|pack|packs)|mega\s*box|hanger\s*(box|pack|packs)|value\s*box|cello\s*(box|pack|packs)|booster|wax\s*(box|pack|packs)|complete\s*set|full\s+team\s+set|factory\s*set|master\s*set|(\d+)\s*(box(es)?|case(s)?|pack(s)?|card\s*lot|cards?\s*(team\s*)?set)|lot\s*of\s*\d+|card\s*lot|\d+\s*card\s*lot|repack|mixer)\b/i;
 const SEALED_PRODUCT_WORDS_RE = /\b(factory|sealed|unopened|hobby|jumbo|blaster|retail|mega|hanger|value|cello|wax)\b/i;
 const PRODUCT_CONTAINER_WORDS_RE = /\b(box|boxes|case|cases|pack|packs|product|wax)\b/i;
 export function isNonSingleCardListing(title: string | null | undefined): boolean {

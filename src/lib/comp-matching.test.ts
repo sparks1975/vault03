@@ -256,6 +256,33 @@ describe("2021 BBM 1st Version #140 Yoshinobu Yamamoto", () => {
   });
 });
 
+describe("uncatalogued Japanese team-set valuation", () => {
+  const bbmTeamCard = {
+    player_name: "Shugo Maki",
+    year: 2024,
+    set_name: "BBM Yokohama DeNA BayStars Team Set",
+    card_number: "12",
+  };
+
+  it("accepts an individual card whose product name contains team set", () => {
+    expect(
+      scoreCompTitle(
+        "2024 BBM Yokohama DeNA BayStars Team Set #12 Shugo Maki",
+        bbmTeamCard,
+      ).level,
+    ).toBe("exact");
+  });
+
+  it("still rejects a complete or multi-card team set", () => {
+    expect(
+      scoreCompTitle("2024 BBM Yokohama DeNA BayStars Complete Set Shugo Maki", bbmTeamCard).level,
+    ).toBe("reject");
+    expect(
+      scoreCompTitle("2024 BBM Yokohama DeNA BayStars 36 Card Team Set", bbmTeamCard).level,
+    ).toBe("reject");
+  });
+});
+
 describe("sold search descriptors", () => {
   // Searches are identity-only: eBay ranks by keyword relevance, so trait words
   // pull in other players' parallels. Traits are enforced in verification.
