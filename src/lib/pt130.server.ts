@@ -38,7 +38,9 @@ export function buildPt130Descriptor(fields: {
     null;
   const setLabel =
     opts.setLabel === "set"
-      ? (toApprovedCardSet(fields.set_name) ??
+      ? (isUncataloguedBrand(fields.set_name)
+          ? ((fields.set_name ?? "").replace(/\s+/g, " ").trim() || cardSetBrand(fields.set_name))
+          : toApprovedCardSet(fields.set_name) ??
           ((fields.set_name ?? "").replace(/\s+/g, " ").trim() || cardSetBrand(fields.set_name)))
       : cardSetBrand(fields.set_name);
   const normalizedSet = String(fields.set_name ?? "").toLowerCase();
