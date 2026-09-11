@@ -20,7 +20,7 @@ export function buildPt130Descriptor(fields: {
   serial_number?: string | null;
   grader?: string | null;
   grade?: string | null;
-}, opts: { includeCardNumber?: boolean; setLabel?: "brand" | "set"; includeTraits?: boolean } = {}): string {
+}, opts: { includeCardNumber?: boolean; setLabel?: "brand" | "set"; includeTraits?: boolean; includeTeam?: boolean } = {}): string {
   const includeCardNumber = opts.includeCardNumber ?? true;
   const includeTraits = opts.includeTraits ?? true;
   // Grades are intentionally left out: the verifier never checks them and
@@ -38,7 +38,9 @@ export function buildPt130Descriptor(fields: {
     null;
   const setLabel =
     opts.setLabel === "set"
-      ? (toApprovedCardSet(fields.set_name) ??
+      ? (isUncataloguedBrand(fields.set_name)
+          ? ((fields.set_name ?? "").replace(/\s+/g, " ").trim() || cardSetBrand(fields.set_name))
+          : toApprovedCardSet(fields.set_name) ??
           ((fields.set_name ?? "").replace(/\s+/g, " ").trim() || cardSetBrand(fields.set_name)))
       : cardSetBrand(fields.set_name);
   const normalizedSet = String(fields.set_name ?? "").toLowerCase();
@@ -48,7 +50,7 @@ export function buildPt130Descriptor(fields: {
   // search when it is not already part of the set name; matching still relies
   // on year/product/card number/player and never requires the team wording.
   const searchTeam =
-    team && isUncataloguedBrand(fields.set_name) && !normalizedSet.includes(team.toLowerCase())
+    opts.includeTeam !== false && team && isUncataloguedBrand(fields.set_name) && !normalizedSet.includes(team.toLowerCase())
       ? team
       : null;
   const parts = [
@@ -76,9 +78,23 @@ export function buildPt130SearchTiers(
   fields: Parameters<typeof buildPt130Descriptor>[0],
 ): { primary: string; brand: string | null; noNumber: string | null } {
   const identity = { includeTraits: false } as const;
-  const primary = buildPt130Descriptor(fields, { ...identity, includeCardNumber: true, setLabel: "set" });
-  const brand = buildPt130Descriptor(fields, { ...identity, includeCardNumber: true, setLabel: "brand" });
-  const noNumber = buildPt130Descriptor(fields, { ...identity, includeCardNumber: false, setLabel: "set" });
+  const primary = buildPt130Descriptor(fields, { ...identity, includeCardNumber: true, setLabel: "set", includeTeam: true });
+  // Japanese listings often omit the translated club name even when the card
+  // comes from a team set. Broader tiers omit team wording while retaining the
+  // year, manufacturer/set, card number and player identity.
+  const omitTeamWhenUncatalogued = isUncataloguedBrand(fields.set_name);
+  const brand = buildPt130Descriptor(fields, {
+    ...identity,
+    includeCardNumber: true,
+    setLabel: "brand",
+    includeTeam: !omitTeamWhenUncatalogued,
+  });
+  const noNumber = buildPt130Descriptor(fields, {
+    ...identity,
+    includeCardNumber: false,
+    setLabel: "set",
+    includeTeam: !omitTeamWhenUncatalogued,
+  });
   return {
     primary,
     brand: brand && brand !== primary ? brand : null,

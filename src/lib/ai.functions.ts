@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { APPROVED_CARD_SETS, setFromCardNumber, toApprovedCardSet } from "./card-sets";
+import { APPROVED_CARD_SETS, isUncataloguedBrand, setFromCardNumber, toApprovedCardSet } from "./card-sets";
 
 const AI_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
 const MODEL = "google/gemini-3.5-flash";
@@ -684,6 +684,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
 
     let resolvedGradeId: string | null = data.cardsight_grade_id ?? null;
     let resolvedCardId: string | null = data.cardsight_card_id ?? null;
+    const uncatalogued = isUncataloguedBrand(data.set_name);
     let selectedParallelName: string | null = null;
     let valuationLookup: {
       player_name: string | null;
@@ -753,6 +754,10 @@ export const estimateCardValue = createServerFn({ method: "POST" })
     }
 
     const cardsightPass = async () => {
+    // BBM, Epoch, Calbee and other known Japanese manufacturers are valued
+    // directly from sold listings. A failed catalog lookup is expected for
+    // these cards and must never replace the actual valuation outcome.
+    if (uncatalogued) return;
     if (!resolvedCardId && !lookupFailedRecently) {
       try {
         const { searchCatalogCardByFields } = await import("./cardsight.server");
@@ -1070,7 +1075,11 @@ export const estimateCardValue = createServerFn({ method: "POST" })
           await runSearch(tiers.primary, false);
           rows = await loadRows();
         }
-        if (data.broaden && qualifiedCount() === 0) {
+        // Catalog-less Japanese cards need automatic fallback searches because
+        // marketplace titles frequently omit the translated team or card
+        // number. Exact title verification still decides which rows can set a
+        // value, so broadening retrieval does not weaken valuation integrity.
+        if ((data.broaden || uncatalogued) && qualifiedCount() === 0) {
           const broader = [tiers.brand, tiers.noNumber].filter((d): d is string => Boolean(d));
           if (broader.length > 0) {
             await Promise.all(broader.map((d) => runSearch(d, true)));
@@ -1127,6 +1136,10 @@ export const estimateCardValue = createServerFn({ method: "POST" })
         } else if (rows.length > 0) {
           compsNote =
             `eBay returned ${rows.length} sold listings but none matched this exact card — open Manage Comps to see them and pick the right ones.`;
+        } else {
+          compsNote = uncatalogued
+            ? "No sold listings were found for this Japanese card using its year, set, team, card number, and player."
+            : "No sold listings were found for this card.";
         }
         pricingSourceResponded = true;
 
@@ -1146,7 +1159,7 @@ export const estimateCardValue = createServerFn({ method: "POST" })
       if (!usedCardsight) await ebaySoldPass();
     } else {
       await ebaySoldPass();
-      if (!usedCardsight) await cardsightPass();
+      if (!usedCardsight && !uncatalogued) await cardsightPass();
     }
 
 

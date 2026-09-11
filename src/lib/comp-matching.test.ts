@@ -281,6 +281,16 @@ describe("uncatalogued Japanese team-set valuation", () => {
       scoreCompTitle("2024 BBM Yokohama DeNA BayStars 36 Card Team Set", bbmTeamCard).level,
     ).toBe("reject");
   });
+
+  it("automatically creates broader searches that do not require the translated team name", () => {
+    const tiers = buildPt130SearchTiers({
+      ...bbmTeamCard,
+      team: "Yokohama DeNA BayStars",
+    });
+    expect(tiers.primary).toBe("2024 BBM Yokohama DeNA BayStars Team Set #12 Shugo Maki");
+    expect(tiers.brand).toBe("2024 BBM #12 Shugo Maki");
+    expect(tiers.noNumber).toBe("2024 BBM Yokohama DeNA BayStars Team Set Shugo Maki");
+  });
 });
 
 describe("sold search descriptors", () => {
